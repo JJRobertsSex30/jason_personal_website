@@ -1,0 +1,115 @@
+---
+// src/components/FAQItem.astro
+export interface Props {
+  question: string;
+  answer: string;
+  initiallyOpen?: boolean;
+  id?: string; // <<<< ADD THIS LINE: Optional id prop
+}
+
+const { question, answer, initiallyOpen = false, id } = Astro.props; // <<<< Destructure id
+
+// Generate unique IDs for ARIA attributes
+// Use the passed 'id' prop if available, otherwise generate a random suffix
+const uniqueSuffix = id ?? Math.random().toString(36).substring(7);
+const questionId = `faq-question-${uniqueSuffix}`;
+const answerId = `faq-answer-${uniqueSuffix}`;
+
+// Convert boolean to string "true" or "false" for ARIA
+const ariaExpandedValue = initiallyOpen ? "true" : "false";
+---
+
+<div class="faq-item border-b border-gray-200 dark:border-slate-700">
+  <h2 class="faq-question-heading text-lg font-semibold">
+    <button
+      type="button"
+      class="faq-question-button w-full flex justify-between items-center text-left py-5 px-1 md:px-2 text-dark-text dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 transition-colors duration-150 rounded-sm"
+      aria-expanded={ariaExpandedValue} {/* Use the pre-converted string */}
+      aria-controls={answerId}
+      id={questionId}
+    >
+      <span class="flex-1">{question}</span>
+      <span class="faq-arrow transform transition-transform duration-300 ease-out text-brand-orange ml-3">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </span>
+    </button>
+  </h2>
+  <div
+    id={answerId}
+    class:list={[
+        "faq-answer-content",
+        "text-medium-text dark:text-slate-400 text-base px-1 md:px-2",
+        { "hidden": !initiallyOpen }
+    ]}
+    role="region"
+    aria-labelledby={questionId}
+  >
+    <div class="pb-5 pt-1">
+      <div class="prose prose-sm sm:prose-base dark:prose-invert max-w-none" set:html={answer} />
+    </div>
+  </div>
+</div>
+
+<script>
+  // Vanilla JavaScript for Accordion Logic
+  // Corrected to handle multiple instances on a page properly
+  function initializeFAQItem(itemElement) {
+    const button = itemElement.querySelector('.faq-question-button');
+    const answerContent = itemElement.querySelector('.faq-answer-content');
+    const arrow = itemElement.querySelector('.faq-arrow');
+
+    if (!button || !answerContent || !arrow) {
+        // console.warn('FAQ item missing required elements:', itemElement);
+        return;
+    }
+
+    let isOpen = button.getAttribute('aria-expanded') === 'true';
+
+    // Initial visual state based on aria-expanded
+    if (isOpen) {
+        answerContent.classList.remove('hidden');
+        answerContent.style.maxHeight = answerContent.scrollHeight + "px";
+        arrow.style.transform = 'rotate(180deg)';
+    } else {
+        // Ensure it starts hidden with no max-height if not initially open
+        answerContent.classList.add('hidden'); // Explicitly add hidden
+        answerContent.style.maxHeight = '0px';
+        arrow.style.transform = 'rotate(0deg)';
+    }
+
+    button.addEventListener('click', () => {
+      isOpen = !isOpen;
+      button.setAttribute('aria-expanded', isOpen.toString());
+
+      if (isOpen) {
+        answerContent.classList.remove('hidden'); // Remove hidden class BEFORE calculating scrollHeight
+        requestAnimationFrame(() => { // Allow DOM to update after removing 'hidden'
+            answerContent.style.maxHeight = answerContent.scrollHeight + "px";
+            arrow.style.transform = 'rotate(180deg)';
+        });
+      } else {
+        answerContent.style.maxHeight = '0px';
+        arrow.style.transform = 'rotate(0deg)';
+        // Re-add 'hidden' after transition for accessibility and if CSS relies on it
+        answerContent.addEventListener('transitionend', () => {
+            if (!isOpen) {
+                answerContent.classList.add('hidden');
+            }
+        }, { once: true });
+      }
+    });
+  }
+
+  // Initialize all FAQ items on the page
+  // This ensures each item's script works independently
+  document.querySelectorAll('.faq-item').forEach(initializeFAQItem);
+</script>
+
+<style>
+  .faq-answer-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease-out;
+  }
+  /* No .open class needed here as JS directly manipulates max-height */
+</style>

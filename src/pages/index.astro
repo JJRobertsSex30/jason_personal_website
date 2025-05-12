@@ -11,6 +11,7 @@ import Content from '~/components/widgets/Content.astro';
 import BlogLatestPosts from '~/components/widgets/BlogLatestPosts.astro';
 import FAQs from '~/components/widgets/FAQs.astro';
 import Stats from '~/components/widgets/Stats.astro';
+import AccordionFAQ from '~/components/widgets/AccordionFAQ.astro';
 import CallToAction from '~/components/widgets/CallToAction.astro';
 
 const metadata = {
@@ -63,6 +64,13 @@ const aboutJJExpertDescription2 = `
   JJ's work, including the groundbreaking book "Sex 3.0: The Relationship Upgrade", provides a clear blueprint for this upgraded approach. It has already transformed the lives of people worldwide, guiding them from confusion and disappointment to clarity, empowerment, and deeply fulfilling partnerships that truly align with their authentic selves.
 `;
 
+// Optional: Define specific FAQ items for the homepage if you want to override AccordionFAQs defaults
+const homepageFAQItems = [
+  { question: "Is jealousy truly natural in love?", answer: "While possessiveness feels common, this new approach helps you understand its roots and build trust beyond it, leading to more peaceful connections.", id: "q1" },
+  { question: "How does this differ from traditional relationship advice?", answer: "It moves beyond surface-level fixes to address the fundamental flawed designs in how society views relationships, offering a path to authentic freedom and choice.", id: "q2" },
+  { question: "Can this approach really lead to lasting happiness?", answer: "Yes, by building relationships on a foundation of honesty, mutual reward, and respect for individual freedom, you create a more resilient and genuinely fulfilling bond.", id: "q3", initiallyOpen: false }, // Example of initiallyOpen
+  // Add 1-2 more if desired
+];
 
 ---
 
@@ -199,43 +207,21 @@ const aboutJJExpertDescription2 = `
   </Fragment>
   </Content>
 
-  <!-- Content Widget **************** -->
 
-  <Content
-    isReversed
-    isAfterContent
-    items={[
-      {
-        title: 'Enhanced user engagement',
-        description:
-          'Captivate your audience with interactive elements, intuitive navigation, and visually appealing layouts, encouraging longer visits.',
-      },
-      {
-        title: 'Continuous improvement',
-        description:
-          'Ensure your website stays aligned with the latest trends and technologies through regular updates and enhancements.',
-      },
-      {
-        title: 'Time and resource efficiency',
-        description:
-          'Skip the time-consuming process of building a website from scratch and launch your online presence sooner with AstroWind.',
-      },
-      {
-        title: 'Community support',
-        description: `Join the growing AstroWind community for insights, resources, and assistance, ensuring you're never alone on your web development journey.`,
-      },
-    ]}
-    image={{
-      src: 'https://images.unsplash.com/photo-1611462985358-60d3498e0364?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
-      alt: 'Astronauts Image',
-    }}
+  <AccordionFAQ
+    id="homepage-faqs" {/* Give it a unique ID for anchor linking if needed */}
+    title="Quick Answers to Key Questions"
+    subtitle="Get clarity on the core ideas of this transformative approach."
+    tagline="Common Queries"
+    items={homepageFAQItems} {/* Pass your specific homepage FAQ items */}
+    isDark={false} /* Or determine dynamically based on theme context if needed */
+    classes={{ container: 'bg-white dark:bg-slate-900' }} /* Example styling */
   >
-    <Fragment slot="content">Designed to foster growth and success.</Fragment>
-
-    <Fragment slot="bg">
-      <div class="absolute inset-0 bg-blue-50 dark:bg-transparent"></div>
-    </Fragment>
-  </Content>
+    {/* Optional: Custom background for this specific FAQ section instance */}
+    {/* <Fragment slot="bg">
+      <div class="absolute inset-0 bg-gray-100 dark:bg-gray-800"></div>
+    </Fragment> */}
+</AccordionFAQs>
 
   <!-- Steps Widget ****************** -->
 

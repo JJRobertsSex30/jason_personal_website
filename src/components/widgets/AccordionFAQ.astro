@@ -1,0 +1,83 @@
+---
+// src/components/widgets/AccordionFAQs.astro
+import Headline from '~/components/ui/Headline.astro';
+import WidgetWrapper from '~/components/ui/WidgetWrapper.astro';
+import FAQItem from '~/components/widgets/FAQItem.astro';
+
+export interface FAQ {
+  question: string;
+  answer: string;
+  initiallyOpen?: boolean;
+  id?: string;
+}
+
+export interface Props {
+  title?: string;
+  subtitle?: string;
+  tagline?: string;
+  items?: Array<FAQ>;
+  id?: string;
+  isDark?: boolean;
+  classes?: {
+    container?: string;
+    headline?: string;
+  };
+  // bg?: string | unknown; // OLD - Incorrect type
+  // The 'bg' prop itself is not explicitly defined here if we always expect
+  // it to come from Astro.slots.render('bg') which correctly types it.
+  // However, WidgetWrapper expects a 'bg' prop that can be string | undefined
+  // when it receives slot content.
+}
+
+const {
+  title = 'Frequently Asked Questions',
+  subtitle = 'Find answers to common questions about this revolutionary approach.',
+  tagline = 'Quick Answers',
+  items = [
+    { question: "Is jealousy just a natural part of loving someone?", answer: "No. While envy is natural, sexual jealousy stems from a sense of ownership, a concept this new approach helps you dismantle for more peaceful connections." },
+    { question: "Does this new approach mean avoiding commitment?", answer: "Absolutely not. True commitment is redefined as a conscious choice based on mutual reward, honesty, and respect—stronger because it's freely chosen, not enforced.", initiallyOpen: false },
+    { question: "Is this anti-marriage?", answer: "Not at all. Marriage becomes a valid *choice* within this framework, entered into consciously, honestly, and without societal pressure, understanding both its benefits and potential pitfalls." },
+    { question: "How can relationships truly work without strict exclusivity?", answer: "The same way deep friendships thrive: through unwavering trust, open communication, profound respect, and ongoing mutual reward. Exclusivity becomes an *agreement*, not a prerequisite for love." },
+  ],
+  id,
+  isDark = false,
+  classes = {},
+  // bg will be the content of the slot passed from the parent (index.astro)
+  // Astro.slots.render('bg') returns string | undefined
+} = Astro.props;
+
+// Capture the rendered slot content for the bg prop
+const backgroundSlotContent = await Astro.slots.render('bg');
+
+---
+
+<WidgetWrapper
+  id={id ?? 'accordion-faq'}
+  isDark={isDark}
+  containerClass={`py-12 md:py-16 lg:py-20 ${classes?.container ?? ''}`}
+  bg={backgroundSlotContent} {/* Pass the correctly typed slot content */}
+>
+  <Headline
+    title={title}
+    subtitle={subtitle}
+    tagline={tagline}
+    classes={{ container: `text-center mb-10 md:mb-14 ${classes?.headline ?? ''}`, title: 'text-3xl lg:text-4xl' }}
+  />
+
+  <div class="max-w-3xl mx-auto">
+    {items && items.length > 0 && items.map((faq, index) => (
+      <FAQItem
+        question={faq.question}
+        answer={faq.answer}
+        initiallyOpen={faq.initiallyOpen || false}
+        id={`faq-item-${faq.id ?? index}`}
+      />
+    ))}
+  </div>
+
+  <div class="text-center mt-10 md:mt-12">
+    <a href="/full-faq" class="text-brand-orange hover:text-brand-orange-darker font-semibold hover:underline transition duration-150 ease-in-out">
+      Have More Questions? Visit Our Full FAQ Page →
+    </a>
+  </div>
+</WidgetWrapper>
