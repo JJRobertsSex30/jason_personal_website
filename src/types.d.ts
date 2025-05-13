@@ -1,6 +1,19 @@
 import type { AstroComponentFactory } from 'astro/runtime/server/index.js';
 import type { HTMLAttributes, ImageMetadata } from 'astro/types';
 
+export interface MediaResource {
+  type: 'blog' | 'video' | 'audio' | 'page' | 'external';
+  title: string;
+  link: string;
+  imageSrc: ImageMetadata | string; // Use ImageMetadata for local, string for public/external
+  imageAlt: string;
+  category?: string;
+  description?: string;
+  durationOrReadTime?: string;
+  isNew?: boolean;
+  sourceName?: string;
+}
+
 export interface Post {
   /** A unique ID number that identifies a post. */
   id: string;
