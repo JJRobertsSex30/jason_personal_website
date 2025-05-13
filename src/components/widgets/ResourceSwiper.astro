@@ -127,8 +127,14 @@ const swiperOptionsForDataAttribute = {
         <div class={`swiper-button-next ${swiperNextElClass} !text-brand-orange !right-0 md:!right-[-10px] after:!text-3xl hidden sm:flex z-10`}></div>
       </div>
     ) : ( <p class="text-center text-medium-text dark:text-slate-400">Exciting new resources coming soon!</p> )}
-    {viewAllLink && ( <div class="text-center mt-10 md:mt-14"> <a href={viewAllLink} class="inline-block bg-brand-green text-white px-8 py-3 rounded-full hover:bg-brand-green-darker font-semibold text-lg transition duration-200 transform hover:scale-105 shadow-md hover:shadow-lg"> {viewAllText} → </a> </div> )}
-  </div>
+        {/* "View All" Button - STYLING UPDATED HERE */}
+        {viewAllLink && (<div class="text-center mt-10 md:mt-14"> <a href={viewAllLink} target={viewAllLink && viewAllLink.startsWith('http') ? '_blank' : '_self'} rel={viewAllLink && viewAllLink.startsWith('http') ? 'noopener noreferrer' : ''} class="inline-flex items-center justify-center gap-2 px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap">
+          <span>{viewAllText}</span>
+          <Icon name="tabler:arrow-right" class="w-5 h-5 ml-1" /> {/* Added Icon here */}
+        </a>
+      </div>
+    )}
+   </div>
 </section>
 
 

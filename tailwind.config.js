@@ -23,6 +23,17 @@ export default {
         fade: 'fadeInUp 1s both',
       },
 
+      theme: {
+        extend: {
+          colors: {
+            'brand-green': '#4CAF50',
+            'brand-orange': '#FFAB40',
+            'brand-orange-darker': '#ffa02d', // Or your preferred darker shade
+            // ... your other custom colors
+          },
+        },
+      },
+
       keyframes: {
         fadeInUp: {
           '0%': { opacity: 0, transform: 'translateY(2rem)' },
@@ -39,3 +50,4 @@ export default {
   ],
   darkMode: 'class',
 };
+

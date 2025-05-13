@@ -1,39 +1,34 @@
 ---
+// src/pages/index.astro
 import Layout from '~/layouts/PageLayout.astro';
 import type { ImageMetadata } from 'astro';
-import type { MediaResource } from '~/types';
+import type { MediaResource } from '~/types'; // Assuming MediaResource is in src/types.d.ts
 
-import Hero from '~/components/widgets/Hero.astro';
-import Note from '~/components/widgets/Note.astro';
-import ResourceSwiper from '~/components/widgets/ResourceSwiper.astro';
-import Features from '~/components/widgets/Features.astro';
-import Features2 from '~/components/widgets/Features2.astro';
-import Steps from '~/components/widgets/Steps.astro';
-import Testimonials from '~/components/widgets/Testimonials.astro';
-import Content from '~/components/widgets/Content.astro';
-import BlogLatestPosts from '~/components/widgets/BlogLatestPosts.astro';
-import FAQs from '~/components/widgets/FAQs.astro';
-import Stats from '~/components/widgets/Stats.astro';
-import AccordionFAQ from '~/components/widgets/AccordionFAQ.astro';
-import CallToAction from '~/components/widgets/CallToAction.astro';
-
-const metadata = {
-  title: 'Upgrade Your Love Life',
-  ignoreTitleTemplate: true,
-};
+// Your Core Widgets & Custom Components
+import Header from '~/components/widgets/Header.astro';
+import Hero from '~/components/widgets/Hero.astro'; // AstroWind's Hero
+import Features from '~/components/widgets/Features.astro'; // For Benefits section
+import Testimonials from '~/components/widgets/Testimonials.astro'; // Your modified Testimonials
+import Content from '~/components/widgets/Content.astro'; // For About JJ & Book sections
+import AccordionFAQ from '~/components/widgets/AccordionFAQ.astro'; // Your custom Accordion FAQ
+import ResourceSwiper from '~/components/widgets/ResourceSwiper.astro'; // Your custom Swiper
+import Footer from '~/components/widgets/Footer.astro'; // Your modified Footer
+import { Icon } from 'astro-icon/components'; // For buttons with icons
 
 // --- IMPORT YOUR LOCAL IMAGES (ImageMetadata objects) ---
-// Hero, About, Book images
-import imgHeroMain from '~/assets/images/jj-roberts-hero.jpg'; // Replace with your actual hero image
-import imgAboutJJ from '~/assets/images/jj_upscale.jpg'; // From your Content widget example
-import imgBookCover from '~/assets/images/book_thin.png'; // From your Content widget example
+// Hero Image
+import imgHeroMain from '~/assets/images/jj.jpg';
+// About JJ Image
+import imgAboutJJ from '~/assets/images/jj_upscale.jpg'; // Using the one from your previous Content example
+// Book Image
+import imgBookCover from '~/assets/images/book_thin.png';
 
-// Testimonial Images
+// Testimonial Images (Using jj.jpg as a general placeholder, replace with specifics)
 import imgTestimonial1 from '~/assets/images/jj.jpg';
 import imgTestimonial2 from '~/assets/images/jj.jpg';
 import imgTestimonial3 from '~/assets/images/jj.jpg';
 
-// Resource Images (Make sure these paths are correct and images exist in src/assets/images/...)
+// Resource Images (Using jj.jpg as a general placeholder, replace with specifics)
 import imgBlogPlaceholder1 from '~/assets/images/jj.jpg';
 import imgBlogPlaceholder2 from '~/assets/images/jj.jpg';
 import imgVideoPlaceholder1 from '~/assets/images/jj.jpg';
@@ -41,441 +36,249 @@ import imgVideoPlaceholder2 from '~/assets/images/jj.jpg';
 import imgPodcastPlaceholder1 from '~/assets/images/jj.jpg';
 import imgPodcastPlaceholder2 from '~/assets/images/jj.jpg';
 
+// --- METADATA ---
+const metadata = {
+  title: 'JJ Roberts | Upgrade Your Love Life Now',
+  description: "Escape painful relationship cycles with JJ Roberts' revolutionary approach. Get free chapters and discover connections built on honesty, freedom, and lasting joy.",
+  ignoreTitleTemplate: true, // AstroWind setting
+};
 
-// === DEFINE YOUR TESTIMONIAL DATA HERE ===
-const myTestimonials = [
-  {
-    testimonial: "Reading this completely changed how I view relationships. The honesty is refreshing and empowering!",
-    name: "Sarah K.",
-    job: "Book Reader", // Optional
-    image: { src: '~/assets/images/placeholder-testimonial-1.png', alt: 'Sarah K.' } // Use theme's Image component structure
-  },
-  {
-    testimonial: "JJ Roberts cuts through the noise. Finally, relationship advice that makes sense and addresses the root causes of conflict.",
-    name: "Mark T.",
-    job: "Coaching Client", // Optional
-    image: { src: '~/assets/images/placeholder-testimonial-2.png', alt: 'Mark T.' }
-  },
-  {
-    testimonial: "I realized I wasn't broken, the old rules were. This approach gave me the courage to build authentic connections.",
-    name: "Elena P.",
-    job: "Workshop Attendee", // Optional
-    image: { src: '~/assets/images/placeholder-testimonial-3.png', alt: 'Elena P.' }
-  },
-  // Add more testimonials as needed
-];
-
-// HERO CONTENT (replace with your actual content)
+// === HERO DATA ===
 const heroTitle = "Is Your Love Life Stuck on Repeat? <br class=\"block sm:hidden\"/> <span class=\"text-brand-green\">Discover the Upgrade.</span>";
-const heroSubtitle = "Stop the painful cycles. Learn the revolutionary principles for relationships built on true freedom, radical honesty, and lasting mutual reward. Get your FREE chapters now.";
+const heroSubtitle = "Stop the painful cycles. Learn the revolutionary principles for relationships built on true freedom, radical honesty, and lasting mutual reward. Get your FREE chapters now and transform your connections.";
 const heroActions = [
-  { variant: 'primary', text: 'Get Free Chapters Now', href: '#your-email-form-id', icon: 'tabler:book-download' }, // Update href
+  { variant: 'primary', text: 'Get Free Chapters Now', href: '#hero-form-section', icon: 'tabler:book-download' },
   { text: 'See the Benefits', href: '#benefits' },
 ];
-const heroImage = { src: '~/assets/images/jj-roberts-hero.jpg', alt: 'JJ Roberts - Relationship Expert' }; // Your hero image
+const heroImageForWidget = { src: imgHeroMain, alt: 'JJ Roberts - Relationship Expert' };
 
-// ABOUT JJ CONTENT
-const aboutJJTagline = "The Expert Behind the Transformation";
+// === BENEFITS (FEATURES WIDGET) DATA ===
+const benefitsItems = [
+    { title: 'End Destructive Jealousy & Possessiveness', description: 'Discover how to build unwavering trust and eliminate possessive patterns for a truly peaceful connection.', icon: 'tabler:shield-check' },
+    { title: 'Experience Radical Honesty & Deeper Trust', description: 'Build relationships on a foundation of truth and transparency, creating the foundation for profound intimacy.', icon: 'tabler:message-circle-2' },
+    { title: 'Achieve True Freedom & Choice in Love', description: 'Move beyond societal pressure and obligation to create connections based on conscious choice and genuine desire.', icon: 'tabler:mood-smile-beam' },
+    { title: 'Align Relationships with Your True Nature', description: 'Understand how aligning your relationships with natural human connection patterns leads to less conflict and more ease.', icon: 'tabler:atom-2' },
+    { title: 'Break Free From Painful Relationship Cycles', description: 'Identify and release the outdated patterns that keep you stuck, and step into a new way of loving.', icon: 'tabler:key' },
+    { title: 'Become the Architect of Your Relationship Destiny', description: "Reclaim your power from societal scripts to build the fulfilling love life you truly deserve.", icon: 'tabler:user-check' },
+];
+
+// === TESTIMONIAL DATA ===
+const myTestimonials = [
+  { testimonial: "Reading this completely changed how I view relationships. The honesty is refreshing and empowering!", name: "Sarah K.", job: "Book Reader", image: { src: imgTestimonial1, alt: 'Sarah K.' } },
+  { testimonial: "JJ Roberts cuts through the noise. Finally, relationship advice that makes sense and addresses the root causes of conflict.", name: "Mark T.", job: "Coaching Client", image: { src: imgTestimonial2, alt: 'Mark T.' } },
+  { testimonial: "I realized I wasn't broken, the old rules were. This approach gave me the courage to build authentic connections.", name: "Elena P.", job: "Workshop Attendee", image: { src: imgTestimonial3, alt: 'Elena P.' } },
+];
+
+// === ABOUT JJ DATA (Part 1) ===
+const aboutJJTagline = "Architect of a New Relationship Paradigm";
 const aboutJJTitle = "Meet JJ Roberts";
-const aboutJJImage = { src: '~/assets/images/jj-roberts-about.jpg', alt: 'JJ Roberts, Relationship Psychologist' }; // Your 'About Me' photo
-const aboutJJExpertDescription = `
-  JJ Roberts is a pioneering voice in relationship psychology, dedicated to helping individuals escape the frustrating cycles of conventional relationships. For years, JJ experienced firsthand the limitations and disappointments of traditional relationship models—a system fraught with unspoken rules and inevitable conflict. This personal journey culminated in an enlightening two-year research trip across more than 40 countries, a quest to understand the true nature of human connection beyond societal conditioning. <br/><br/>
-  This global exploration led to profound breakthroughs and the deconstruction of outdated relationship paradigms. JJ saw clearly the flawed design inherent in the common approach to love and intimacy—a system that often breeds misunderstanding, jealousy, and pain.
-`;
-const aboutJJExpertDescription2 = `
-  From these realisations, the revolutionary modern framework for relationships was born, offering a path to connections built on radical honesty, conscious choice, and genuine freedom. <br/><br/>
-  JJ's work, including the groundbreaking book "Sex 3.0: The Relationship Upgrade", provides a clear blueprint for this upgraded approach. It has already transformed the lives of people worldwide, guiding them from confusion and disappointment to clarity, empowerment, and deeply fulfilling partnerships that truly align with their authentic selves.
+const aboutJJImageForWidget = { src: imgAboutJJ, alt: 'JJ Roberts' };
+const aboutJJExpertDescription = `JJ Roberts is a pioneering voice in relationship psychology, dedicated to helping individuals escape the frustrating cycles of conventional relationships. For years, JJ experienced firsthand the limitations and disappointments of traditional relationship models—a system fraught with unspoken rules and inevitable conflict. This personal journey culminated in an enlightening two-year research trip across more than 40 countries, a quest to understand the true nature of human connection beyond societal conditioning. <br/><br/>This global exploration led to profound breakthroughs and the deconstruction of outdated relationship paradigms. JJ saw clearly the flawed design inherent in the common approach to love and intimacy—a system that often breeds misunderstanding, jealousy, and pain. From these realizations, the revolutionary modern framework for relationships was born.`;
+
+// === BOOK DATA / ABOUT JJ (Part 2) ===
+const bookSectionTitle = "The Culmination: \"Sex 3.0 - A Sexual Revolution Manual\"";
+const bookImageForWidget = { src: imgBookCover, alt: "Sex 3.0 A Sexual Revolution Manual Book Cover" };
+const bookExpertDescriptionAndOffer = `
+  This framework, born from years of research and real-world experience, is detailed in JJ's groundbreaking book, "Sex 3.0: The Relationship Upgrade." It provides the clear blueprint and practical tools you need to break free from outdated patterns and build the fulfilling connections you've always desired. This isn't just another relationship guide—it's a new operating system for your love life, already transforming lives worldwide.
 `;
 
-// Optional: Define specific FAQ items for the homepage if you want to override AccordionFAQs defaults
+// === HOMEPAGE FAQ ITEMS ===
 const homepageFAQItems = [
-  { question: "Is jealousy truly natural in love?", answer: "While possessiveness feels common, this new approach helps you understand its roots and build trust beyond it, leading to more peaceful connections.", id: "q1" },
-  { question: "How does this differ from traditional relationship advice?", answer: "It moves beyond surface-level fixes to address the fundamental flawed designs in how society views relationships, offering a path to authentic freedom and choice.", id: "q2" },
-  { question: "Can this approach really lead to lasting happiness?", answer: "Yes, by building relationships on a foundation of honesty, mutual reward, and respect for individual freedom, you create a more resilient and genuinely fulfilling bond.", id: "q3", initiallyOpen: false }, // Example of initiallyOpen
-  // Add 1-2 more if desired
+  { question: "Is jealousy truly natural in love?", answer: "While possessiveness feels common, this new approach helps you understand its roots and build trust beyond it, leading to more peaceful connections.", id: "hp-q1" },
+  { question: "How does this differ from traditional relationship advice?", answer: "It moves beyond surface-level fixes to address the fundamental flawed designs in how society views relationships, offering a path to authentic freedom and choice.", id: "hp-q2" },
+  { question: "Can this approach really lead to lasting happiness?", answer: "Yes, by building relationships on a foundation of honesty, mutual reward, and respect for individual freedom, you create a more resilient and genuinely fulfilling bond.", id: "hp-q3", initiallyOpen: false },
 ];
 
 // === COMBINED DATA FOR SINGLE RESOURCE SWIPER ===
 const allMyResources: MediaResource[] = [
-  // Latest Blog Posts
   { type: 'blog', title: 'The Truth About "Happily Ever After"', link: '/blog/truth-happily-ever-after', imageSrc: imgBlogPlaceholder1, imageAlt: 'Couple walking on beach', category: 'Relationship Myths', durationOrReadTime: '5 min read', isNew: true, sourceName: 'Our Blog', description: "Unpacking common misconceptions." },
   { type: 'blog', title: 'Honesty: The Ultimate Aphrodisiac', link: '/blog/honesty-aphrodisiac', imageSrc: imgBlogPlaceholder2, imageAlt: 'Couple talking intimately', category: 'Communication', durationOrReadTime: '7 min read', sourceName: 'Our Blog', description: "Why transparency builds deeper intimacy." },
-
-  // Featured Videos
   { type: 'video', title: 'Understanding Modern Relationships', link: 'https://youtube.com/yourvideoid1', imageSrc: imgVideoPlaceholder1, imageAlt: 'Abstract design', category: 'Core Concepts', durationOrReadTime: '10:23', sourceName: 'YouTube', description: "JJ breaks down key concepts visually." },
   { type: 'video', title: 'Masterclass: Eliminating Jealousy', link: 'https://youtube.com/yourvideoid2', imageSrc: imgVideoPlaceholder2, imageAlt: 'Serene person', category: 'Problem Solving', durationOrReadTime: '15:05', sourceName: 'YouTube', isNew: true, description: "Practical steps for peaceful connections." },
-
-  // Recent Podcasts/Audio
   { type: 'audio', title: 'Ep 01: The Relationship Upgrade Intro', link: '/podcast/ep-01', imageSrc: imgPodcastPlaceholder1, imageAlt: 'Podcast logo', category: 'Season 1', durationOrReadTime: '35:12', sourceName: 'The Upgrade Podcast', description: "Introducing the new framework for love." },
   { type: 'audio', title: 'Ep 02: Commitment & Freedom Redefined', link: '/podcast/ep-02', imageSrc: imgPodcastPlaceholder2, imageAlt: 'Sound waves', category: 'Season 1', durationOrReadTime: '42:30', sourceName: 'The Upgrade Podcast', description: "What these terms *truly* mean." },
-  // Add more items from any category as needed
 ];
-// Optional: Sort allMyResources here if needed
-// allMyResources.sort((a, b) => new Date(b.dateField) - new Date(a.dateField)); // Example sort
 
-
-
-
-
+// === FINAL CALL TO ACTION (Quiz) ===
+const finalCtaTagline = "Your Next Step to a Better Love Life";
+const finalCtaTitle = "Unlock Your Relationship Blueprint";
+const finalCtaImage = { src: imgHeroMain, alt: 'Abstract graphic representing a blueprint or pathway' }; // Re-using hero image as placeholder
+const finalCtaDescription = `Ready to understand what's *really* going on in your relationships and how to make lasting positive changes? Our quick, insightful quiz will help you identify key patterns and provide a starting point for your personal transformation. Plus, you'll get exclusive free chapters from "Sex 3.0: The Relationship Upgrade" to guide you further!`;
+const finalCtaActions = [ { variant: 'primary', text: 'Take the 2-Minute Insight Quiz Now', href: '/quiz', icon: 'tabler:checkup-list' } ]; // Link to your quiz page
 ---
 
 <Layout metadata={metadata}>
-  <!-- Hero Widget ******************* -->
 
-  <Hero
-    actions={[
-      {
-        variant: 'primary',
-        text: 'Get free chapters ',
-        href: 'https://github.com/onwidget/astrowind',
-        target: '_blank',
-        icon: 'tabler:download',
-      },
-      { text: 'Learn more', href: '#features' },
-    ]}
-    image={{ src: '~/assets/images/hero-image.png', alt: 'JJ Roberts Image' }}
-  >
-    <Fragment slot="title">
-      Free template for <span class="hidden xl:inline">creating websites with</span>
-      <span class="text-accent dark:text-white highlight"> Astro 5.0</span> + Tailwind CSS
-    </Fragment>
+  <main>
+    {/* --- HERO WIDGET --- */}
+    <Hero actions={heroActions} image={heroImageForWidget}>
+      <Fragment slot="title" set:html={heroTitle} />
+      <Fragment slot="subtitle" set:html={heroSubtitle} />
+    </Hero>
 
-    <Fragment slot="subtitle">
-      <span class="hidden sm:inline">
-        <span class="font-semibold">AstroWind</span> is a free, customizable and production-ready template for Astro 5.0
-        + Tailwind CSS.</span
-      >
-      <span class="block mb-1 sm:hidden font-bold text-blue-600">AstroWind: Production-ready.</span>
-      Suitable for Startups, Small Business, SaaS websites, Professional Portfolios, Marketing websites, Landing Pages &
-      Blogs.
-    </Fragment>
-  </Hero>
+    {/* --- FEATURES WIDGET (Your Benefits Section) --- */}
+    <Features
+      id="benefits"
+      tagline="Benefits"
+      title="What You Will Discover"
+      subtitle="Modern relationships are a mess we designed. Uncover the flawed blueprint, then discover the elegant path to rebuild."
+      items={benefitsItems}
+      classes={{ container: 'py-16 md:py-20 bg-white dark:bg-slate-900'}}
+    />
 
-  <!-- Note Widget ******************* -->
+    {/* --- TESTIMONIALS WIDGET --- */}
+    <Testimonials
+      id="testimonials"
+      title="What People Are Saying"
+      subtitle="Hear from those who have started their journey to healthier, more fulfilling relationships."
+      tagline="Success Stories"
+      testimonials={myTestimonials}
+      classes={{ container: 'py-16 md:py-20' }}
+    >
+      <Fragment slot="bg">
+        <div class="absolute inset-0 bg-blue-50 dark:bg-slate-800/30"></div>
+      </Fragment>
+    </Testimonials>
 
-  <!-- <Note /> -->
+    {/* --- CONTENT WIDGET ("Meet JJ Roberts" - Part 1: The Journey) --- */}
+    <Content
+      id="about-jj-roberts"
+      isReversed={false}
+      tagline={aboutJJTagline}
+      title={aboutJJTitle}
+      image={aboutJJImageForWidget}
+      classes={{ container: 'pt-16 md:pt-20 pb-8 md:pb-10 bg-slate-50 dark:bg-slate-800/30', panel: 'gap-8 md:gap-12 lg:gap-16 items-center', content: 'prose prose-lg dark:prose-invert max-w-none text-left', image: 'max-w-xs sm:max-w-sm md:max-w-md mx-auto md:mx-0 rounded-lg shadow-lg'}}
+    >
+      <Fragment slot="content">
+        <div class="space-y-4" set:html={aboutJJExpertDescription} />
+        <div class="mt-8 text-center md:text-left">
+          <a href="/about" class="inline-block text-brand-green hover:text-brand-green-darker font-semibold transition duration-200 ease-in-out group">
+            <span>More About JJ's Journey</span>
+            <span class="tracking-normal text-brand-green group-hover:translate-x-0.5 transition-transform duration-150 ease-in-out ml-1">→</span>
+          </a>
+        </div>
+      </Fragment>
+    </Content>
 
-  <!-- Features Widget *************** -->
+    {/* --- CONTENT WIDGET (Focus on Book & "Buy Now" Button) - Part 2 of About --- */}
+    <Content
+        id="get-the-book"
+        isReversed={true}
+        title={bookSectionTitle}
+        image={bookImageForWidget}
+        classes={{ container: 'pt-8 md:pt-10 pb-16 md:pb-20 bg-slate-50 dark:bg-slate-800/30', panel: 'gap-8 md:gap-12 lg:gap-16 items-center', content: 'prose prose-lg dark:prose-invert max-w-none text-left', image: 'max-w-[180px] sm:max-w-[200px] md:max-w-[240px] mx-auto md:mx-0 rounded-md shadow-2xl hover:scale-105 transition-transform duration-300'}}
+    >
+        <Fragment slot="content">
+            <div class="space-y-4" set:html={bookExpertDescriptionAndOffer} />
+            <div class="mt-8 text-center md:text-left">
+                <a
+                    href="https://www.amazon.com/Sex-3-0-J-Roberts-ebook/dp/B006PU2DLI"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center justify-center gap-2 px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap" 
+                >
+                    <Icon name="tabler:brand-amazon" class="w-5 h-5 md:w-6 md:h-6" />
+                    <span>Order Your Copy Now</span>
+                </a>
+            </div>
+            <div class="mt-4 text-center md:text-left">
+                <a href="/book-details" class="text-sm text-brand-green hover:underline">Learn more about the book...</a>
+            </div>
+        </Fragment>
+    </Content>
 
-  <Features
-    id="benefits"
-    tagline="Benefits"
-    title="What you will discover"
-    subtitle="Modern relationships are a mess we designed. Uncover the flawed blueprint, then discover the elegant path to rebuild."
-    items={[
-      {
-        title: 'Create a Bond That is Built to Actually Last',
-        description:
-          'Discover why relationships founded on freedom and genuine mutual reward often have greater strength and longevity.',
-        icon: 'tabler:brand-tailwind',
-      },
-      {
-        title: 'Break Free From the Same Old Relationship Heartbreak',
-        description:
-          'Identify and release the outdated patterns that keep you stuck, and step into a new way of loving.',
-        icon: 'tabler:components',
-      },
-      {
-        title: 'Create a Love That Feels Effortless, Not Like Hard Work',
-        description:
-          'Learn principles that make connections more self-sustaining and joyful, minimising draining conflicts.',
-        icon: 'tabler:list-check',
-      },
-      {
-        title: 'Finally Understand Why Modern Dating is So Confusing (And How to Navigate It)',
-        description:
-          'Get the clear map to understanding modern relationship landscapes and making choices that lead to happiness.',
-        icon: 'tabler:rocket',
-      },
-      {
-        title: 'Become the Conscious Creator of Your Relationship Destiny',
-        description:
-          "Reclaim your power from societal scripts and outdated advice to build the fulfilling love life you truly deserve.",
-        icon: 'tabler:arrows-right-left',
-      },
-      {
-        title: 'Finally, a Relationship Without the Jealousy Games',
-        description:
-          'Discover how to build unwavering trust and eliminate possessive patterns for a truly peaceful connection.',
-        icon: 'tabler:bulb',
-      },
-    ]}
-  />
+    {/* --- ACCORDION FAQ WIDGET --- */}
+    <AccordionFAQ
+      id="homepage-faqs"
+      title="Quick Answers to Key Questions"
+      subtitle="Get clarity on the core ideas of this transformative approach."
+      tagline="Clarifications"
+      items={homepageFAQItems}
+      classes={{ container: 'py-16 md:py-20 bg-white dark:bg-slate-900' }}
+    />
 
-  <!-- Testimonials Widget ******************* -->
-  <Testimonials
-    id="testimonials"
-    title="What People Are Saying"
-    subtitle="Hear from those who have started their journey to healthier, more fulfilling relationships."
-    tagline="Success Stories"
-    testimonials={myTestimonials}
-  >
-    <Fragment slot="bg">
-      <div class="absolute inset-0 bg-blue-50 dark:bg-transparent"></div>
-    </Fragment>
-  </Testimonials>
+    {/* --- SINGLE COMBINED RESOURCE SWIPER SECTION --- */}
+    <ResourceSwiper
+      id="all-resources-swiper"
+      headline="Dive Deeper: Latest Insights & Resources"
+      subheadline="Explore articles, watch videos, and listen to podcasts designed to guide your relationship upgrade."
+      items={allMyResources}
+      viewAllLink="/resources"
+      viewAllText="Explore All Resources"
+      classes={{ container: "py-16 md:py-20 bg-slate-100 dark:bg-slate-800" }}
+      lgSlidesPerView={3.3} mdSlidesPerView={2.3} slidesPerView={1.3} spaceBetween={20}
+      loop={allMyResources.length > 3}
+    />
 
-  <!-- Content Widget **************** -->
-  <Content
-    isReversed
-    id="about-the-expert"
-    subtitle="Discover the journey and insights that led to a revolutionary framework for transforming modern relationships"
-    title="Meet JJ Roberts"
-    tagline="Architect of a New Relationship Paradigm"
+    {/* --- FINAL CALL TO ACTION (Quiz) using Content Widget --- */}
+    <Content
+      id="final-cta-quiz-section" 
+      isReversed={false} 
+      tagline={finalCtaTagline}
+      title={finalCtaTitle}
+      image={finalCtaImage} 
+       
+      classes={{
+        container: 'py-16 md:py-24 bg-brand-orange/10 dark:bg-brand-orange/5',
+        panel: 'gap-8 md:gap-12 lg:gap-16 items-center',
+        content: 'prose prose-lg dark:prose-invert max-w-none text-center md:text-left',
+        image: 'max-w-md lg:max-w-lg mx-auto md:mx-0 rounded-lg shadow-xl',
+        actions: 'mt-8 flex justify-center md:justify-start'
+      }}
+    >
+      <Fragment slot="content">
+        <div class="space-y-4" set:html={finalCtaDescription} />
+        {/* Button is rendered by 'actions' prop of Content widget */}
+      </Fragment>
+    </Content>
 
-    image={{
-      src: '~/assets/images/jj_upscale.jpg',
-      alt: 'JJ Roberts',
-    }}
-  >
-    <Fragment slot="content">
-      <h3 class="text-2xl font-bold tracking-tight dark:text-white sm:text-3xl mb-2">Taking The Journey</h3>
-      <div set:html={aboutJJExpertDescription} />
-    </Fragment>
-
-
-  </Content>
-
-  <!-- Content Widget **************** -->
-
-  <Content
-    isAfterContent
-
-    image={{
-      src: '~/assets/images/book_thin.png',
-      alt: 'Book Image',
-    }}
-  >
-  <Fragment slot="content">
-    <h3 class="text-2xl font-bold tracking-tight dark:text-white sm:text-3xl mb-2">Writing The Book</h3>
-    <div set:html={aboutJJExpertDescription2} />
-  </Fragment>
-  </Content>
-
-
-  <AccordionFAQ
-    id="homepage-faqs" 
-    title="Quick Answers to Key Questions"
-    subtitle="Get clarity on the core ideas of this transformative approach."
-    tagline="Common Queries"
-    items={homepageFAQItems} 
-    isDark={false} 
-    classes={{ container: 'bg-white dark:bg-slate-900' }} 
-  >
-
-</AccordionFAQs>
-
-
- 
+  </main>
 
 
 
-<ResourceSwiper
-  id="all-resources-swiper"
-  headline="Dive Deeper: Latest Insights & Resources"
-  subheadline="Explore articles, watch videos, and listen to podcasts designed to guide your relationship upgrade."
-  items={allMyResources}
-  viewAllLink="/resources"
-  viewAllText="Explore All Resources"
-  classes={{ container: "py-16 md:py-20 bg-slate-100 dark:bg-slate-800" }}
-  lgSlidesPerView={3.3}
-  mdSlidesPerView={2.3}
-  slidesPerView={1.3}
-  spaceBetween={20}
-  loop={allMyResources.length > 3}
-/>
+  {/* Scripts for Forms */}
+  <script is:inline>
+    function handleFormSubmit(formId, emailInputId, messageElementId, successMessage, quizRedirectUrl = null) {
+      const form = document.getElementById(formId);
+      const emailInput = document.getElementById(emailInputId);
+      const messageElement = document.getElementById(messageElementId);
 
+      form?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!messageElement || !(emailInput instanceof HTMLInputElement)) return; // Type guards
 
+        messageElement.textContent = '';
+        messageElement.style.color = 'inherit';
 
+        if (emailInput.checkValidity()) {
+           messageElement.textContent = 'Processing...';
+           messageElement.style.color = 'gray';
+           console.log(`Form ${formId} submitted with email:`, emailInput.value);
+           // ** ACTUAL EMAIL SENDING LOGIC (e.g., fetch to API) WOULD GO HERE **
+           setTimeout(() => {
+            messageElement.textContent = successMessage;
+            messageElement.style.color = 'green';
+            form.reset();
+            if (quizRedirectUrl) {
+                alert("Redirecting to quiz (placeholder)... You also get free chapters!");
+                // window.location.href = quizRedirectUrl; // Uncomment for actual redirect
+            } else {
+                alert("Free chapters would be sent now (placeholder)!");
+            }
+          }, 1000);
+        } else {
+          messageElement.textContent = 'Please enter a valid email address.';
+          messageElement.style.color = 'red';
+          emailInput.focus();
+        }
+      });
+    }
+    // Initialize Hero Form
+    handleFormSubmit('hero-page-form', 'hero-page-email', 'hero-page-form-message', "Thanks! Your free chapters are on their way (simulated).");
 
-
-
-
-
-
-
-
-
-  <!-- Steps Widget ****************** -->
-
-  <Steps
-    title="Get your dream website up and running in no time with AstroWind."
-    items={[
-      {
-        title: 'Step 1: <span class="font-medium">Download</span>',
-        description:
-          "Kickstart with GitHub! Either fork the AstroWind template or simply click 'Use this template'. Your canvas awaits, ready for your digital masterpiece. In just a few clicks, you've already set the foundation.",
-        icon: 'tabler:package',
-      },
-      {
-        title: 'Step 2: <span class="font-medium">Add content</span>',
-        description:
-          "Pour your vision into it. Add images, text, and all that jazz to breathe life into your digital space. Remember, it's the content that tells your story, so make it captivating.",
-        icon: 'tabler:letter-case',
-      },
-      {
-        title: 'Step 3: <span class="font-medium">Customize styles</span>',
-        description:
-          'Give it your personal touch. Tailor colors, fonts, and layouts until it feels just right. Your unique flair, amplified by AstroWind! Precision in design ensures a seamless user experience.',
-        icon: 'tabler:paint',
-      },
-      {
-        title: 'Ready!',
-        icon: 'tabler:check',
-      },
-    ]}
-    image={{
-      src: 'https://images.unsplash.com/photo-1616198814651-e71f960c3180?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=987&q=80',
-      alt: 'Steps image',
-    }}
-  />
-
-  <!-- Features2 Widget ************** -->
-
-  <Features2
-    title="Most used widgets"
-    subtitle="Provides frequently used components for building websites using Tailwind CSS"
-    tagline="Components"
-    items={[
-      {
-        title: 'Headers',
-        description: "Ever tried driving without GPS? Boom! That's why websites need headers for direction.",
-        icon: 'flat-color-icons:template',
-      },
-      {
-        title: 'Heros',
-        description:
-          "Picture a superhero landing – epic, right? That's the job of a Hero section, making grand entrances!",
-        icon: 'flat-color-icons:gallery',
-      },
-      {
-        title: 'Features',
-        description:
-          'Where websites strut their stuff and show off superpowers. No holding back on the bragging rights here!',
-        icon: 'flat-color-icons:approval',
-      },
-      {
-        title: 'Content',
-        description:
-          "Dive into the meat and potatoes of a site; without it, you'd just be window shopping. Content is king.",
-        icon: 'flat-color-icons:document',
-      },
-      {
-        title: 'Call-to-Action',
-        description:
-          'That enthusiastic friend who\'s always urging, "Do it! Do it!"? Yeah, that\'s this button nudging you towards adventure.',
-        icon: 'flat-color-icons:advertising',
-      },
-      {
-        title: 'Pricing',
-        description: 'Behold the dessert menu of the website world. Tempting choices await, can you resist?',
-        icon: 'flat-color-icons:currency-exchange',
-      },
-      {
-        title: 'Testimonial',
-        description: 'Step into the gossip corner! Here, other visitors spill the beans and share the juicy details.',
-        icon: 'flat-color-icons:voice-presentation',
-      },
-      {
-        title: 'Contact',
-        description:
-          'Like a digital mailbox, but faster! Drop a line, ask a question, or send a virtual high-five. Ding! Message in.',
-        icon: 'flat-color-icons:business-contact',
-      },
-      {
-        title: 'Footers',
-        description: "The footer's like the credits of a movie but sprinkled with easter eggs. Time to hunt!",
-        icon: 'flat-color-icons:database',
-      },
-    ]}
-  >
-    <Fragment slot="bg">
-      <div class="absolute inset-0 bg-blue-50 dark:bg-transparent"></div>
-    </Fragment>
-  </Features2>
-
-  <!-- HighlightedPosts Widget ******* -->
-
-  <BlogLatestPosts
-    title="Find out more content in our Blog"
-    information={`The blog is used to display AstroWind documentation.
-                        Each new article will be an important step that you will need to know to be an expert in creating a website using Astro + Tailwind CSS.
-                        Astro is a very interesting technology. Thanks.
-                `}
-  />
-
-  <!-- FAQs Widget ******************* -->
-
-  <FAQs
-    title="Frequently Asked Questions"
-    subtitle="Dive into the following questions to gain insights into the powerful features that AstroWind offers and how it can elevate your web development journey."
-    tagline="FAQs"
-    classes={{ container: 'max-w-6xl' }}
-    items={[
-      {
-        title: 'Why AstroWind?',
-        description:
-          "Michael Knight a young loner on a crusade to champion the cause of the innocent. The helpless. The powerless in a world of criminals who operate above the law. Here he comes Here comes Speed Racer. He's a demon on wheels.",
-      },
-      {
-        title: 'What do I need to start?',
-        description:
-          'Space, the final frontier. These are the voyages of the Starship Enterprise. Its five-year mission: to explore strange new worlds. Many say exploration is part of our destiny, but it’s actually our duty to future generations.',
-      },
-      {
-        title: 'How to install the Astro + Tailwind CSS template?',
-        description:
-          "Well, the way they make shows is, they make one show. That show's called a pilot. Then they show that show to the people who make shows, and on the strength of that one show they decide if they're going to make more shows.",
-      },
-      {
-        title: "What's something that you don't understand?",
-        description:
-          "A flower in my garden, a mystery in my panties. Heart attack never stopped old Big Bear. I didn't even know we were calling him Big Bear.",
-      },
-      {
-        title: 'What is something that you would like to try again?',
-        description:
-          "A business big enough that it could be listed on the NASDAQ goes belly up. Disappears! It ceases to exist without me. No, you clearly don't know who you're talking to, so let me clue you in.",
-      },
-      {
-        title: 'If you could only ask one question to each person you meet, what would that question be?',
-        description:
-          "This is not about revenge. This is about justice. A lot of things can change in twelve years, Admiral. Well, that's certainly good to know. About four years. I got tired of hearing how young I looked.",
-      },
-    ]}
-  />
-
-  <!-- Stats Widget ****************** -->
-
-  <Stats
-    stats={[
-      { title: 'Downloads', amount: '132K' },
-      { title: 'Stars', amount: '24.8K' },
-      { title: 'Forks', amount: '10.3K' },
-      { title: 'Users', amount: '48.4K' },
-    ]}
-  />
-
-  <!-- CallToAction Widget *********** -->
-
-  <CallToAction
-    actions={[
-      {
-        variant: 'primary',
-        text: 'Get template',
-        href: 'https://github.com/onwidget/astrowind',
-        target: '_blank',
-        icon: 'tabler:download',
-      },
-    ]}
-  >
-    <Fragment slot="title">
-      Astro&nbsp;+&nbsp;<br class="block sm:hidden" /><span class="sm:whitespace-nowrap">Tailwind CSS</span>
-    </Fragment>
-
-    <Fragment slot="subtitle">
-      Be very surprised by these huge fake numbers you are seeing on this page. <br class="hidden md:inline" />Don't
-      waste more time! :P
-    </Fragment>
-  </CallToAction>
+    // Note: The Final CTA section now uses AstroWind's Content widget with an 'actions' prop,
+    // which renders a button that's an <a> tag. If you want an email form for the quiz CTA,
+    // you'd build a form section similar to the 'hero-form-section' instead of using the Content widget's action button.
+    // If finalCtaActions links to a /quiz page that has its own form, no JS needed here for *that specific form*.
+  </script>
 </Layout>

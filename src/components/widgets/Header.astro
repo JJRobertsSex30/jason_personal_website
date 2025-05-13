@@ -70,13 +70,18 @@ const currentPath = `/${trimSlash(new URL(Astro.url).pathname)}`;
       },
     ]}
   >
-    <div class:list={[{ 'mr-auto rtl:mr-0 rtl:ml-auto': position === 'right' }, 'flex justify-between']}>
-      <a class="flex items-center" href={getHomePermalink()}>
-        <Logo />
-      </a>
-      <div class="flex items-center md:hidden">
-        <ToggleMenu />
-      </div>
+    <div class:list={[
+        { 'md:col-span-1 md:flex': position === 'center' },
+        'flex items-center justify-start',
+    ]}>
+        <a class="flex items-center" href={getHomePermalink()} title="JJ Roberts | Sex 3.0 Home">
+            <span class="self-center text-xl lg:text-2xl font-bold whitespace-nowrap text-brand-green dark:text-white">
+                JJ Roberts | Sex 3.0
+            </span>
+        </a>
+        <div class="flex items-center md:hidden ml-auto">
+            <ToggleMenu />
+        </div>
     </div>
     <nav
       class="items-center w-full md:w-auto hidden md:flex md:mx-5 text-default overflow-y-auto overflow-x-hidden md:overflow-y-visible md:overflow-x-auto md:justify-self-center"
@@ -121,7 +126,7 @@ const currentPath = `/${trimSlash(new URL(Astro.url).pathname)}`;
                   ]}
                   href={href}
                 >
-                  {text}
+
                 </a>
               )}
             </li>
@@ -138,29 +143,9 @@ const currentPath = `/${trimSlash(new URL(Astro.url).pathname)}`;
       <div class="items-center flex justify-between w-full md:w-auto">
         <div class="flex">
           {showToggleTheme && <ToggleTheme iconClass="w-6 h-6 md:w-5 md:h-5 md:inline-block" />}
-          {
-            showRssFeed && (
-              <a
-                class="text-muted dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5 inline-flex items-center"
-                aria-label="RSS Feed"
-                href={getAsset('/rss.xml')}
-              >
-                <Icon name="tabler:rss" class="w-5 h-5" />
-              </a>
-            )
-          }
+
         </div>
-        {
-          actions?.length ? (
-            <span class="ml-4 rtl:ml-0 rtl:mr-4">
-              {actions.map((btnProps) => (
-                <Button {...btnProps} class="ml-2 py-2.5 px-5.5 md:px-6 font-semibold shadow-none text-sm w-auto" />
-              ))}
-            </span>
-          ) : (
-            ''
-          )
-        }
+ 
       </div>
     </div>
   </div>
