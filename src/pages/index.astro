@@ -99,12 +99,24 @@ const allMyResources: MediaResource[] = [
   { type: 'audio', title: 'Ep 02: Commitment & Freedom Redefined', link: '/podcast/ep-02', imageSrc: imgPodcastPlaceholder2, imageAlt: 'Sound waves', category: 'Season 1', durationOrReadTime: '42:30', sourceName: 'The Upgrade Podcast', description: "What these terms *truly* mean." },
 ];
 
-// === FINAL CALL TO ACTION (Quiz) ===
+// === FINAL CALL TO ACTION (Quiz) DATA ===
 const finalCtaTagline = "Your Next Step to a Better Love Life";
 const finalCtaTitle = "Unlock Your Relationship Blueprint";
-const finalCtaImage = { src: imgHeroMain, alt: 'Abstract graphic representing a blueprint or pathway' }; // Re-using hero image as placeholder
-const finalCtaDescription = `Ready to understand what's *really* going on in your relationships and how to make lasting positive changes? Our quick, insightful quiz will help you identify key patterns and provide a starting point for your personal transformation. Plus, you'll get exclusive free chapters from "Sex 3.0: The Relationship Upgrade" to guide you further!`;
-const finalCtaActions = [ { variant: 'primary', text: 'Take the 2-Minute Insight Quiz Now', href: '/quiz', icon: 'tabler:checkup-list' } ]; // Link to your quiz page
+const finalCtaImage = { src: imgHeroMain, alt: 'Abstract graphic representing a blueprint or pathway' }; // Re-using hero image as placeholder, replace
+const finalCtaDescription = `
+  Ready to understand what's *really* going on in your relationships and how to make lasting positive changes? 
+  Our quick, insightful quiz will help you identify key patterns and provide a starting point for your personal transformation. 
+  Plus, you'll get exclusive free chapters from "Sex 3.0: The Relationship Upgrade" to guide you further!
+`;
+// We will define the button manually, so this might not be strictly needed if not using Content's 'actions' prop
+const finalCtaButton = {
+    text: 'Enter The Love Lab', // Updated text
+    href: '/quiz', // Link to your quiz page
+    icon: 'tabler:flask' // Example icon
+};
+
+
+
 ---
 
 <Layout metadata={metadata}>
@@ -211,24 +223,38 @@ const finalCtaActions = [ { variant: 'primary', text: 'Take the 2-Minute Insight
     />
 
     {/* --- FINAL CALL TO ACTION (Quiz) using Content Widget --- */}
-    <Content
-      id="final-cta-quiz-section" 
+  <Content
+      id="final-cta-quiz-section"
       isReversed={false} 
       tagline={finalCtaTagline}
       title={finalCtaTitle}
-      image={finalCtaImage} 
-       
+      image={finalCtaImage}
       classes={{
-        container: 'py-16 md:py-24 bg-brand-orange/10 dark:bg-brand-orange/5',
+        container: 'py-16 md:py-24 bg-brand-orange/5 dark:bg-brand-orange/5', // Subtle orange tint for section
         panel: 'gap-8 md:gap-12 lg:gap-16 items-center',
         content: 'prose prose-lg dark:prose-invert max-w-none text-center md:text-left',
-        image: 'max-w-md lg:max-w-lg mx-auto md:mx-0 rounded-lg shadow-xl',
-        actions: 'mt-8 flex justify-center md:justify-start'
+        image: 'max-w-md lg:max-w-lg mx-auto md:mx-0 rounded-lg shadow-xl order-first md:order-last', // Image on right for this layout
       }}
     >
       <Fragment slot="content">
         <div class="space-y-4" set:html={finalCtaDescription} />
-        {/* Button is rendered by 'actions' prop of Content widget */}
+        {/* === YOUR WARM ORANGE BUTTON HERE === */}
+        <div class="mt-8 flex justify-center md:justify-start">
+          <a
+            href={finalCtaButton.href}
+            class="inline-flex items-center justify-center gap-2 
+                   px-8 py-3 bg-orange-500 hover:bg-orange-600 
+                   text-white text-lg font-semibold rounded-full 
+                   shadow-md transition duration-300 ease-in-out 
+                   transform hover:scale-105 whitespace-nowrap
+                   focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-orange-700 dark:focus-visible:ring-offset-slate-900"
+            target={finalCtaButton.href.startsWith('http') ? '_blank' : '_self'}
+            rel={finalCtaButton.href.startsWith('http') ? 'noopener noreferrer' : ''}
+          >
+            {finalCtaButton.icon && <Icon name={finalCtaButton.icon} class="w-5 h-5 md:w-6 md:h-6" />}
+            <span>{finalCtaButton.text}</span>
+          </a>
+        </div>
       </Fragment>
     </Content>
 

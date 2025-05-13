@@ -3,171 +3,124 @@ import { getPermalink, getBlogPermalink, getAsset } from './utils/permalinks';
 export const headerData = {
   links: [
     {
-      text: 'Homes',
+      text: 'The Framework',
       links: [
         {
-          text: 'SaaS',
-          href: getPermalink('/homes/saas'),
+          text: 'What is Sex 3.0',
+          href: getPermalink('/#'),
         },
         {
-          text: 'Startup',
-          href: getPermalink('/homes/startup'),
+          text: 'Key Benefits',
+          href: getPermalink('/#'),
         },
         {
-          text: 'Mobile App',
-          href: getPermalink('/homes/mobile-app'),
-        },
-        {
-          text: 'Personal',
-          href: getPermalink('/homes/personal'),
+          text: 'Why the Old Way Fails',
+          href: getPermalink('/#'),
         },
       ],
     },
     {
-      text: 'Pages',
+      text: 'Resources',
       links: [
         {
-          text: 'Features (Anchor Link)',
-          href: getPermalink('/#features'),
+          text: 'The Book - Sex 3.0',
+          href: getPermalink('/#'),
         },
         {
-          text: 'Services',
-          href: getPermalink('/services'),
+          text: 'Blog',
+          href: getPermalink('/#'),
         },
         {
-          text: 'Pricing',
-          href: getPermalink('/pricing'),
+          text: 'Videos',
+          href: getPermalink('/#'),
         },
         {
-          text: 'About us',
-          href: getPermalink('/about'),
+          text: 'Podcast',
+          href: getPermalink('/#'),
+        },
+      ],
+    },
+    {
+      text: 'Love Lab',
+      links: [
+        {
+          text: 'Take the Quiz',
+          href: getPermalink('/#'),
+        },
+        {
+          text: 'Relationship Blueprint Tool',
+          href: getPermalink('/#'),
+        },
+        {
+          text: 'Interactive Exercises',
+          href: getPermalink('/#'),
+        },
+      ],
+    },
+    {
+      text: 'About JJ',
+      links: [
+        {
+          text: 'My Story',
+          href: getPermalink('/#'),
+        },
+        {
+          text: 'My Mission',
+          href: getPermalink('/#'),
         },
         {
           text: 'Contact',
-          href: getPermalink('/contact'),
-        },
-        {
-          text: 'Terms',
-          href: getPermalink('/terms'),
-        },
-        {
-          text: 'Privacy policy',
-          href: getPermalink('/privacy'),
+          href: getPermalink('/#'),
         },
       ],
-    },
-    {
-      text: 'Landing',
-      links: [
-        {
-          text: 'Lead Generation',
-          href: getPermalink('/landing/lead-generation'),
-        },
-        {
-          text: 'Long-form Sales',
-          href: getPermalink('/landing/sales'),
-        },
-        {
-          text: 'Click-Through',
-          href: getPermalink('/landing/click-through'),
-        },
-        {
-          text: 'Product Details (or Services)',
-          href: getPermalink('/landing/product'),
-        },
-        {
-          text: 'Coming Soon or Pre-Launch',
-          href: getPermalink('/landing/pre-launch'),
-        },
-        {
-          text: 'Subscription',
-          href: getPermalink('/landing/subscription'),
-        },
-      ],
-    },
-    {
-      text: 'Blog',
-      links: [
-        {
-          text: 'Blog List',
-          href: getBlogPermalink(),
-        },
-        {
-          text: 'Article',
-          href: getPermalink('get-started-website-with-astro-tailwind-css', 'post'),
-        },
-        {
-          text: 'Article (with MDX)',
-          href: getPermalink('markdown-elements-demo-post', 'post'),
-        },
-        {
-          text: 'Category Page',
-          href: getPermalink('tutorials', 'category'),
-        },
-        {
-          text: 'Tag Page',
-          href: getPermalink('astro', 'tag'),
-        },
-      ],
-    },
-    {
-      text: 'Widgets',
-      href: '#',
     },
   ],
   actions: [{ text: 'Download', href: 'https://github.com/onwidget/astrowind', target: '_blank' }],
 };
 
 export const footerData = {
+  // We can use one or two main columns for this flatter list.
+  // Let's aim for two columns for better readability if the list is long.
   links: [
     {
-      title: 'Product',
+      title: 'Navigate', // Column 1 Title (Optional, can be empty if no title needed)
       links: [
-        { text: 'Features', href: '#' },
-        { text: 'Security', href: '#' },
-        { text: 'Team', href: '#' },
-        { text: 'Enterprise', href: '#' },
-        { text: 'Customer stories', href: '#' },
-        { text: 'Pricing', href: '#' },
-        { text: 'Resources', href: '#' },
+        { text: 'Home', href: getPermalink('/') },
+        { text: 'Full JJ Bio', href: getPermalink('/about-jj') },
+        { text: 'Love Lab (Quiz)', href: getPermalink('/quiz') },
+        { text: 'Courses', href: getPermalink('/courses') },
+        { text: 'Contact / Work With JJ', href: getPermalink('/work-with-jj') },
       ],
     },
     {
-      title: 'Platform',
+      title: 'Resources', // Column 2 Title (Optional)
       links: [
-        { text: 'Developer API', href: '#' },
-        { text: 'Partners', href: '#' },
-        { text: 'Atom', href: '#' },
-        { text: 'Electron', href: '#' },
-        { text: 'AstroWind Desktop', href: '#' },
+        { text: 'The Book', href: getPermalink('/book-details') },
+        { text: 'Blog', href: getPermalink('/blog') },
+        { text: 'Videos', href: getPermalink('/videos') },
+        { text: 'Podcast', href: getPermalink('/podcast') },
+        { text: 'Full FAQ', href: getPermalink('/faq') },
+        // You can add more links here if needed for the second column
       ],
     },
+    // If you want a third column for legal, or merge legal into secondaryLinks:
+    /*
     {
-      title: 'Support',
+      title: 'Legal',
       links: [
-        { text: 'Docs', href: '#' },
-        { text: 'Community Forum', href: '#' },
-        { text: 'Professional Services', href: '#' },
-        { text: 'Skills', href: '#' },
-        { text: 'Status', href: '#' },
-      ],
-    },
-    {
-      title: 'Company',
-      links: [
-        { text: 'About', href: '#' },
-        { text: 'Blog', href: '#' },
-        { text: 'Careers', href: '#' },
-        { text: 'Press', href: '#' },
-        { text: 'Inclusion', href: '#' },
-        { text: 'Social Impact', href: '#' },
-        { text: 'Shop', href: '#' },
-      ],
-    },
+        { text: 'Privacy Policy', href: getPermalink('/privacy') },
+        { text: 'Terms of Service', href: getPermalink('/terms') },
+      ]
+    }
+    */
   ],
+
+  // Secondary links (these usually appear horizontally below the main columns or site name)
   secondaryLinks: [
-    { text: 'Terms', href: getPermalink('/terms') },
     { text: 'Privacy Policy', href: getPermalink('/privacy') },
+    { text: 'Terms of Service', href: getPermalink('/terms') },
+    // You could also put FAQ here if not in main columns:
+    // { text: 'FAQ', href: getPermalink('/faq') },
   ],
   socialLinks: [
     { ariaLabel: 'X', icon: 'tabler:brand-x', href: '#' },
@@ -177,7 +130,6 @@ export const footerData = {
     { ariaLabel: 'Github', icon: 'tabler:brand-github', href: 'https://github.com/onwidget/astrowind' },
   ],
   footNote: `
-    <img class="w-5 h-5 md:w-6 md:h-6 md:-mt-0.5 bg-cover mr-1.5 rtl:mr-0 rtl:ml-1.5 float-left rtl:float-right rounded-sm" src="https://onwidget.com/favicon/favicon-32x32.png" alt="onWidget logo" loading="lazy"></img>
-    Made by <a class="text-blue-600 underline dark:text-muted" href="https://onwidget.com/"> onWidget</a> · All rights reserved.
+    JJ Roberts · All rights reserved 2025.
   `,
 };
