@@ -68,13 +68,15 @@ const myTestimonials = [
 ];
 
 // === ABOUT JJ DATA (Part 1) ===
+
 const aboutJJTagline = "Architect of a New Relationship Paradigm";
 const aboutJJTitle = "Meet JJ Roberts";
+const aboutJJsubtitle="Discover the journey and insights that led to a revolutionary framework for transforming modern relationships"
 const aboutJJImageForWidget = { src: imgAboutJJ, alt: 'JJ Roberts' };
 const aboutJJExpertDescription = `JJ Roberts is a pioneering voice in relationship psychology, dedicated to helping individuals escape the frustrating cycles of conventional relationships. For years, JJ experienced firsthand the limitations and disappointments of traditional relationship models—a system fraught with unspoken rules and inevitable conflict. This personal journey culminated in an enlightening two-year research trip across more than 40 countries, a quest to understand the true nature of human connection beyond societal conditioning. <br/><br/>This global exploration led to profound breakthroughs and the deconstruction of outdated relationship paradigms. JJ saw clearly the flawed design inherent in the common approach to love and intimacy—a system that often breeds misunderstanding, jealousy, and pain. From these realizations, the revolutionary modern framework for relationships was born.`;
 
 // === BOOK DATA / ABOUT JJ (Part 2) ===
-const bookSectionTitle = "The Culmination: \"Sex 3.0 - A Sexual Revolution Manual\"";
+const bookSectionTitle = "The Culmination";
 const bookImageForWidget = { src: imgBookCover, alt: "Sex 3.0 A Sexual Revolution Manual Book Cover" };
 const bookExpertDescriptionAndOffer = `
   This framework, born from years of research and real-world experience, is detailed in JJ's groundbreaking book, "Sex 3.0: A Sexual Revolution Manual." It provides the clear blueprint and practical tools you need to break free from outdated patterns and build the fulfilling connections you've always desired. This isn't just another relationship guide—it's a new operating system for your love life, already transforming lives worldwide.
@@ -150,35 +152,32 @@ const finalCtaButton = {
       </Fragment>
     </Testimonials>
 
-    {/* --- CONTENT WIDGET ("Meet JJ Roberts" - Part 1: The Journey) --- */}
-    <Content
-      id="about-jj-roberts"
-      isReversed={false}
-      tagline={aboutJJTagline}
-      title={aboutJJTitle}
-      image={aboutJJImageForWidget}
-      classes={{ container: 'pt-16 md:pt-20 pb-8 md:pb-10 bg-slate-50 dark:bg-slate-800/30', panel: 'gap-8 md:gap-12 lg:gap-16 items-center', content: 'prose prose-lg dark:prose-invert max-w-none text-left', image: 'max-w-xs sm:max-w-sm md:max-w-md mx-auto md:mx-0 rounded-lg shadow-lg'}}
-    >
-      <Fragment slot="content">
-        <div class="space-y-4" set:html={aboutJJExpertDescription} />
-        <div class="mt-8 text-center md:text-left">
-          <a href="/about" class="inline-block text-brand-green hover:text-brand-green-darker font-semibold transition duration-200 ease-in-out group">
-            <span>More About JJ? Read the full bio</span>
-            <span class="tracking-normal text-brand-green group-hover:translate-x-0.5 transition-transform duration-150 ease-in-out ml-1">→</span>
-          </a>
-        </div>
-      </Fragment>
-    </Content>
+    <section class="bg-slate-50 dark:bg-slate-800/30">
+      {/* --- CONTENT WIDGET ("Meet JJ Roberts" - Part 1: The Journey) --- */}
+      <Content
+        id="about-jj-roberts"
+        isReversed={false}
+        tagline={aboutJJTagline}
+        title={aboutJJTitle}    
+        subtitle={aboutJJsubtitle}
+        image={aboutJJImageForWidget}
+        classes={{ container: 'pt-16 md:pt-20 pb-0 md:pb-0 bg-transparent', panel: 'gap-8 md:gap-12 lg:gap-16 items-center', content: 'prose prose-lg dark:prose-invert max-w-none text-left', image: 'max-w-xs sm:max-w-sm md:max-w-md mx-auto md:mx-0 rounded-lg shadow-lg'}}
+      >
+         <Fragment slot="content">
+          <h3 class="text-2xl font-bold tracking-tight dark:text-white sm:text-3xl mb-2">The Journey</h3>
+          <div set:html={aboutJJExpertDescription} />
+         </Fragment>
+      </Content>
 
-    {/* --- CONTENT WIDGET (Focus on Book & "Buy Now" Button) - Part 2 of About --- */}
-    <Content
-        id="get-the-book"
-        isReversed={true}
-        title={bookSectionTitle}
-        image={bookImageForWidget}
-        classes={{ container: 'pt-8 md:pt-10 pb-16 md:pb-20 bg-slate-50 dark:bg-slate-800/30', panel: 'gap-8 md:gap-12 lg:gap-16 items-center', content: 'prose prose-lg dark:prose-invert max-w-none text-left', image: 'max-w-[180px] sm:max-w-[200px] md:max-w-[240px] mx-auto md:mx-0 rounded-md shadow-2xl hover:scale-105 transition-transform duration-300'}}
-    >
+      {/* --- CONTENT WIDGET (Focus on Book & "Buy Now" Button) - Part 2 of About --- */}
+      <Content
+          id="get-the-book"
+          isReversed={true}
+          image={bookImageForWidget}
+          classes={{ container: 'pt-0 md:pt-0 pb-16 md:pb-20 bg-transparent', panel: 'gap-8 md:gap-12 lg:gap-16 items-center', content: 'prose prose-lg dark:prose-invert max-w-none text-left', image: 'max-w-[180px] sm:max-w-[200px] md:max-w-[240px] mx-auto md:mx-0 rounded-md shadow-2xl hover:scale-105 transition-transform duration-300'}}
+      >
         <Fragment slot="content">
+          <h3 class="text-2xl font-bold tracking-tight dark:text-white sm:text-3xl mb-2">The Culmination</h3>
             <div class="space-y-4" set:html={bookExpertDescriptionAndOffer} />
             <div x-data="{ showEmailModal: false }" class="mt-8 flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
                 <a
@@ -202,6 +201,7 @@ const finalCtaButton = {
             </div>
         </Fragment>
     </Content>
+    </section>
 
     {/* --- ACCORDION FAQ WIDGET --- */}
     <AccordionFAQ
@@ -232,7 +232,7 @@ const finalCtaButton = {
       title={finalCtaTitle}
       image={finalCtaImage}
       classes={{
-        container: 'py-16 md:py-24 bg-brand-orange/5 dark:bg-brand-orange/5', // Subtle orange tint for section
+        container: 'py-16 md:py-24 bg-brand-orange/5 dark:bg-brand-orange/5', 
         panel: 'gap-8 md:gap-12 lg:gap-16 items-center',
         content: 'prose prose-lg dark:prose-invert max-w-none text-center md:text-left',
         image: 'max-w-md lg:max-w-lg mx-auto md:mx-0 rounded-lg shadow-xl order-first md:order-last', // Image on right for this layout
@@ -240,7 +240,7 @@ const finalCtaButton = {
     >
       <Fragment slot="content">
         <div class="space-y-4" set:html={finalCtaDescription} />
-        {/* === YOUR WARM ORANGE BUTTON HERE === */}
+
         <div class="mt-8 flex justify-center md:justify-start">
           <a
             href={finalCtaButton.href}
@@ -309,15 +309,5 @@ const finalCtaButton = {
     // you'd build a form section similar to the 'hero-form-section' instead of using the Content widget's action button.
     // If finalCtaActions links to a /quiz page that has its own form, no JS needed here for *that specific form*.
   </script>
-  <div x-data="{ showEmailModal: false }">
-    <button
-      type="button"
-      class="inline-flex items-center justify-center gap-2 px-8 py-3 bg-slate-400 hover:bg-slate-500 text-white text-lg font-semibold rounded-full shadow transition duration-200 whitespace-nowrap"
-      x-on:click="showEmailModal = true"
-    >
-      <Icon name="tabler:mail" class="w-5 h-5 md:w-6 md:h-6" />
-      <span>Get Free Chapter Samples First</span>
-    </button>
-    <EmailCaptureModal x-show="showEmailModal" x-on:click.away="showEmailModal = false" />
-  </div>
+
 </Layout>
