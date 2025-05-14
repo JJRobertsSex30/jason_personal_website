@@ -1,6 +1,6 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
-
+import vercel from '@astrojs/vercel/serverless'; 
 import { defineConfig } from 'astro/config';
 
 import sitemap from '@astrojs/sitemap';
@@ -22,7 +22,8 @@ const whenExternalScripts = (items: (() => AstroIntegration) | (() => AstroInteg
   hasExternalScripts ? (Array.isArray(items) ? items.map((item) => item()) : [items()]) : [];
 
 export default defineConfig({
-  output: 'static',
+  output: 'server',
+  adapter: vercel({}),
 
   integrations: [
     tailwind({
