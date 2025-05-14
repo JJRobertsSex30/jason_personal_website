@@ -1,8 +1,7 @@
 ---
-// src/components/Hero.astro --- Check image path and existence ---
-import { Image } from 'astro:assets'; // <-- Line 3: Ensure this import is correct
+import { Image } from 'astro:assets';
 
-// !! Line 8: VERIFY THIS PATH AND FILENAME MATCH YOUR ACTUAL IMAGE FILE !!
+// VERIFY THIS PATH AND FILENAME MATCH YOUR ACTUAL IMAGE FILE
 import heroBgImage from '~/assets/images/jj.jpg';
 
 // Define overlay color and opacity here for easy modification
@@ -12,10 +11,9 @@ const overlayOpacity = 'opacity-60';
 <section class="relative overflow-hidden py-24 md:py-32">
 
   {/* Background Image */}
-  {/* Error likely originates from Astro not finding the image specified on line 8 */}
-  <Image 
+  <Image
     src={heroBgImage}
-    alt="JJ Roberts" 
+    alt="JJ Roberts"
     width={1920}
     height={1080}
     format="webp"
@@ -38,7 +36,7 @@ const overlayOpacity = 'opacity-60';
       <p class="text-lg text-gray-200 mb-8 drop-shadow-sm">
         Uncover society's dirty little secret which causes relationships to fail. Then, learn the principles to take your connections to a brand new level.</p>
       {/* Basic Form */}
-      <form class="flex flex-col sm:flex-row gap-4 justify-center max-w-xl mx-auto">
+      <form id="hero-page-form" class="flex flex-col sm:flex-row gap-4 justify-center max-w-xl mx-auto">
         <label for="hero-email-bg" class="sr-only">Email address</label>
         <input
           type="email"
@@ -55,10 +53,61 @@ const overlayOpacity = 'opacity-60';
           Get Started Now
         </button>
       </form>
-      <p class="text-sm text-gray-300 mt-4 drop-shadow-sm">
-         
-       </p>
+      {/* Added message area */}
+      <p id="hero-page-form-message" class="text-sm text-gray-300 mt-4 drop-shadow-sm"></p>
     </div>
 
   </div>
 </section>
+
+---
+<script>
+  if (typeof window !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.getElementById('hero-page-form') as HTMLFormElement | null;
+      const emailInput = document.getElementById('hero-email-bg') as HTMLInputElement | null;
+      const message = document.getElementById('hero-page-form-message') as HTMLParagraphElement | null;
+      const submitBtn = form ? form.querySelector('button[type="submit"]') as HTMLButtonElement | null : null;
+      if (form && emailInput && message && submitBtn) {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const email = emailInput.value.trim();
+          // Simple email validation
+          const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+          if (!valid) {
+            message.textContent = 'Please enter a valid email address.';
+            message.style.color = '#f87171'; // red-400
+            return;
+          }
+          message.textContent = 'Submitting...';
+          message.style.color = '#fbbf24'; // amber-400
+          submitBtn.disabled = true;
+submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+          try {
+            const res = await fetch('/api/subscribe', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({ email })
+            });
+            const data = await res.json();
+            if (res.ok) {
+              message.textContent = 'You are now a member of the inner circle. Please check your email.';
+              message.style.color = '#34d399'; // green-400
+              form.reset();
+            } else {
+              message.textContent = data.message || 'Subscription failed. Please try again.';
+              message.style.color = '#f87171'; // red-400
+            }
+          } catch {
+
+            message.textContent = 'Network error. Please try again.';
+            message.style.color = '#f87171'; // red-400
+          } finally {
+            submitBtn.disabled = false;
+submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+          }
+        });
+      }
+    });
+  }
+</script>
