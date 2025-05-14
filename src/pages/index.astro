@@ -11,6 +11,7 @@ import Content from '~/components/widgets/Content.astro'; // For About JJ & Book
 import AccordionFAQ from '~/components/widgets/AccordionFAQ.astro'; // Your custom Accordion FAQ
 import EmbaSlider from '~/components/widgets/EmbaSlider.astro'; // Embla Carousel Slider
 import { Icon } from 'astro-icon/components'; // For buttons with icons
+import EmailCaptureModal from '~/components/ui/EmailCaptureModal.astro';
 
 // --- IMPORT YOUR LOCAL IMAGES (ImageMetadata objects) ---
 // Hero Image
@@ -179,7 +180,7 @@ const finalCtaButton = {
     >
         <Fragment slot="content">
             <div class="space-y-4" set:html={bookExpertDescriptionAndOffer} />
-            <div class="mt-8 text-center md:text-left">
+            <div x-data="{ showEmailModal: false }" class="mt-8 flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
                 <a
                     href="https://www.amazon.com/Sex-3-0-J-Roberts-ebook/dp/B006PU2DLI"
                     target="_blank"
@@ -189,9 +190,15 @@ const finalCtaButton = {
                     <Icon name="tabler:brand-amazon" class="w-5 h-5 md:w-6 md:h-6" />
                     <span>Order Your Copy Now</span>
                 </a>
-            </div>
-            <div class="mt-4 text-center md:text-left">
-                <a href="/book-details" class="text-sm text-brand-green hover:underline">Learn more about the book...</a>
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center gap-2 px-8 py-3 bg-slate-400 hover:bg-slate-500 text-white text-lg font-semibold rounded-full shadow transition duration-200 whitespace-nowrap"
+                  x-on:click="showEmailModal = true"
+                >
+                  <Icon name="tabler:mail" class="w-5 h-5 md:w-6 md:h-6" />
+                  <span>Get Free Chapter Samples First</span>
+                </button>
+                <EmailCaptureModal x-show="showEmailModal" x-on:click.away="showEmailModal = false" />
             </div>
         </Fragment>
     </Content>
@@ -302,4 +309,15 @@ const finalCtaButton = {
     // you'd build a form section similar to the 'hero-form-section' instead of using the Content widget's action button.
     // If finalCtaActions links to a /quiz page that has its own form, no JS needed here for *that specific form*.
   </script>
+  <div x-data="{ showEmailModal: false }">
+    <button
+      type="button"
+      class="inline-flex items-center justify-center gap-2 px-8 py-3 bg-slate-400 hover:bg-slate-500 text-white text-lg font-semibold rounded-full shadow transition duration-200 whitespace-nowrap"
+      x-on:click="showEmailModal = true"
+    >
+      <Icon name="tabler:mail" class="w-5 h-5 md:w-6 md:h-6" />
+      <span>Get Free Chapter Samples First</span>
+    </button>
+    <EmailCaptureModal x-show="showEmailModal" x-on:click.away="showEmailModal = false" />
+  </div>
 </Layout>
