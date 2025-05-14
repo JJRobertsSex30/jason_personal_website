@@ -9,7 +9,7 @@ import Features from '~/components/widgets/Features.astro'; // For Benefits sect
 import Testimonials from '~/components/widgets/Testimonials.astro'; // Your modified Testimonials
 import Content from '~/components/widgets/Content.astro'; // For About JJ & Book sections
 import AccordionFAQ from '~/components/widgets/AccordionFAQ.astro'; // Your custom Accordion FAQ
-import ResourceSwiper from '~/components/widgets/ResourceSwiper.astro'; // Your custom Swiper
+import EmbaSlider from '~/components/widgets/EmbaSlider.astro'; // Embla Carousel Slider
 import { Icon } from 'astro-icon/components'; // For buttons with icons
 
 // --- IMPORT YOUR LOCAL IMAGES (ImageMetadata objects) ---
@@ -206,17 +206,15 @@ const finalCtaButton = {
       classes={{ container: 'py-16 md:py-20 bg-white dark:bg-slate-900' }}
     />
 
-    {/* --- SINGLE COMBINED RESOURCE SWIPER SECTION --- */}
-    <ResourceSwiper
-      id="all-resources-swiper"
+    {/* --- RESOURCE CAROUSEL (Embla) --- */}
+    <EmbaSlider
+      id="all-resources-slider"
       headline="Dive Deeper: Latest Insights & Resources"
       subheadline="Explore articles, watch videos, and listen to podcasts designed to guide your relationship upgrade."
       items={allMyResources}
       viewAllLink="/resources"
       viewAllText="Explore All Resources"
       classes={{ container: "py-16 md:py-20 bg-slate-100 dark:bg-slate-800" }}
-      lgSlidesPerView={3.3} mdSlidesPerView={2.3} slidesPerView={1.3} spaceBetween={20}
-      loop={allMyResources.length > 3}
     />
 
     {/* --- FINAL CALL TO ACTION (Quiz) using Content Widget --- */}

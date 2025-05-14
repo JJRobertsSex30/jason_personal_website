@@ -1,0 +1,107 @@
+---
+// EmbaSlider.astro - Embla Carousel Astro Component
+// import { onMount } from 'astro/client'; // Removed unused import
+import type { MediaResource } from '~/types';
+export interface Props {
+  id?: string;
+  headline?: string;
+  subheadline?: string;
+  items: MediaResource[];
+  viewAllLink?: string;
+  viewAllText?: string;
+  classes?: { container?: string };
+}
+const {
+  id = '',
+  headline = '',
+  subheadline = '',
+  items = [],
+  viewAllLink = '',
+  viewAllText = '',
+  classes = {}
+} = Astro.props;
+---
+
+<!-- Embla Carousel CSS -->
+<style is:global>
+.embla {
+  overflow: hidden;
+}
+.embla__container {
+  display: flex;
+  gap: 1.5rem;
+}
+.embla__slide {
+  min-width: 280px;
+  max-width: 20rem;
+  flex-shrink: 0;
+  position: relative;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 2px 8px 0 rgba(0,0,0,0.06);
+}
+</style>
+
+<section id={id} class={classes.container ?? ''}>
+  {headline && <h2 class="text-2xl md:text-3xl font-bold mb-2 text-center">{headline}</h2>}
+  {subheadline && <p class="text-lg text-center mb-6 text-gray-500 dark:text-gray-300">{subheadline}</p>}
+  <div class="relative">
+    <button type="button" class="embla__arrow embla__arrow--prev absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-orange-500 hover:bg-orange-600 text-white shadow rounded-full p-2 transition" aria-label="Previous">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+      </svg>
+    </button>
+    <button type="button" class="embla__arrow embla__arrow--next absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-orange-500 hover:bg-orange-600 text-white shadow rounded-full p-2 transition" aria-label="Next">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+      </svg>
+    </button>
+    <div class="embla">
+      <div class="embla__container flex gap-6">
+        {items.map((item) => (
+          <div class="embla__slide min-w-[280px] max-w-xs flex-shrink-0 relative rounded-lg overflow-hidden shadow-lg bg-white dark:bg-slate-900 group" style="height:340px;">
+            <a href={item.link} target={item.link?.startsWith('http') ? '_blank' : '_self'} rel={item.link?.startsWith('http') ? 'noopener noreferrer' : ''} class="block w-full h-full">
+              <div class="absolute inset-0 bg-cover bg-center transition-transform duration-300 group-hover:scale-105" style={`background-image:url('${item.imageSrc?.src ?? item.imageSrc}')`}></div>
+              <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+              <div class="absolute bottom-0 left-0 right-0 p-4 z-10">
+                {item.isNew && (
+  <span class="inline-block px-2 py-1 text-xs font-semibold bg-brand-green text-white rounded mb-2">NEW</span>
+)}
+                <div class="text-white font-bold text-lg mb-1">{item.title}</div>
+                <div class="text-white text-xs mb-1">{item.category}</div>
+                <div class="text-white text-sm line-clamp-2">{item.description}</div>
+                <div class="text-gray-300 text-xs mt-2 flex flex-wrap gap-2">
+                  {item.sourceName && <span>{item.sourceName}</span>}
+                  {item.durationOrReadTime && <span>{item.durationOrReadTime}</span>}
+                </div>
+              </div>
+              {item.type === 'video' && <span class="absolute top-4 right-4 bg-black/70 text-white text-xs px-2 py-1 rounded">Video</span>}
+              {item.type === 'audio' && <span class="absolute top-4 right-4 bg-black/70 text-white text-xs px-2 py-1 rounded">Audio</span>}
+              {item.type === 'blog' && <span class="absolute top-4 right-4 bg-black/70 text-white text-xs px-2 py-1 rounded">Blog</span>}
+            </a>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+  {viewAllLink && viewAllText && (
+    <div class="text-center mt-6">
+      <a href={viewAllLink} class="inline-block px-6 py-2 bg-brand-green text-white rounded-full font-semibold shadow hover:bg-brand-green-dark transition">{viewAllText}</a>
+    </div>
+  )}
+</section>
+
+<script src="https://unpkg.com/embla-carousel/embla-carousel.umd.js"></script>
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', function () {
+    const emblaNode = document.querySelector('.embla');
+    const prevBtn = document.querySelector('.embla__arrow--prev');
+    const nextBtn = document.querySelector('.embla__arrow--next');
+    if (emblaNode && window.EmblaCarousel) {
+      const embla = window.EmblaCarousel(emblaNode, { align: 'start', loop: false, dragFree: true });
+      prevBtn.addEventListener('click', function () { embla.scrollPrev(); });
+      nextBtn.addEventListener('click', function () { embla.scrollNext(); });
+    }
+  });
+</script>
