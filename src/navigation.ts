@@ -45,7 +45,7 @@ export const headerData = {
       links: [
         {
           text: 'Take the Quiz',
-          href: getPermalink('/#'),
+          href: getPermalink('/quiz'),
         },
         {
           text: 'Relationship Blueprint Tool',

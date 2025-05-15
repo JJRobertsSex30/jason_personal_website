@@ -9,7 +9,7 @@ import Features from '~/components/widgets/Features.astro'; // For Benefits sect
 import Testimonials from '~/components/widgets/Testimonials.astro'; // Your modified Testimonials
 import Content from '~/components/widgets/Content.astro'; // For About JJ & Book sections
 import AccordionFAQ from '~/components/widgets/AccordionFAQ.astro'; // Your custom Accordion FAQ
-import EmbaSlider from '~/components/widgets/EmbaSlider.astro'; // Embla Carousel Slider
+import EmblaSlider from '~/components/widgets/EmblaSlider.astro'; // Embla Carousel Slider
 import { Icon } from 'astro-icon/components'; // For buttons with icons
 import EmailCaptureModal from '~/components/ui/EmailCaptureModal.astro';
 
@@ -73,14 +73,11 @@ const aboutJJTagline = "Architect of a New Relationship Paradigm";
 const aboutJJTitle = "Meet JJ Roberts";
 const aboutJJsubtitle="Discover the journey and insights that led to a revolutionary framework for transforming modern relationships"
 const aboutJJImageForWidget = { src: imgAboutJJ, alt: 'JJ Roberts' };
-const aboutJJExpertDescription = `JJ Roberts is a pioneering voice in relationship psychology, dedicated to helping individuals escape the frustrating cycles of conventional relationships. For years, JJ experienced firsthand the limitations and disappointments of traditional relationship models—a system fraught with unspoken rules and inevitable conflict. This personal journey culminated in an enlightening two-year research trip across more than 40 countries, a quest to understand the true nature of human connection beyond societal conditioning. <br/><br/>This global exploration led to profound breakthroughs and the deconstruction of outdated relationship paradigms. JJ saw clearly the flawed design inherent in the common approach to love and intimacy—a system that often breeds misunderstanding, jealousy, and pain. From these realizations, the revolutionary modern framework for relationships was born.`;
+const aboutJJExpertDescription = "JJ Roberts is a pioneering voice in relationship psychology, dedicated to helping individuals escape the frustrating cycles of conventional relationships. For years, JJ experienced firsthand the limitations and disappointments of traditional relationship models—a system fraught with unspoken rules and inevitable conflict. This personal journey culminated in an enlightening two-year research trip across more than 40 countries, a quest to understand the true nature of human connection beyond societal conditioning. <br/><br/>This global exploration led to profound breakthroughs and the deconstruction of outdated relationship paradigms. JJ saw clearly the flawed design inherent in the common approach to love and intimacy—a system that often breeds misunderstanding, jealousy, and pain. From these realizations, the revolutionary modern framework for relationships was born.";
 
 // === BOOK DATA / ABOUT JJ (Part 2) ===
-const bookSectionTitle = "The Culmination";
-const bookImageForWidget = { src: imgBookCover, alt: "Sex 3.0 A Sexual Revolution Manual Book Cover" };
-const bookExpertDescriptionAndOffer = `
-  This framework, born from years of research and real-world experience, is detailed in JJ's groundbreaking book, "Sex 3.0: A Sexual Revolution Manual." It provides the clear blueprint and practical tools you need to break free from outdated patterns and build the fulfilling connections you've always desired. This isn't just another relationship guide—it's a new operating system for your love life, already transforming lives worldwide.
-`;
+const bookImageForWidget = { src: imgBookCover, alt: 'Sex 3.0 A Sexual Revolution Manual Book Cover' };
+const bookExpertDescriptionAndOffer = "This framework, born from years of research and real-world experience, is detailed in JJ's groundbreaking book, 'Sex 3.0: A Sexual Revolution Manual.' It provides the clear blueprint and practical tools you need to break free from outdated patterns and build the fulfilling connections you've always desired. This isn't just another relationship guide—it's a new operating system for your love life, already transforming lives worldwide.";
 
 // === HOMEPAGE FAQ ITEMS ===
 const homepageFAQItems = [
@@ -214,7 +211,7 @@ const finalCtaButton = {
     />
 
     {/* --- RESOURCE CAROUSEL (Embla) --- */}
-    <EmbaSlider
+    <EmblaSlider
       id="all-resources-slider"
       headline="Dive Deeper: Latest Insights & Resources"
       subheadline="Explore articles, watch videos, and listen to podcasts designed to guide your relationship upgrade."
