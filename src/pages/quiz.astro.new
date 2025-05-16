@@ -139,15 +139,15 @@ const results: QuizResult[] = [
   },
   {
     range: [51, 75],
-    title: 'Balanced Perspective',
-    description: 'You have a mix of traditional and modern views on relationships. You see value in both conventional relationship structures and more liberated approaches.',
+    title: 'Relationship 2.0 with Awareness',
+    description: 'You primarily operate within traditional relationship frameworks but are becoming aware of their limitations. You\'re starting to question societal expectations around love and commitment.',
     color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
   },
   {
     range: [76, 100],
     title: 'Traditional Relationship Thinker',
-    description: 'Your views align with conventional relationship norms. You might find value in exploring alternative perspectives that could lead to more freedom and fulfillment in your connections.',
-    color: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+    description: 'Your relationship views align strongly with conventional Sex 2.0 paradigms. You value traditional concepts of commitment, exclusivity, and societal expectations in relationships.',
+    color: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
   },
 ];
 
@@ -166,14 +166,27 @@ const url = new URL(Astro.request.url);
 // Handle form submission
 if (Astro.request.method === 'POST') {
   const formData = await Astro.request.formData();
-  const email = formData.get('email');
-  const answers = JSON.parse(formData.get('answers')?.toString() || '[]') as number[];
+  const email = formData.get('email')?.toString();
+  const answers = formData.getAll('answers');
   
   // Calculate score
-  const score = answers.reduce((sum, answer, index) => {
-    return sum + (quizQuestions[index]?.scoring[answer - 1] || 0);
-  }, 0);
+  let score = 0;
+  for (let i = 0; i < quizQuestions.length; i++) {
+    const answer = parseInt(formData.get(`question-${i}`)?.toString() || '0');
+    if (answer > 0) {
+      // Apply scoring based on question type
+      // First 4 questions, plus questions 12, 17, 18 use reverse scoring (Sex 2.0 questions)
+      if (i < 4 || i === 12 || i === 17 || i === 18) {
+        // Sex 2.0 questions (reverse scoring)
+        score += 6 - answer; // 5,4,3,2,1 points for 1,2,3,4,5 answers
+      } else {
+        // Sex 3.0 questions (direct scoring)
+        score += answer; // 1,2,3,4,5 points for 1,2,3,4,5 answers
+      }
+    }
+  }
   
+  // Get result
   const result = getResult(score);
   
   try {
@@ -183,7 +196,11 @@ if (Astro.request.method === 'POST') {
     const response = await fetch('https://your-email-service.com/api/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, answers, score, result })
+      body: JSON.stringify({
+        email,
+        score,
+        result: result?.title,
+      }),
     });
     
     if (!response.ok) throw new Error('Failed to submit form');
@@ -197,49 +214,12 @@ if (Astro.request.method === 'POST') {
 }
 
 // Get score from URL if present (used in template)
+const emailSubmitted = url.searchParams.get('email_submitted') === 'true';
+const error = url.searchParams.get('error');
+const score = parseInt(url.searchParams.get('score') || '0');
 
-// --- SCORE RANGES AND RESULTS ---
-// Max possible score: 20 questions * 5 points/question = 100
-// Min possible score: 20 questions * 1 point/question = 20
-// Let's create a few ranges:
-// 20-40 (Mostly 2.0), 41-60 (Mixed/Aware), 61-80 (Leaning 3.0), 81-100 (Mostly 3.0)
-
-const scoreRanges = [
-  {
-    maxScore: 40,
-    type: 'Mostly Sex 2.0',
-    summary: 'Your score indicates you are largely operating within the traditional Sex 2.0 framework. You likely hold many common societal beliefs about love, relationships, and commitment, which can often lead to unnecessary conflict, jealousy, and confusion. But awareness is the first step to change. The good news is that the blueprint for a better way exists.'
-  },
-  {
-    maxScore: 60,
-    type: 'Sex 2.0 with Growing Awareness',
-    summary: 'Your responses show a mix of traditional Sex 2.0 beliefs and a growing awareness that something isn\'t quite right with the conventional map. You may feel the friction and frustration caused by outdated paradigms. This position is fertile ground for change! You are ready to explore a new framework that aligns more closely with your true nature and leads to less suffering.'
-  },
-  {
-    maxScore: 80,
-    type: 'Leaning Towards Sex 3.0',
-    summary: 'You are strongly aligned with the core principles of Sex 3.0! You likely value honesty, freedom, and mutual reward over societal expectations and the need for control. You\'ve probably experienced the limitations of the Sex 2.0 firsthand. You are well on your way to building truly authentic and joyful connections based on a more natural and empowering understanding of human relationships.'
-  },
-  {
-    maxScore: 100, // Represents 81-100
-    type: 'Mostly Sex 3.0',
-    summary: 'Wow! Your score indicates you already resonate strongly with the Sex 3.0 paradigm. You fundamentally understand that relationships thrive on mutual reward, honesty, trust, and respect, not on outdated notions of ownership or societal pressure. You are likely already navigating relationships with greater clarity and less suffering. You are a pioneer in building connections that are natural, free, and deeply fulfilling.'
-  }
-];
-
-// Get result summary based on score (used in template)
-// This function is used in the template
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function getResultSummary(score: number) {
-  for (const range of scoreRanges) {
-    if (score <= range.maxScore) {
-      return range;
-    }
-  }
-  return scoreRanges[scoreRanges.length - 1]; // Fallback for scores outside expected range
-}
-
-// Result will be used in the template
+// Get result from URL if present
+const result = emailSubmitted ? getResult(score) : undefined;
 ---
 
 <Layout metadata={metadata}>
@@ -253,7 +233,6 @@ function getResultSummary(score: number) {
       <div class="mb-8">
         <div class="flex justify-between items-center mb-2">
           <span id="question-counter" class="text-sm font-medium text-orange-500">Answered 0 of 25 questions</span>
-
         </div>
         <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
           <div id="progress-bar" class="bg-orange-500 h-2.5 rounded-full transition-all duration-300 ease-in-out" style="width: 5%"></div>
@@ -261,7 +240,7 @@ function getResultSummary(score: number) {
       </div>
 
       {/* Quiz Form */}
-      <form id="quiz-form" class="space-y-8">
+      <form id="quiz-form" class="space-y-8" method="POST">
         {quizQuestions.map((question, index) => (
           <div class="mb-6 p-6 bg-white dark:bg-slate-700 rounded-lg shadow">
             <p class="text-lg font-medium text-gray-800 dark:text-white mb-4">{index + 1}. {question.text}</p>
@@ -290,11 +269,10 @@ function getResultSummary(score: number) {
         
         <div class="mt-8 text-center">
           <button 
-            id="show-email-form-btn"
-            type="button" 
+            type="submit" 
             class="inline-flex items-center justify-center gap-2 px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap"
           >
-            Calculate My Results
+            Submit Answers
           </button>
         </div>
       </form>
@@ -343,6 +321,28 @@ function getResultSummary(score: number) {
   </div>
 
   <script is:inline>
+    // Function to update progress - accessible globally for onclick handlers
+    function updateQuizProgress() {
+      const progressBar = document.getElementById('progress-bar');
+      const questionCounter = document.getElementById('question-counter');
+      
+      // Count how many questions have been answered
+      const answeredQuestions = document.querySelectorAll('input[type="radio"]:checked');
+      const uniqueQuestionNames = new Set();
+      
+      answeredQuestions.forEach(radio => {
+        uniqueQuestionNames.add(radio.name);
+      });
+      
+      const answeredCount = uniqueQuestionNames.size;
+      const totalQuestions = 25; // Total number of questions
+      
+      // Update the progress bar
+      const progress = (answeredCount / totalQuestions) * 100;
+      progressBar.style.width = progress + '%';
+      questionCounter.textContent = `Answered ${answeredCount} of ${totalQuestions} questions`;
+    }
+    
     // Get DOM elements
     const progressBar = document.getElementById('progress-bar');
     const questionCounter = document.getElementById('question-counter');
@@ -375,39 +375,17 @@ function getResultSummary(score: number) {
       questionCounter.textContent = `Answered ${answeredCount} of ${totalQuestions} questions`;
     }
 
-    // Add event listeners to all radio buttons when DOM is fully loaded
-    document.addEventListener('DOMContentLoaded', () => {
-      // Initial update
-      updateProgress();
-      
-      // Add change event listeners to all radio buttons
-      document.querySelectorAll('input[type="radio"]').forEach(radio => {
-        radio.addEventListener('change', updateProgress);
-      });
+    // Add event listeners to all radio buttons
+    document.querySelectorAll('input[type="radio"]').forEach(radio => {
+      radio.addEventListener('change', updateProgress);
     });
     
-    // Also add direct event listeners to ensure they work immediately
-    document.querySelectorAll('input[type="radio"]').forEach(radio => {
-      radio.addEventListener('click', updateProgress);
-    });
+    // Also update progress when DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', updateProgress);
 
-    // Handle show email form button click
-    document.getElementById('show-email-form-btn').addEventListener('click', () => {
-      // Check if all questions are answered
-      const totalQuestions = 25;
-      const answeredQuestions = document.querySelectorAll('input[type="radio"]:checked');
-      const uniqueQuestionNames = new Set();
-      
-      answeredQuestions.forEach(radio => {
-        uniqueQuestionNames.add(radio.name);
-      });
-      
-      const answeredCount = uniqueQuestionNames.size;
-      
-      if (answeredCount < totalQuestions) {
-        alert(`Please answer all questions. You've answered ${answeredCount} of ${totalQuestions} questions.`);
-        return;
-      }
+    // Handle form submission
+    quizForm.addEventListener('submit', (e) => {
+      e.preventDefault();
       
       // Calculate score
       const formData = new FormData(quizForm);
@@ -467,7 +445,6 @@ function getResultSummary(score: number) {
       
       // Show loading state
       const submitButton = quizEmailForm.querySelector('button[type="submit"]');
-      
       const originalButtonText = submitButton.innerHTML;
       submitButton.disabled = true;
       submitButton.innerHTML = 'Processing...';
@@ -480,27 +457,28 @@ function getResultSummary(score: number) {
         const scoreText = scorePreview.textContent;
         const resultType = scoreText.match(/you are (.+)\./)[1];
         
-        // FIRST: Immediately show results without waiting for email confirmation
-        emailGateArea.classList.add('hidden');
-        resultsArea.classList.remove('hidden');
-        
-        // Set result heading
-        resultTypeHeading.textContent = `Your Relationship Map Type: ${resultType}`;
-        
-        // THEN: Prepare data for submission to Kit email integration
+        // Prepare data for submission
         const formData = new FormData();
         formData.append('email', email);
         formData.append('score', totalScore);
         formData.append('resultType', resultType);
         
-        // Send data to server in the background (no await)
-        fetch('/quiz', {
+        // Send data to server
+        const response = await fetch('/quiz', {
           method: 'POST',
           body: formData
-        }).catch(error => {
-          console.error('Error sending email:', error);
-          // We don't need to show this error to the user since they already have their results
         });
+        
+        if (!response.ok) {
+          throw new Error('Failed to submit form');
+        }
+        
+        // Show results
+        emailGateArea.classList.add('hidden');
+        resultsArea.classList.remove('hidden');
+        
+        // Set result heading
+        resultTypeHeading.textContent = `Your Relationship Map Type: ${resultType}`;
         
         // Set appropriate summary based on result type
         let summary = '';

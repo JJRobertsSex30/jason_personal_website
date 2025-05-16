@@ -1,0 +1,295 @@
+---
+import Layout from '~/layouts/PageLayout.astro';
+import { Icon } from 'astro-icon/components';
+
+// --- METADATA ---
+const metadata = {
+  title: 'LoveLab Relationship Quiz | JJ Roberts',
+  description: "Take the LoveLab Relationship Quiz to understand your relationship perspective and unlock personalized insights.",
+};
+
+// --- QUIZ DATA ---
+interface Question {
+  text: string;
+  scoring: number[];
+}
+
+interface Result {
+  range: [number, number];
+  title: string;
+  description: string;
+  color: string;
+}
+
+const quizQuestions: Question[] = [
+  {
+    text: "Jealousy in a relationship is a sign of how much you love someone.",
+    scoring: [5, 4, 3, 2, 1],
+  },
+  {
+    text: "A healthy relationship requires constant effort and hard 'work'.",
+    scoring: [5, 4, 3, 2, 1],
+  },
+  {
+    text: "The concept of 'The One' is a realistic ideal for finding a life partner.",
+    scoring: [5, 4, 3, 2, 1],
+  },
+  {
+    text: "It is natural for human beings to be monogamous for their entire lives.",
+    scoring: [5, 4, 3, 2, 1],
+  },
+  {
+    text: "Society's expectations significantly influence my relationship choices.",
+    scoring: [1, 2, 3, 4, 5],
+  },
+  {
+    text: "Relationships should be built on complete honesty, even when it's difficult.",
+    scoring: [1, 2, 3, 4, 5],
+  },
+  {
+    text: "Mutual reward is the fundamental basis of any relationship.",
+    scoring: [1, 2, 3, 4, 5],
+  },
+  {
+    text: "It's possible to have a fulfilling relationship that is not based on sexual exclusivity.",
+    scoring: [1, 2, 3, 4, 5],
+  },
+  {
+    text: "Fear of losing my partner's sexual attention drives my feelings of insecurity.",
+    scoring: [5, 4, 3, 2, 1],
+  },
+  {
+    text: "Open communication is essential for a healthy connection.",
+    scoring: [1, 2, 3, 4, 5],
+  },
+  {
+    text: "I believe society's view of relationships is often outdated.",
+    scoring: [1, 2, 3, 4, 5],
+  },
+  {
+    text: "It's okay to prioritize personal freedom within a committed relationship.",
+    scoring: [1, 2, 3, 4, 5],
+  },
+  {
+    text: "Possessiveness is a healthy expression of caring deeply for someone.",
+    scoring: [5, 4, 3, 2, 1],
+  },
+  {
+    text: "My sense of reality about relationships might be different from actual reality.",
+    scoring: [1, 2, 3, 4, 5],
+  },
+  {
+    text: "Nagging or complaints in a relationship usually indicate unmet deeper needs.",
+    scoring: [1, 2, 3, 4, 5],
+  },
+];
+
+const results: Result[] = [
+  {
+    range: [0, 25],
+    title: 'Relationship 3.0 Thinker',
+    description: 'You have a modern, evolved perspective on relationships that aligns with Sex 3.0 principles. You value freedom, honesty, and mutual growth in your connections.',
+    color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+  },
+  {
+    range: [26, 50],
+    title: 'Transitioning to 3.0',
+    description: 'You\'re questioning traditional relationship norms and moving toward a more liberated approach. You understand many Sex 3.0 concepts but may still hold some conventional beliefs',
+    color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+  },
+  {
+    range: [51, 75],
+    title: 'Balanced Perspective',
+    description: 'You have a mix of traditional and modern views on relationships. You see value in both conventional relationship structures and more liberated approaches.',
+    color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+  },
+  {
+    range: [76, 100],
+    title: 'Traditional Relationship Thinker',
+    description: 'Your views align with conventional relationship norms. You might find value in exploring alternative perspectives that could lead to more freedom and fulfillment in your connections.',
+    color: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+  },
+];
+
+const getResult = (score: number): Result | undefined => {
+  const percentage = (score / (quizQuestions.length * 5)) * 100;
+  return results.find(r => percentage >= r.range[0] && percentage <= r.range[1]);
+};
+
+// Get URL parameters
+const url = new URL(Astro.request.url);
+const emailSubmitted = url.searchParams.get('email_submitted') === 'true';
+const error = url.searchParams.get('error');
+const score = Number.parseInt(url.searchParams.get('score') || '0');
+
+// Handle form submission
+if (Astro.request.method === 'POST') {
+  const formData = await Astro.request.formData();
+  const email = formData.get('email');
+  const answers = JSON.parse(formData.get('answers')?.toString() || '[]') as number[];
+  
+  // Calculate score
+  const score = answers.reduce((sum, answer, index) => {
+    return sum + (quizQuestions[index]?.scoring[answer - 1] || 0);
+  }, 0);
+  
+  const result = getResult(score);
+  
+  try {
+    const response = await fetch('https://your-email-service.com/api/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, answers, score, result })
+    });
+    
+    if (!response.ok) throw new Error('Failed to submit form');
+    
+    // Redirect with success state
+    return Astro.redirect(`/lovelab_quiz?email_submitted=true&score=${score}`);
+  } catch (error) {
+    console.error('Error submitting form:', error);
+    return Astro.redirect('/lovelab_quiz?error=submission_failed');
+  }
+}
+
+// Calculate progress
+const currentProgress = Math.min(100, Math.floor((score / (quizQuestions.length * 5)) * 100));
+
+// Get result from URL if present
+const result = emailSubmitted ? getResult(score) : undefined;
+---
+
+<Layout metadata={metadata}>
+  <div class="container mx-auto px-4 py-16 md:py-24">
+    <div class="max-w-3xl mx-auto bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 md:p-8 lg:p-10">
+      <h1 class="text-3xl md:text-4xl font-bold text-center text-brand-green mb-8">Your Relationship Map Quiz</h1>
+      
+      {/* Progress Bar */}
+      <div class="relative h-3 bg-gray-200 dark:bg-gray-700 rounded-full mb-8">
+        <div 
+          class="absolute h-full bg-green-500 rounded-full transition-all duration-300"
+          style={`width: ${currentProgress}%`}
+        ></div>
+      </div>
+
+      {/* Quiz Form */}
+      <form id="quiz-form" class="space-y-8">
+        {quizQuestions.map((question, index) => (
+          <div class="mb-6">
+            <p class="text-lg font-semibold mb-4">{index + 1}. {question.text}</p>
+            <div class="space-y-2">
+              {['Strongly Disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly Agree'].map((option, optionIndex) => (
+                <div class="flex items-center">
+                  <input
+                    type="radio"
+                    name={`question-${index}`}
+                    value={optionIndex + 1}
+                    class="mr-2"
+                    required
+                  />
+                  <label class="text-gray-700 dark:text-gray-300">{option}</label>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </form>
+
+      {/* Email Form */}
+      <div class="mt-12">
+        <h2 class="text-xl font-semibold mb-4">Get Your Results</h2>
+        <form id="quiz-email-form" class="space-y-4">
+          <div>
+            <label for="quiz-email-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Your Email
+            </label>
+            <input
+              type="email"
+              id="quiz-email-input"
+              name="email"
+              required
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter your email address"
+            />
+          </div>
+          <button
+            type="submit"
+            class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors"
+          >
+            Submit and Get Results
+          </button>
+        </form>
+      </div>
+
+      {/* Results Display */}
+      {emailSubmitted && result && (
+        <div class="mt-12 p-6 rounded-lg text-center">
+          <h2 class="text-2xl font-bold mb-4">Your Results</h2>
+          <div class="text-lg mb-6">
+            {result.title}
+          </div>
+          <p class="text-base text-gray-700 dark:text-gray-300 mb-8">
+            {result.description}
+          </p>
+          <p class="text-base text-gray-700 dark:text-gray-300 mb-8">
+            Your score: {score} out of {quizQuestions.length * 5}
+          </p>
+          <p class="text-base text-gray-700 dark:text-gray-300 text-center italic mb-8">
+            Check your email! We've sent you a confirmation link. Once confirmed, you'll receive another email to unlock your free chapters of the book, which will help you continue your journey.
+          </p>
+          <div class="mt-8 text-center">
+            <a 
+              href="/" 
+              class="inline-flex items-center justify-center gap-2 px-8 py-3 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-800 dark:text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap"
+            >
+              Back to Homepage
+              <Icon name="tabler:home" class="w-5 h-5 md:w-6 md:h-6" />
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* Error Message */}
+      {error && (
+        <div class="mt-8 p-4 bg-red-100 text-red-700 rounded-lg text-center">
+          Error submitting form. Please try again.
+        </div>
+      )}
+    </div>
+  </div>
+</Layout>
+
+<script is:inline>
+  // Email form handling
+  const quizEmailForm = document.getElementById('quiz-email-form');
+  const quizEmailInput = document.getElementById('quiz-email-input');
+
+  quizEmailForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = quizEmailInput.value.trim();
+    
+    if (!email) {
+      alert('Please enter your email address');
+      return;
+    }
+
+    // Get form values
+    const formData = new FormData(document.getElementById('quiz-form'));
+    const answers = [...formData.entries()].map(([, value]) => Number.parseInt(value));
+
+    // Submit form
+    try {
+      const response = await fetch('/lovelab_quiz', {
+        method: 'POST',
+        body: new FormData()
+          .append('email', email)
+          .append('answers', JSON.stringify(answers))
+      });
+
+      if (!response.ok) throw new Error('Failed to submit form');
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      alert('Error submitting form. Please try again.');
+    }
+  });
+</script>
