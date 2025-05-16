@@ -494,7 +494,7 @@ function getResultSummary(score: number) {
         formData.append('resultType', resultType);
         
         // Send data to server in the background (no await)
-        fetch('/quiz', {
+        fetch('/api/quiz-submit', {
           method: 'POST',
           body: formData
         }).catch(error => {
