@@ -493,10 +493,22 @@ function getResultSummary(score: number) {
         formData.append('score', totalScore);
         formData.append('resultType', resultType);
         
+        // Log the form data for debugging
+        console.log('Form data being sent:', {
+          email,
+          score: totalScore,
+          resultType
+        });
+        
         // Send data to server in the background (no await)
         fetch('/api/quiz-submit', {
           method: 'POST',
           body: formData
+        }).then(response => {
+          console.log('Server response:', response.status, response.statusText);
+          return response.json();
+        }).then(data => {
+          console.log('Server response data:', data);
         }).catch(error => {
           console.error('Error sending email:', error);
           // We don't need to show this error to the user since they already have their results

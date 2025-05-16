@@ -19,7 +19,7 @@ export const POST: APIRoute = async ({ request }) => {
 
     // Retrieve secret key and form ID from environment variables
     const convertKitApiKey = import.meta.env.CONVERTKIT_API_KEY;
-    const convertKitFormId = import.meta.env.PUBLIC_CONVERTKIT_FORM_ID; // Form ID can be public
+    const convertKitFormId = import.meta.env.PUBLIC_CONVERTKIT_FORM_ID;
 
     if (!convertKitApiKey || !convertKitFormId) {
        console.error("ConvertKit API Key or Form ID not set in environment variables.");
@@ -31,6 +31,13 @@ export const POST: APIRoute = async ({ request }) => {
 
     const convertKitApiUrl = `https://api.convertkit.com/v3/forms/${convertKitFormId}/subscribe`;
 
+    // Log the data being sent to ConvertKit for debugging
+    console.log('Submitting to ConvertKit:', {
+      email,
+      score,
+      resultType
+    });
+
     const response = await fetch(convertKitApiUrl, {
       method: 'POST',
       headers: {
@@ -39,13 +46,11 @@ export const POST: APIRoute = async ({ request }) => {
       body: JSON.stringify({
         api_secret: convertKitApiKey,
         email: email,
-        // Add quiz data as custom fields
+        // ConvertKit expects these fields to be in the 'fields' object
         fields: { 
-          quiz_score: score,
-          quiz_result_type: resultType
+          "love_lab_quiz_score": score,
+          "quiz_result_type": resultType
         },
-        // You can also add tags based on result type if needed
-        // tags: [12345], // Replace with actual tag ID if you use tags
       }),
     });
 
@@ -65,10 +70,9 @@ export const POST: APIRoute = async ({ request }) => {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
-
   } catch (error) {
-    console.error('Error processing quiz submission:', error);
-    return new Response(JSON.stringify({ message: 'Server error processing quiz submission.' }), {
+    console.error('Error in quiz submission:', error);
+    return new Response(JSON.stringify({ message: 'Internal server error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });

@@ -119,6 +119,8 @@ const finalCtaButton = {
 <Layout metadata={metadata}>
 
   <main>
+    <!-- Resources Carousel -->
+    <EmblaSlider items={allMyResources} />
     {/* --- HERO WIDGET --- */}
     <Hero actions={heroActions} image={heroImageForWidget}>
       <Fragment slot="title" set:html={heroTitle} />
