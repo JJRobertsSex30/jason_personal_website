@@ -2,6 +2,15 @@
 export const prerender = false;
 import type { APIRoute } from 'astro';
 
+function generateReferralId(length = 8) {
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
 export const POST: APIRoute = async ({ request }) => {
   try {
     const formData = await request.formData();
@@ -47,6 +56,10 @@ export const POST: APIRoute = async ({ request }) => {
       resultType
     });
 
+    const referralId = generateReferralId();
+    console.log('Successfully set referral id:', referralId);
+    
+
     const response = await fetch(convertKitApiUrl, {
       method: 'POST',
       headers: {
@@ -57,7 +70,8 @@ export const POST: APIRoute = async ({ request }) => {
         email: email,
         // ConvertKit expects these fields to be in the 'fields' object
         fields: { 
-          "love_lab_quiz_score": score
+          "love_lab_quiz_score": score,
+          "referral_id": referralId
         },
         // Add the appropriate tag based on result type
         tags: {
@@ -81,7 +95,12 @@ export const POST: APIRoute = async ({ request }) => {
     const data = await response.json();
     console.log('Successfully submitted quiz results:', data);
 
-    return new Response(JSON.stringify({ message: 'Quiz results submitted successfully!', data: data }), {
+    if (data.referralId) {
+      console.log('Successfully set referral id:', data);
+      localStorage.setItem("my_referral_id", data.referralId);
+    }
+
+    return new Response(JSON.stringify({ message: 'Quiz results submitted successfully!', referralId: referralId, data: data }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });

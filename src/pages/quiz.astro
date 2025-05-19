@@ -79,7 +79,7 @@ const quizQuestions: Question[] = [
   },
   {
     text: "A relationship should be effortless if it's with the right person.",
-    scoring: [5, 4, 3, 2, 1],
+    scoring: [1, 2, 3, 4, 5],
   },
   {
     text: "You should always put your partner's needs before your own.",
@@ -95,7 +95,7 @@ const quizQuestions: Question[] = [
   },
   {
     text: "A relationship should be free of conflict to be healthy.",
-    scoring: [5, 4, 3, 2, 1],
+    scoring: [1, 2, 3, 4, 5],
   },
   {
     text: "You should be willing to tolerate bad behavior if you love someone.",
@@ -103,7 +103,7 @@ const quizQuestions: Question[] = [
   },
   {
     text: "Society's expectations significantly influence my relationship choices.",
-    scoring: [1, 2, 3, 4, 5],
+    scoring: [5, 4, 3, 2, 1],
   },
   {
     text: "I believe in the concept of 'soulmates' or 'the one'.",
@@ -343,6 +343,15 @@ function getResultSummary(score: number) {
   </div>
 
   <script is:inline>
+    // --- Referral Tracking ---
+    const queryParams = new URLSearchParams(window.location.search);
+    const referrerId = queryParams.get("ref");
+    if (referrerId) {
+      localStorage.setItem("referrer_id", referrerId);
+    }
+
+
+
     // Get DOM elements
     const progressBar = document.getElementById('progress-bar');
     const questionCounter = document.getElementById('question-counter');
@@ -417,15 +426,8 @@ function getResultSummary(score: number) {
       for (let i = 0; i < 25; i++) {
         const value = parseInt(formData.get(`question-${i}`));
         if (!isNaN(value)) {
-          // Apply scoring based on question type
-          // First 4 questions, plus questions 12, 17, 18 use reverse scoring (Sex 2.0 questions)
-          if (i < 4 || i === 12 || i === 17 || i === 18) {
-            // Sex 2.0 questions (reverse scoring)
-            totalScore += 6 - value; // 5,4,3,2,1 points for 1,2,3,4,5 answers
-          } else {
             // Sex 3.0 questions (direct scoring)
             totalScore += value; // 1,2,3,4,5 points for 1,2,3,4,5 answers
-          }
         }
       }
       
