@@ -265,9 +265,9 @@ function getResultSummary(score: number) {
         {quizQuestions.map((question, index) => (
           <div class="mb-6 p-6 bg-white dark:bg-slate-700 rounded-lg shadow">
             <p class="text-lg font-medium text-gray-800 dark:text-white mb-4">{index + 1}. {question.text}</p>
-            <div class="grid grid-cols-5 gap-4 md:grid-cols-5 sm:grid-cols-1">
+            <div class="grid grid-cols-5 gap-4">
               {['Strongly Disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly Agree'].map((option, optionIndex) => (
-                <div class="flex flex-col items-center">
+                <div class="flex flex-col items-center min-w-[120px]">
                   <div class="flex items-center">
                     <input 
                       type="radio"
@@ -279,7 +279,7 @@ function getResultSummary(score: number) {
                       onclick="updateQuizProgress()"
                     />
                   </div>
-                  <label for={`q${index}-opt${optionIndex + 1}`} class="mt-1 text-sm text-center text-gray-700 dark:text-gray-300">
+                  <label for={`q${index}-opt${optionIndex + 1}`} class="mt-2 text-sm text-center text-gray-700 dark:text-gray-300">
                     {option}
                   </label>
                 </div>
