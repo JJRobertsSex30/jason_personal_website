@@ -68,11 +68,12 @@ export const POST: APIRoute = async ({ request }) => {
     });
 
     // Get any referral ID from the form data (if someone used a referral link)
-    const referrerId = formData.get('referrer_id');
+    const incomingReferrerId = formData.get('referrer_id');
+    console.log('Received referral ID from form:', incomingReferrerId);
     
     // Generate a new referral ID for the person taking the quiz
-    const referralId = generateReferralId();
-    console.log('Generated referral id:', referralId);
+    const newReferralId = generateReferralId();
+    console.log('Generated referral id:', newReferralId);
     
     const response = await fetch(convertKitApiUrl, {
       method: 'POST',
@@ -85,8 +86,12 @@ export const POST: APIRoute = async ({ request }) => {
         // ConvertKit expects these fields to be in the 'fields' object
         fields: { 
           "love_lab_quiz_score": score,
-          "referral_id": referralId
+          "referral_id": newReferralId,
+          "id_of_person_that_referred_me": incomingReferrerId || '' // Ensure it's always a string
         },
+        // Add metadata fields directly at the root level
+        id_of_person_that_referred_me: incomingReferrerId || '',
+        referral_id: newReferralId,
         // Add the appropriate tag based on result type
         tags: {
           "Mostly Sex 2.0": 7939497,
@@ -110,13 +115,13 @@ export const POST: APIRoute = async ({ request }) => {
     console.log('Successfully submitted quiz results:', data);
 
     // Store referral relationship in Supabase
-    if (referrerId) {
+    if (incomingReferrerId) {
       // This is a referral signup - store the relationship
       const { error: referralError } = await supabase
         .from('referrals')
         .insert([
           {
-            referrer_id: referrerId,
+            referrer_id: incomingReferrerId,
             new_user_email: email,
             timestamp: new Date().toISOString()
           }
@@ -132,7 +137,7 @@ export const POST: APIRoute = async ({ request }) => {
     // Return the referral ID in the response
     return new Response(JSON.stringify({ 
       message: 'Quiz results submitted successfully!', 
-      referralId: referralId,
+      referralId: newReferralId,
       data: data 
     }), {
       status: 200,

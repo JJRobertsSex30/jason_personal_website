@@ -346,8 +346,12 @@ function getResultSummary(score: number) {
     // --- Referral Tracking ---
     const queryParams = new URLSearchParams(window.location.search);
     const referrerId = queryParams.get("ref");
+    console.log('Referral ID from URL:', referrerId);
     if (referrerId) {
       localStorage.setItem("referrer_id", referrerId);
+      console.log('Stored referral ID in localStorage:', referrerId);
+    } else {
+      console.log('No referral ID found in URL');
     }
 
     // Automatically check all 'strongly agree' options for testing
@@ -499,10 +503,14 @@ function getResultSummary(score: number) {
         formData.append('score', totalScore);
         formData.append('resultType', resultType);
         
-        // Add referral ID if it exists
-        const storedReferrerId = localStorage.getItem('referrer_id');
-        if (storedReferrerId) {
-          formData.append('referrer_id', storedReferrerId);
+        // Get referral ID from localStorage (already stored when URL parameter was detected)
+        const referrerId = localStorage.getItem('referrer_id');
+        console.log('Referral ID from localStorage:', referrerId);
+        if (referrerId) {
+          formData.append('referrer_id', referrerId);
+          console.log('Appending referral ID to form data:', referrerId);
+        } else {
+          console.log('No referral ID found in localStorage');
         }
         
         // Log the form data for debugging
