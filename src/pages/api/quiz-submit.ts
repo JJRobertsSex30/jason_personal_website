@@ -1,6 +1,17 @@
 // src/pages/api/quiz-submit.ts
 export const prerender = false;
 import type { APIRoute } from 'astro';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase client
+const supabaseUrl = import.meta.env.SUPABASE_URL;
+const supabaseKey = import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseKey) {
+  throw new Error('SUPABASE_SERVICE_ROLE_KEY is required in environment variables');
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 function generateReferralId(length = 8) {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -56,10 +67,13 @@ export const POST: APIRoute = async ({ request }) => {
       resultType
     });
 
-    const referralId = generateReferralId();
-    console.log('Successfully set referral id:', referralId);
+    // Get any referral ID from the form data (if someone used a referral link)
+    const referrerId = formData.get('referrer_id');
     
-
+    // Generate a new referral ID for the person taking the quiz
+    const referralId = generateReferralId();
+    console.log('Generated referral id:', referralId);
+    
     const response = await fetch(convertKitApiUrl, {
       method: 'POST',
       headers: {
@@ -95,20 +109,40 @@ export const POST: APIRoute = async ({ request }) => {
     const data = await response.json();
     console.log('Successfully submitted quiz results:', data);
 
-    if (data.referralId) {
-      console.log('Successfully set referral id:', data);
-      localStorage.setItem("my_referral_id", data.referralId);
+    // Store referral relationship in Supabase
+    if (referrerId) {
+      // This is a referral signup - store the relationship
+      const { error: referralError } = await supabase
+        .from('referrals')
+        .insert([
+          {
+            referrer_id: referrerId,
+            new_user_email: email,
+            timestamp: new Date().toISOString()
+          }
+        ]);
+
+      if (referralError) {
+        console.error('Error storing referral:', referralError);
+      } else {
+        console.log('Successfully stored referral relationship');
+      }
     }
 
-    return new Response(JSON.stringify({ message: 'Quiz results submitted successfully!', referralId: referralId, data: data }), {
+    // Return the referral ID in the response
+    return new Response(JSON.stringify({ 
+      message: 'Quiz results submitted successfully!', 
+      referralId: referralId,
+      data: data 
+    }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' }
     });
   } catch (error) {
     console.error('Error in quiz submission:', error);
-    return new Response(JSON.stringify({ message: 'Internal server error' }), {
+    return new Response(JSON.stringify({ message: 'Failed to submit quiz results', error: error.message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' }
     });
   }
 };

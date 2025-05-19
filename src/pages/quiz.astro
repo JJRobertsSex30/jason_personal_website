@@ -350,7 +350,11 @@ function getResultSummary(score: number) {
       localStorage.setItem("referrer_id", referrerId);
     }
 
-
+    // Automatically check all 'strongly agree' options for testing
+    const stronglyAgreeOptions = document.querySelectorAll('input[type="radio"][value="5"]');
+    stronglyAgreeOptions.forEach(option => {
+      option.checked = true;
+    });
 
     // Get DOM elements
     const progressBar = document.getElementById('progress-bar');
@@ -494,6 +498,12 @@ function getResultSummary(score: number) {
         formData.append('email', email);
         formData.append('score', totalScore);
         formData.append('resultType', resultType);
+        
+        // Add referral ID if it exists
+        const storedReferrerId = localStorage.getItem('referrer_id');
+        if (storedReferrerId) {
+          formData.append('referrer_id', storedReferrerId);
+        }
         
         // Log the form data for debugging
         console.log('Form data being sent:', {

@@ -28,6 +28,7 @@
     "@astrolib/analytics": "^0.6.1",
     "@astrolib/seo": "^1.0.0-beta.8",
     "@fontsource-variable/inter": "^5.2.5",
+    "@supabase/supabase-js": "^2.49.5",
     "@tabler/icons-react": "^3.31.0",
     "astro": "^5.5.2",
     "astro-embed": "^0.9.0",
