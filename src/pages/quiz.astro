@@ -267,7 +267,7 @@ function getResultSummary(score: number) {
             <div class="p-6">
               <p class="text-lg font-medium text-gray-800 dark:text-white mb-4">{index + 1}. {question.text}</p>
             </div>
-            <div class="flex justify-between items-center w-full px-6">
+            <div class="flex justify-between items-center w-full px-6 flex-nowrap gap-2">
               {['Strongly Disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly Agree'].map((option, optionIndex) => (
                 <div class="flex flex-col items-center">
                   <div class="flex items-center">
