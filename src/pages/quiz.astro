@@ -7,157 +7,97 @@ const metadata = {
   description: "Take the Sex 3.0 Relationship Map Quiz to understand where you are on your journey and unlock personalized insights.",
 };
 
-// --- QUIZ DATA ---
-interface Question {
-  text: string;
-  scoring: number[];
-}
-
-interface QuizResult {
-  range: [number, number];
-  title: string;
-  description: string;
-  color: string;
-}
-
-const quizQuestions: Question[] = [
+const quizQuestions = [
   {
     text: "Jealousy in a relationship is a sign of how much you love someone.",
-    scoring: [5, 4, 3, 2, 1], // 1-5 maps to 5-1 points (Sex 2.0)
+    scoring: [5, 4, 3, 2, 1], // Sex 2.0 Attitude (Agree=Low)
   },
   {
-    text: "A healthy relationship requires constant effort and hard 'work'.",
-    scoring: [5, 4, 3, 2, 1],
+    text: "Relationships should be built on complete honesty, even when it's difficult.",
+    scoring: [1, 2, 3, 4, 5], // Sex 3.0 Attitude (Agree=High)
   },
   {
-    text: "The concept of 'The One' is a realistic ideal for finding a life partner.",
-    scoring: [5, 4, 3, 2, 1],
+    text: "I believe in the concept of 'The One' in relationships.",
+    scoring: [5, 4, 3, 2, 1], // Sex 2.0 Attitude (Agree=Low)
   },
   {
-    text: "It is natural for human beings to be monogamous for their entire lives.",
-    scoring: [5, 4, 3, 2, 1],
+    text: "Trust and respect are more important that exclusivity and control in a relationship.",
+    scoring: [1, 2, 3, 4, 5], // Sex 3.0 Attitude (Agree=High)
   },
   {
-    text: "Love should be unconditional in a committed relationship.",
-    scoring: [5, 4, 3, 2, 1],
-  },
-  {
-    text: "A relationship is successful if it lasts a lifetime.",
-    scoring: [5, 4, 3, 2, 1],
-  },
-  {
-    text: "Compromise is essential for a healthy relationship.",
-    scoring: [5, 4, 3, 2, 1],
-  },
-  {
-    text: "You should share everything with your partner.",
-    scoring: [5, 4, 3, 2, 1],
-  },
-  {
-    text: "A relationship should complete you as a person.",
-    scoring: [5, 4, 3, 2, 1],
-  },
-  {
-    text: "You should be willing to sacrifice your happiness for your partner's.",
-    scoring: [5, 4, 3, 2, 1],
-  },
-  {
-    text: "A relationship requires exclusivity to be meaningful.",
-    scoring: [5, 4, 3, 2, 1],
-  },
-  {
-    text: "If you truly love someone, you should be willing to change for them.",
-    scoring: [5, 4, 3, 2, 1],
-  },
-  {
-    text: "A relationship should be your top priority in life.",
-    scoring: [5, 4, 3, 2, 1],
-  },
-  {
-    text: "You should be able to predict your partner's needs without them telling you.",
-    scoring: [5, 4, 3, 2, 1],
-  },
-  {
-    text: "A relationship should be effortless if it's with the right person.",
-    scoring: [1, 2, 3, 4, 5],
-  },
-  {
-    text: "You should always put your partner's needs before your own.",
-    scoring: [5, 4, 3, 2, 1],
-  },
-  {
-    text: "A relationship should fulfill all your emotional needs.",
-    scoring: [5, 4, 3, 2, 1],
-  },
-  {
-    text: "You should be willing to give up your dreams for your relationship.",
-    scoring: [5, 4, 3, 2, 1],
+    text: "A relationship is successful if it lasts a lifetime, regardless of the quality.",
+    scoring: [5, 4, 3, 2, 1], // Sex 2.0 Attitude (Agree=Low) - Slightly rephrased
   },
   {
     text: "A relationship should be free of conflict to be healthy.",
     scoring: [1, 2, 3, 4, 5],
   },
   {
-    text: "You should be willing to tolerate bad behavior if you love someone.",
+    text: "You should be willing to tolerate bad behaviour if you love someone.",
     scoring: [5, 4, 3, 2, 1],
   },
   {
-    text: "Society's expectations significantly influence my relationship choices.",
+    text: "A relationship should complete you as a person.",
+    scoring: [5, 4, 3, 2, 1], // Sex 2.0 Attitude (Agree=Low)
+  },
+  {
+    text: "I believe society promotes outdated ideas about sexual relationships.",
+    scoring: [1, 2, 3, 4, 5], // Sex 3.0 Awareness (Agree=High) - Rephrased original 17's theme
+  },
+  {
+    text: "You should be willing to sacrifice your happiness for your partner's.",
+    scoring: [5, 4, 3, 2, 1], // Sex 2.0 Attitude (Agree=Low)
+  },
+  {
+    text: "A relationship requires exclusivity to be fulfilling and meaningful above all else.",
+    scoring: [5, 4, 3, 2, 1], // Sex 2.0 Attitude (Agree=Low) - Slightly rephrased
+  },
+  {
+    text: "My partner having personal freedom is compatible with deep intimacy in a relationship.",
+    scoring: [1, 2, 3, 4, 5], // Sex 3.0 Attitude (Agree=High) - New question based on book
+  },
+  {
+    text: "A healthy relationship requires effort and hard work.",
+    scoring: [5, 4, 3, 2, 1], // Sex 2.0 Attitude (Agree=Low)
+  },
+  {
+    text: "I have gut feeling that there is something wrong with the way that society tells me how relationships should be but I can't quite put my finger on it.",
+    scoring: [1, 2, 3, 4, 5], // Sex 3.0 Attitude (Agree=High) - New question based on book
+  },
+  {
+    text: "You should be able to predict your partner's needs without them telling you.",
     scoring: [5, 4, 3, 2, 1],
   },
   {
-    text: "I believe in the concept of 'soulmates' or 'the one'.",
-    scoring: [5, 4, 3, 2, 1],
+    text: "It is natural for human beings to be monogamous for their entire lives.",
+    scoring: [5, 4, 3, 2, 1], // Sex 2.0 Attitude (Agree=Low)
   },
   {
-    text: "Jealousy is a natural and healthy part of love.",
-    scoring: [5, 4, 3, 2, 1],
+    text: "If you truly love someone, you should prioritize their needs above your own and your own dreams.",
+    scoring: [5, 4, 3, 2, 1], // Sex 2.0 Attitude (Agree=Low) - Combined/rephrased
   },
   {
-    text: "Relationships should be built on complete honesty, even when it's difficult.",
-    scoring: [1, 2, 3, 4, 5],
+    text: "A relationship should fulfil all your emotional needs.",
+    scoring: [5, 4, 3, 2, 1], // Sex 2.0 Attitude (Agree=Low)
   },
   {
-    text: "Mutual reward is the fundamental basis of any relationship.",
-    scoring: [1, 2, 3, 4, 5],
+    text: "I feel pressured to follow a standard relationship timeline (dating, marriage, kids).",
+    scoring: [1, 2, 3, 4, 5], // Sex 3.0 Awareness (Agree=High) - Acknowledging RD
+  },
+  {
+    text: "My happiness depends on finding 'the right person' to complete me.",
+    scoring: [5, 4, 3, 2, 1], // Sex 2.0 Attitude (Agree=Low)
   }
 ];
 
-// Results interpretation
-const results: QuizResult[] = [
-  {
-    range: [0, 25],
-    title: 'Relationship 3.0 Thinker',
-    description: 'You have a modern, evolved perspective on relationships that aligns with Sex 3.0 principles. You value freedom, honesty, and mutual growth in your connections.',
-    color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  },
-  {
-    range: [26, 50],
-    title: 'Transitioning to 3.0',
-    description: 'You\'re questioning traditional relationship norms and moving toward a more liberated approach. You understand many Sex 3.0 concepts but may still hold some conventional beliefs.',
-    color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  },
-  {
-    range: [51, 75],
-    title: 'Balanced Perspective',
-    description: 'You have a mix of traditional and modern views on relationships. You see value in both conventional relationship structures and more liberated approaches.',
-    color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-  },
-  {
-    range: [76, 100],
-    title: 'Traditional Relationship Thinker',
-    description: 'Your views align with conventional relationship norms. You might find value in exploring alternative perspectives that could lead to more freedom and fulfillment in your connections.',
-    color: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-  },
-];
 
 // Calculate the result based on the score
-const getResult = (score: number): QuizResult | undefined => {
-  const percentage = (score / (quizQuestions.length * 5)) * 100;
-  return results.find(r => percentage >= r.range[0] && percentage <= r.range[1]);
+const getResult = (score: number): string => {
+  if (score <= 40) return 'Mostly Sex 2.0';
+  if (score <= 60) return 'Sex 2.0 with Growing Awareness';
+  if (score <= 80) return 'Leaning Towards Sex 3.0';
+  return 'Mostly Sex 3.0';
 };
-
-
 
 // Get URL parameters
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -175,6 +115,12 @@ if (Astro.request.method === 'POST') {
   }, 0);
   
   const result = getResult(score);
+  
+  // Debug output
+  console.log('Quiz Submission:');
+  console.log('Raw Answers:', answers);
+  console.log('Calculated Score:', score);
+  console.log('Result Category:', result);
   
   try {
     // Here you would typically send this data to your email service
@@ -243,6 +189,8 @@ function getResultSummary(score: number) {
 ---
 
 <Layout metadata={metadata}>
+  <!-- Add quiz questions JSON to DOM -->
+  <div id="quiz-questions-json" style="display: none;">{JSON.stringify(quizQuestions)}</div>
   <div class="container mx-auto px-4 py-16 md:py-24">
 
     <div id="quiz-container" class="max-w-3xl mx-auto bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 md:p-8 lg:p-10">
@@ -252,7 +200,7 @@ function getResultSummary(score: number) {
           {/* Progress Bar and Counter */}
           <div class="mb-8">
             <div class="flex justify-between items-center mb-2">
-              <span id="question-counter" class="text-sm font-medium text-orange-500">Answered 0 of 25 questions</span>
+              <span id="question-counter" class="text-sm font-medium text-orange-500">Answered 0 of 20 questions</span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
               <div id="progress-bar" class="bg-orange-500 h-2.5 rounded-full transition-all duration-300 ease-in-out" style="width: 5%"></div>
@@ -361,9 +309,28 @@ function getResultSummary(score: number) {
       option.checked = true;
     });
 
+    // Update progress based on how many questions have been answered
+    function updateQuizProgress() {
+      // Count how many questions have been answered
+      const answeredQuestions = Array.from(document.querySelectorAll('input[type="radio"]:checked'));
+      const uniqueQuestionNames = new Set();
+      
+      answeredQuestions.forEach(radio => {
+        uniqueQuestionNames.add(radio.name);
+      });
+      
+      const answeredCount = uniqueQuestionNames.size;
+      const totalQuestions = 20; // Total number of questions
+      
+      // Update the progress bar
+      const progress = (answeredCount / totalQuestions) * 100;
+      const progressBar = document.getElementById('progress-bar');
+      const questionCounter = document.getElementById('question-counter');
+      progressBar.style.width = `${progress}%`;
+      questionCounter.textContent = `Answered ${answeredCount} of ${totalQuestions} questions`;
+    }
+
     // Get DOM elements
-    const progressBar = document.getElementById('progress-bar');
-    const questionCounter = document.getElementById('question-counter');
     const quizForm = document.getElementById('quiz-form');
     const emailGateArea = document.getElementById('email-gate-area');
     const scorePreview = document.getElementById('score-preview');
@@ -374,45 +341,26 @@ function getResultSummary(score: number) {
     const resultTypeHeading = document.getElementById('result-type-heading');
     const resultSummaryText = document.getElementById('result-summary-text');
 
-    // Update progress based on how many questions have been answered
-    function updateProgress() {
-      // Count how many questions have been answered
-      const answeredQuestions = Array.from(document.querySelectorAll('input[type="radio"]:checked'));
-      const uniqueQuestionNames = new Set();
-      
-      answeredQuestions.forEach(radio => {
-        uniqueQuestionNames.add(radio.name);
-      });
-      
-      const answeredCount = uniqueQuestionNames.size;
-      const totalQuestions = 25; // Total number of questions
-      
-      // Update the progress bar
-      const progress = (answeredCount / totalQuestions) * 100;
-      progressBar.style.width = `${progress}%`;
-      questionCounter.textContent = `Answered ${answeredCount} of ${totalQuestions} questions`;
-    }
-
     // Add event listeners to all radio buttons when DOM is fully loaded
     document.addEventListener('DOMContentLoaded', () => {
       // Initial update
-      updateProgress();
+      updateQuizProgress();
       
       // Add change event listeners to all radio buttons
       document.querySelectorAll('input[type="radio"]').forEach(radio => {
-        radio.addEventListener('change', updateProgress);
+        radio.addEventListener('change', updateQuizProgress);
       });
     });
     
     // Also add direct event listeners to ensure they work immediately
     document.querySelectorAll('input[type="radio"]').forEach(radio => {
-      radio.addEventListener('click', updateProgress);
+      radio.addEventListener('click', updateQuizProgress);
     });
 
     // Handle show email form button click
     document.getElementById('show-email-form-btn').addEventListener('click', () => {
       // Check if all questions are answered
-      const totalQuestions = 25;
+      const totalQuestions = 20;
       const answeredQuestions = document.querySelectorAll('input[type="radio"]:checked');
       const uniqueQuestionNames = new Set();
       
@@ -432,11 +380,12 @@ function getResultSummary(score: number) {
       let totalScore = 0;
       
       // Get all form values and calculate score based on the scoring system in the questions array
-      for (let i = 0; i < 25; i++) {
+      const quizQuestions = JSON.parse(document.getElementById('quiz-questions-json').textContent);
+      for (let i = 0; i < 20; i++) {
         const value = parseInt(formData.get(`question-${i}`));
         if (!isNaN(value)) {
-            // Sex 3.0 questions (direct scoring)
-            totalScore += value; // 1,2,3,4,5 points for 1,2,3,4,5 answers
+          // Use the scoring array from the question to determine the score
+          totalScore += quizQuestions[i].scoring[value - 1];
         }
       }
       
@@ -487,9 +436,14 @@ function getResultSummary(score: number) {
         // Get the score from the global variable
         const totalScore = window.quizTotalScore;
         
+        // Debug output
+        console.log('Quiz Results:');
+        console.log('Total Score:', totalScore);
+        
         // Get the result type from the score preview text
         const scoreText = scorePreview.textContent;
         const resultType = scoreText.match(/you are (.+)\./)[1];
+        console.log('Result Type:', resultType);
         
         // FIRST: Immediately show results without waiting for email confirmation
         emailGateArea.classList.add('hidden');
@@ -563,6 +517,6 @@ function getResultSummary(score: number) {
     });
 
     // Initialize progress bar
-    updateProgress();
+    updateQuizProgress();
   </script>
 </Layout>
