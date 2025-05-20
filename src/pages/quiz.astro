@@ -106,7 +106,6 @@ const url = new URL(Astro.request.url);
 // Handle form submission
 if (Astro.request.method === 'POST') {
   const formData = await Astro.request.formData();
-  const email = formData.get('email');
   const answers = JSON.parse(formData.get('answers')?.toString() || '[]') as number[];
   
   // Calculate score
@@ -122,24 +121,7 @@ if (Astro.request.method === 'POST') {
   console.log('Calculated Score:', score);
   console.log('Result Category:', result);
   
-  try {
-    // Here you would typically send this data to your email service
-    // For example, using a serverless function or API endpoint
-    // This is a placeholder for the actual implementation
-    const response = await fetch('https://your-email-service.com/api/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, answers, score, result })
-    });
-    
-    if (!response.ok) throw new Error('Failed to submit form');
-    
-    // Redirect with success state
-    return Astro.redirect(`/quiz?email_submitted=true&score=${score}`);
-  } catch (error) {
-    console.error('Error submitting form:', error);
-    return Astro.redirect('/quiz?error=submission_failed');
-  }
+
 }
 
 // Get score from URL if present (used in template)
