@@ -1,153 +1,141 @@
 // src/pages/api/quiz-submit.ts
-export const prerender = false;
-import type { APIRoute } from 'astro';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client
-const supabaseUrl = import.meta.env.SUPABASE_URL;
-const supabaseKey = import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
+const supabaseKey = import.meta.env.PRIVATE_SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseKey) {
-  throw new Error('SUPABASE_SERVICE_ROLE_KEY is required in environment variables');
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Missing Supabase configuration');
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-function generateReferralId(length = 8) {
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
   }
-  return result;
-}
+});
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST = async ({ request }) => {
   try {
     const formData = await request.formData();
-    const email = formData.get('email');
-    const score = formData.get('score');
-    const resultType = formData.get('resultType');
+    const email = formData.get('email')?.toString().toLowerCase().trim();
+    const score = formData.get('score')?.toString();
+    const resultType = formData.get('resultType')?.toString();
+    const referralCode = formData.get('referralCode')?.toString();
 
-    // Validate resultType is a string
-    if (!resultType || typeof resultType !== 'string') {
-      console.error('Invalid resultType:', resultType);
-      return new Response(JSON.stringify({ message: 'Invalid quiz result type' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    // Validate inputs
+    if (!email || !email.includes('@')) {
+      return new Response(
+        JSON.stringify({ success: false, message: 'Valid email is required' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Basic email validation
-    if (!email || typeof email !== 'string' || !email.includes('@')) {
-      return new Response(JSON.stringify({ message: 'Invalid email address' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    if (!resultType) {
+      return new Response(
+        JSON.stringify({ success: false, message: 'Quiz result is required' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Retrieve secret key and form ID from environment variables
-    const convertKitApiKey = import.meta.env.CONVERTKIT_API_KEY;
-    const convertKitFormId = import.meta.env.PUBLIC_CONVERTKIT_FORM_ID;
+    // Check if user already exists
+    const { data: existingUser } = await supabase
+      .from('user_profiles')
+      .select('id, email')
+      .eq('email', email)
+      .maybeSingle();
 
-    if (!convertKitApiKey || !convertKitFormId) {
-       console.error("ConvertKit API Key or Form ID not set in environment variables.");
-       return new Response(JSON.stringify({ message: 'Server configuration error.' }), {
-         status: 500,
-         headers: { 'Content-Type': 'application/json' },
-       });
+    if (existingUser) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: 'This email is already registered' 
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
-    const convertKitApiUrl = `https://api.convertkit.com/v3/forms/${convertKitFormId}/subscribe`;
-
-    // Log the data being sent to ConvertKit for debugging
-    console.log('Submitting to ConvertKit:', {
+    // Create auth user
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
-      score,
-      resultType
+      email_confirm: true,
+      password: crypto.randomUUID(),
     });
 
-    // Get any referral ID from the form data (if someone used a referral link)
-    const incomingReferrerId = formData.get('referrer_id');
-    console.log('Received referral ID from form:', incomingReferrerId);
-    
-    // Generate a new referral ID for the person taking the quiz
-    const newReferralId = generateReferralId();
-    console.log('Generated referral id:', newReferralId);
-    
-    const response = await fetch(convertKitApiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        api_secret: convertKitApiKey,
-        email: email,
-        // ConvertKit expects these fields to be in the 'fields' object
-        fields: { 
-          "love_lab_quiz_score": score,
-          "referral_id": newReferralId,
-          "id_of_person_that_referred_me": incomingReferrerId || '' // Ensure it's always a string
-        },
-        // Add metadata fields directly at the root level
-        id_of_person_that_referred_me: incomingReferrerId || '',
-        referral_id: newReferralId,
-        // Add the appropriate tag based on result type
-        tags: {
-          "Mostly Sex 2.0": 7939497,
-          "Sex 2.0 with Growing Awareness": 7939500,
-          "Leaning Towards Sex 3.0": 7939502,
-          "Mostly Sex 3.0": 7939504
-        }[resultType] || 7939497 // Default to 'Mostly Sex 2.0' if resultType doesn't match
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('ConvertKit API error:', response.status, errorData);
-      return new Response(JSON.stringify({ message: 'Failed to submit quiz results.', error: errorData }), {
-        status: response.status,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    if (authError || !authData.user) {
+      console.error('Auth user creation failed:', authError);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: 'Failed to create user account' 
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
-    const data = await response.json();
-    console.log('Successfully submitted quiz results:', data);
+    const userId = authData.user.id;
 
-    // Store referral relationship in Supabase
-    if (incomingReferrerId) {
-      // This is a referral signup - store the relationship
-      const { error: referralError } = await supabase
-        .from('referrals')
-        .insert([
-          {
-            referrer_id: incomingReferrerId,
-            new_user_email: email,
-            timestamp: new Date().toISOString()
-          }
-        ]);
+    try {
+      // Create user profile with initial gems
+      const { error: profileError } = await supabase
+        .rpc('create_user_with_referral', {
+          p_user_id: userId,
+          p_email: email,
+          p_referral_code: referralCode || null,
+          p_quiz_result: resultType,
+          p_quiz_score: score ? parseInt(score) : 0
+        });
 
-      if (referralError) {
-        console.error('Error storing referral:', referralError);
-      } else {
-        console.log('Successfully stored referral relationship');
+      if (profileError) {
+        console.error('Profile creation failed:', profileError);
+        throw profileError;
       }
+
+      // Record quiz completion
+      const { error: quizError } = await supabase
+        .from('quiz_attempts')
+        .insert({
+          user_id: userId,
+          score: score ? parseInt(score) : null,
+          result_type: resultType,
+          earned_gems: 25
+        });
+
+      if (quizError) throw quizError;
+
+      // Get updated user data
+      const { data: userData } = await supabase
+        .from('user_profiles')
+        .select('gems_balance, referral_code')
+        .eq('id', userId)
+        .single();
+
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          userId,
+          gemsBalance: userData?.gems_balance || 0,
+          referralCode: userData?.referral_code,
+          message: 'Quiz submitted successfully' 
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+
+    } catch (error) {
+      // Clean up auth user if profile creation fails
+      await supabase.auth.admin.deleteUser(userId);
+      console.error('Error in quiz submission:', error);
+      throw error;
     }
 
-    // Return the referral ID in the response
-    return new Response(JSON.stringify({ 
-      message: 'Quiz results submitted successfully!', 
-      referralId: newReferralId,
-      data: data 
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    });
   } catch (error) {
-    console.error('Error in quiz submission:', error);
-    return new Response(JSON.stringify({ message: 'Failed to submit quiz results', error: error.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    console.error('Error processing quiz submission:', error);
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        message: 'An error occurred while processing your submission' 
+      }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 };
