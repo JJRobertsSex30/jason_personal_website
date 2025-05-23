@@ -3,15 +3,15 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.SUPABASE_URL;
 const supabaseKey = import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
-const convertKitApiKey = import.meta.env.CONVERTKIT_API_KEY;  // No PUBLIC_ prefix for server-side
-const convertKitFormId = import.meta.env.PUBLIC_CONVERTKIT_FORM_ID;  // Keep this as is since it's used in the client-side code
+const convertKitApiKey = import.meta.env.CONVERTKIT_API_KEY;
+const convertKitFormId = import.meta.env.PUBLIC_CONVERTKIT_FORM_ID;
 
 if (!supabaseUrl || !supabaseKey) {
   throw new Error('Missing Supabase configuration');
 }
 
 if (!convertKitApiKey || !convertKitFormId) {
-  throw new Error('Missing convertKit configuration');
+  throw new Error('Missing ConvertKit configuration');
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey, {
@@ -60,9 +60,7 @@ export const POST = async ({ request }) => {
       let userId: string;
 
       if (existingUser) {
-        // User exists, use their existing ID
         userId = existingUser.id;
-
       } else {
         // User doesn't exist, create a new user profile
         const newUserId = crypto.randomUUID();
@@ -75,7 +73,7 @@ export const POST = async ({ request }) => {
             id: newUserId,
             email,
             referral_code: newReferralCode,
-            gems_balance: 0 // Will be updated by the RPC call
+            gems_balance: 0
           });
 
         if (insertError) {
@@ -118,6 +116,14 @@ export const POST = async ({ request }) => {
       // Add user to ConvertKit with direct API call
       if (convertKitApiKey && convertKitFormId) {
         try {
+          // Map result types to ConvertKit tag IDs
+          const resultTypeToTagId: Record<string, number> = {
+            'Leaning Towards Sex 3.0': 7939502,
+            'Mostly Sex 2.0': 7939497,
+            'Mostly Sex 3.0': 7939504,
+            'Sex 2.0 with Growing Awareness': 7939500
+          };
+
           const convertKitApiUrl = `https://api.convertkit.com/v3/forms/${convertKitFormId}/subscribe`;
           const response = await fetch(convertKitApiUrl, {
             method: 'POST',
@@ -125,26 +131,29 @@ export const POST = async ({ request }) => {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              api_key: convertKitApiKey,  // This should now have the correct API key
+              api_key: convertKitApiKey,
               email: email,
               fields: {
-                quiz_result: resultType,
-                quiz_score: score || '0',
-                referral_code: updatedUser.referral_code
+                'love_lab_quiz_score': score || '0',
+                'referral_id': updatedUser.referral_code || '',
+                'insight_gems': updatedUser.gems_balance?.toString() || '0',
+                'id_of_person_that_referred_me': referralCode || ''
               },
-              tags: ['quiz-completed']
+              tags: [
+                resultTypeToTagId[resultType]
+              ].filter(Boolean)
             }),
           });
 
           if (!response.ok) {
-            const errorText  = await response.json();
+            const errorText = await response.json();
             console.error('ConvertKit API error status:', response.status);
             console.error('ConvertKit API error status text:', response.statusText);          
-            console.error('ConvertKit API error:', errorText );
+            console.error('ConvertKit API error:', errorText);
             try {
-              const errorData = JSON.parse(errorText );
+              const errorData = JSON.parse(errorText);
               console.error('ConvertKit API error JSON:', errorData);
-            } catch  {
+            } catch {
               console.error('Could not parse error response as JSON');
             }
           } else {
