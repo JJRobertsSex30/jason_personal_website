@@ -4,7 +4,7 @@ import Layout from '~/layouts/PageLayout.astro';
 // --- METADATA ---
 const metadata = {
   title: 'Sex 3.0 Relationship Map Quiz | JJ Roberts',
-  description: "Take the Sex 3.0 Relationship Map Quiz to understand where you are on your journey and unlock personalized insights.",
+  description: "Take the Sex 3.0 Relationship Map Quiz to understand where you are on your journey and unlock personalised insights.",
 };
 
 const quizQuestions = [
@@ -218,14 +218,34 @@ function getResultSummary(score: number) {
           </div>
         ))}
         
-        <div class="mt-8 text-center">
-          <button 
-            id="show-email-form-btn"
-            type="button" 
-            class="inline-flex items-center justify-center gap-2 px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap"
-          >
-            Calculate My Results
-          </button>
+        <div class="mt-8 p-6 bg-orange-50 dark:bg-slate-800 rounded-lg border-l-4 border-orange-500">
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-3">Personalize Your Results</h3>
+          <p class="text-gray-700 dark:text-gray-300 mb-4">
+            We'd love to personalize your experience! Please share your first name so we can tailor your insights and make them more meaningful for you.
+          </p>
+          <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
+            <div class="flex-grow w-full">
+              <label for="user-first-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">First Name</label>
+              <div class="w-full">
+                <input 
+                  type="text" 
+                  id="user-first-name" 
+                  name="firstName"
+                  placeholder="Enter your first name" 
+                  required
+                  class="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                />
+                <p id="first-name-error" class="mt-1 text-sm text-red-600 dark:text-red-400 hidden">Please enter your first name to continue</p>
+              </div>
+            </div>
+            <button 
+              id="show-email-form-btn"
+              type="button" 
+              class="w-full sm:w-auto px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap"
+            >
+              Calculate My Results
+            </button>
+          </div>
         </div>
       </form>
 
@@ -314,11 +334,12 @@ function getResultSummary(score: number) {
     // Get DOM elements
     const quizForm = document.getElementById('quiz-form');
     const emailGateArea = document.getElementById('email-gate-area');
+    const resultsArea = document.getElementById('results-area');
     const scorePreview = document.getElementById('score-preview');
     const quizEmailForm = document.getElementById('quiz-email-form');
     const quizEmailInput = document.getElementById('quiz-email-input');
     const quizFormMessage = document.getElementById('quiz-form-message');
-    const resultsArea = document.getElementById('results-area');
+    const userFirstNameInput = document.getElementById('user-first-name');
     const resultTypeHeading = document.getElementById('result-type-heading');
     const resultSummaryText = document.getElementById('result-summary-text');
 
@@ -340,6 +361,30 @@ function getResultSummary(score: number) {
 
     // Handle show email form button click
     document.getElementById('show-email-form-btn').addEventListener('click', () => {
+      // Check if first name is provided
+      const firstNameInput = document.getElementById('user-first-name');
+      const firstName = firstNameInput.value.trim();
+      
+      const firstNameError = document.getElementById('first-name-error');
+      
+      if (!firstName) {
+        // Add error styling and show error message
+        firstNameInput.classList.add('border-red-500');
+        firstNameError.classList.remove('hidden');
+        // Scroll to the first name field
+        firstNameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Focus the field
+        firstNameInput.focus();
+        return;
+      } else {
+        // Clear any existing error
+        firstNameInput.classList.remove('border-red-500');
+        firstNameError.classList.add('hidden');
+      }
+      
+      // Store first name in localStorage for persistence
+      localStorage.setItem('userFirstName', firstName);
+      
       // Check if all questions are answered
       const totalQuestions = 20;
       const answeredQuestions = document.querySelectorAll('input[type="radio"]:checked');
@@ -436,7 +481,8 @@ function getResultSummary(score: number) {
         // THEN: Prepare data for submission to Kit email integration
         const formData = new FormData();
         formData.append('email', email);
-        formData.append('score', totalScore);
+        formData.append('firstName', userFirstNameInput.value.trim());
+        formData.append('score', totalScore.toString());
         formData.append('resultType', resultType);
         
         // Get referral ID from localStorage (already stored when URL parameter was detected)
@@ -452,9 +498,16 @@ function getResultSummary(score: number) {
         // Log the form data for debugging
         console.log('Form data being sent:', {
           email,
+          firstName: userFirstNameInput.value.trim(),
           score: totalScore,
           resultType
         });
+        
+        // Ensure first name is included in the form data
+        const firstName = userFirstNameInput.value.trim();
+        if (firstName) {
+          formData.append('first_name', firstName);
+        }
         
         // Send data to server in the background (no await)
         fetch('/api/quiz-submit', {
@@ -482,7 +535,9 @@ function getResultSummary(score: number) {
           summary = 'Wow! Your score indicates you already resonate strongly with the Sex 3.0 paradigm. You fundamentally understand that relationships thrive on mutual reward, honesty, trust, and respect, not on outdated notions of ownership or societal pressure. You are likely already navigating relationships with greater clarity and less suffering. You are a pioneer in building connections that are natural, free, and deeply fulfilling.';
         }
         
-        resultSummaryText.textContent = summary;
+        if (resultSummaryText) {
+          resultSummaryText.textContent = summary;
+        }
         
         // Scroll to results
         resultsArea.scrollIntoView({ behavior: 'smooth' });
@@ -499,5 +554,20 @@ function getResultSummary(score: number) {
 
     // Initialize progress bar
     updateQuizProgress();
+    
+    // Clear error state when typing in first name
+    const firstNameInput = document.getElementById('user-first-name');
+    const firstNameError = document.getElementById('first-name-error');
+    
+    firstNameInput?.addEventListener('input', () => {
+      firstNameInput.classList.remove('border-red-500');
+      firstNameError?.classList.add('hidden');
+    });
+    
+    // Load saved first name if available
+    const savedName = localStorage.getItem('userFirstName');
+    if (savedName) {
+      firstNameInput.value = savedName;
+    }
   </script>
 </Layout>

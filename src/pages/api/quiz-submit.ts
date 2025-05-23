@@ -25,6 +25,8 @@ export const POST = async ({ request }) => {
   try {
     const formData = await request.formData();
     const email = formData.get('email')?.toString().toLowerCase().trim();
+    // Try both 'firstName' and 'first_name' for backward compatibility
+    const firstName = (formData.get('firstName') || formData.get('first_name'))?.toString().trim() || '';
     const score = formData.get('score')?.toString();
     const resultType = formData.get('resultType')?.toString();
     const referralCode = formData.get('referralCode')?.toString() || null;
@@ -72,6 +74,7 @@ export const POST = async ({ request }) => {
           .insert({
             id: newUserId,
             email,
+            first_name: firstName,
             referral_code: newReferralCode,
             insight_gems: 100  // Default to 100 gems for new users
           });
@@ -133,11 +136,13 @@ export const POST = async ({ request }) => {
             body: JSON.stringify({
               api_key: convertKitApiKey,
               email: email,
+              first_name: firstName,
               fields: {
                 'love_lab_quiz_score': score || '0',
                 'referral_id': updatedUser.referral_code || '',
-                'insight_gems': updatedUser.insight_gems?.toString() || '100',
-                'id_of_person_that_referred_me': referralCode || ''
+                'insight_gems': '100', // Default value for new users
+                'quiz_result_type': resultType || 'unknown',
+                'quiz_taken_at': new Date().toISOString()
               },
               tags: [
                 resultTypeToTagId[resultType]
