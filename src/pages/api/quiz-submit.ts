@@ -48,7 +48,7 @@ export const POST = async ({ request }) => {
       // First, check if user exists in user_profiles
       const { data: existingUser, error: userLookupError } = await supabase
         .from('user_profiles')
-        .select('id, email, gems_balance, referral_code')
+        .select('id, email, insight_gems, referral_code')
         .eq('email', email)
         .maybeSingle();
 
@@ -73,7 +73,7 @@ export const POST = async ({ request }) => {
             id: newUserId,
             email,
             referral_code: newReferralCode,
-            gems_balance: 0
+            insight_gems: 100  // Default to 100 gems for new users
           });
 
         if (insertError) {
@@ -104,7 +104,7 @@ export const POST = async ({ request }) => {
       // Get updated user data
       const { data: updatedUser, error: fetchError } = await supabase
         .from('user_profiles')
-        .select('gems_balance, referral_code')
+        .select('insight_gems, referral_code')
         .eq('id', userId)
         .single();
 
@@ -136,7 +136,7 @@ export const POST = async ({ request }) => {
               fields: {
                 'love_lab_quiz_score': score || '0',
                 'referral_id': updatedUser.referral_code || '',
-                'insight_gems': updatedUser.gems_balance?.toString() || '0',
+                'insight_gems': updatedUser.insight_gems?.toString() || '100',
                 'id_of_person_that_referred_me': referralCode || ''
               },
               tags: [
@@ -172,7 +172,7 @@ export const POST = async ({ request }) => {
           success: true,
           userId,
           gemsEarned: 100, // Base quiz completion gems
-          totalGems: updatedUser.gems_balance,
+          totalGems: updatedUser.insight_gems,
           referralCode: updatedUser.referral_code,
           message: 'Quiz submitted successfully' 
         }),
