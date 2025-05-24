@@ -1,38 +1,16 @@
 ---
 // src/components/widgets/Hero.astro
 import { Image } from 'astro:assets';
-
-// VERIFY THIS PATH AND FILENAME MATCH YOUR ACTUAL IMAGE FILE
 import heroBgImage from '~/assets/images/jj.jpg';
 
-// Define overlay color and opacity here for easy modification
-const overlayColor = 'bg-gray-900';
-const overlayOpacity = 'opacity-60';
-
-// Define props interface
 export interface Props {
-  title?: string;
-  subtitle?: string;
-  actions?: Array<{
-    variant?: string;
-    text: string;
-    href: string;
-    icon?: string;
-  }>;
   image?: {
     src: any;
     alt: string;
   };
-  abTestVariantKey?: string;
 }
 
-const {
-  title = "Default Title",
-  subtitle = "Default subtitle text",
-  actions = [],
-  image = { src: heroBgImage, alt: 'Default alt text' },
-  abTestVariantKey = 'control'
-} = Astro.props;
+const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
 ---
 
 <section class="relative overflow-hidden py-24 md:py-32">
@@ -49,21 +27,28 @@ const {
   />
 
   {/* Dark Overlay */}
-  <div class={`absolute inset-0 w-full h-full ${overlayColor} ${overlayOpacity} -z-10`}></div>
+  <div class="absolute inset-0 w-full h-full bg-gray-900 opacity-60 -z-10"></div>
 
   {/* Content Container */}
   <div class="container mx-auto px-4 relative z-10 text-center">
-    {/* Headline & Form */}
     <div class="max-w-3xl mx-auto">
-      <h1 id="hero-headline" class="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight drop-shadow-md" set:html={title}></h1>
-      <p id="hero-subheadline" class="text-lg text-gray-200 mb-8 drop-shadow-sm" set:html={subtitle}></p>
+      <h1 id="hero-headline" class="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight drop-shadow-md min-h-[4rem]">
+        <!-- Content will be populated by PostHog -->
+      </h1>
+      <p id="hero-subheadline" class="text-lg text-gray-200 mb-8 drop-shadow-sm min-h-[2rem]">
+        <!-- Content will be populated by PostHog -->
+      </p>
       
-      {/* Basic Form */}
+      <div id="content-loading" class="text-gray-300 mb-4">
+        Loading...
+      </div>
+      
       <form 
         id="hero-page-form" 
         class="flex flex-col sm:flex-row gap-4 justify-center max-w-xl mx-auto"
+        style="display: none;"
       >
-        <input type="hidden" name="ab_test_variant" id="ab-test-variant" value={abTestVariantKey} />
+        <input type="hidden" name="ab_test_variant" id="ab-test-variant" />
         <input type="hidden" name="signup_source" value="hero" />
         
         <label for="hero-email-bg" class="sr-only">Email address</label>
@@ -82,7 +67,6 @@ const {
           Get Started Now
         </button>
       </form>
-      {/* Added message area */}
       <p id="hero-page-form-message" class="text-sm text-gray-300 mt-4 drop-shadow-sm"></p>
     </div>
   </div>
@@ -90,108 +74,96 @@ const {
 
 <script is:inline>
   document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('hero-page-form');
-    const messageElement = document.getElementById('hero-page-form-message');
-    const emailInput = document.getElementById('hero-email-bg');
-    const abTestVariantInput = document.getElementById('ab-test-variant');
+    console.log('Hero component mounted, initializing...');
     
-    // Wait for PostHog to be ready before doing anything
-    function waitForPostHog() {
-      return new Promise((resolve) => {
-        if (window.posthog && window.posthog.__loaded) {
-          resolve(window.posthog);
-        } else {
-          window.addEventListener('posthog:ready', () => {
-            resolve(window.posthog);
-          }, { once: true });
+    // Default content (fallback)
+    const defaultContent = {
+      'control': {
+        headline: "Unlock Your Potential with AI",
+        subheadline: "Join our newsletter to get the latest AI insights and tips delivered straight to your inbox."
+      },
+      'variation-b': {
+        headline: "New Way to Transform Your Love Life",
+        subheadline: "Experience relationships like never before with our proven approach. Sign up now to get started on your journey to better connections."
+      }
+    };
+
+    async function updateContentFromPostHog() {
+      console.group('Updating content from PostHog');
+      
+      try {
+        // Get the variant and payload
+        const variant = window.posthog.getFeatureFlag('hero-section-headline-test');
+        const payload = window.posthog.getFeatureFlagPayload 
+          ? await window.posthog.getFeatureFlagPayload('hero-section-headline-test')
+          : null;
+        
+        console.log('PostHog variant:', variant);
+        console.log('PostHog payload:', payload);
+        
+        const content = payload || defaultContent[variant] || defaultContent.control;
+        console.log('Content to apply:', content);
+        
+        const headline = document.getElementById('hero-headline');
+        const subheadline = document.getElementById('hero-subheadline');
+        const loading = document.getElementById('content-loading');
+        const form = document.getElementById('hero-page-form');
+        const variantInput = document.getElementById('ab-test-variant');
+        
+        if (headline && content.headline) {
+          console.log('Updating headline to:', content.headline);
+          headline.textContent = content.headline;
         }
-      });
-    }
-    
-    // Initialize PostHog and update content
-    waitForPostHog().then(posthog => {
-      // Wait for feature flags to be loaded
-      posthog.onFeatureFlags(function() {
-        updateContent();
-      });
-      
-      // Also update immediately in case flags are already loaded
-      updateContent();
-    });
-    
-    function updateContent() {
-      if (!window.posthog) return;
-      
-      // Get the feature flag value
-      const variant = window.posthog.getFeatureFlag('hero-messaging-ab-test') || 'control';
-      
-      // Update the hidden input with the variant
-      if (abTestVariantInput) {
-        abTestVariantInput.value = variant;
+        
+        if (subheadline && content.subheadline) {
+          console.log('Updating subheadline to:', content.subheadline);
+          subheadline.textContent = content.subheadline;
+        }
+        
+        if (variantInput && variant) {
+          console.log('Updating variant input to:', variant);
+          variantInput.value = variant;
+        }
+        
+        if (loading) {
+          console.log('Hiding loading element');
+          loading.style.display = 'none';
+        }
+        
+        if (form) {
+          console.log('Showing form');
+          form.style.display = 'flex';
+        }
+        
+      } catch (error) {
+        console.error('Error updating content from PostHog:', error);
       }
       
-      // Update the headline and subheadline based on the variant
-      const headlineElement = document.getElementById('hero-headline');
-      const subheadlineElement = document.getElementById('hero-subheadline');
-      
-      if (variant === 'variant1' && headlineElement && subheadlineElement) {
-        headlineElement.innerHTML = "New Way to Transform Your Love Life <br class=\"block sm:hidden\"/> <span class=\"text-brand-green\">Try It Free Today.</span>";
-        subheadlineElement.innerHTML = "Experience relationships like never before with our proven approach. Sign up now to get started on your journey to better connections.";
-      }
+      console.groupEnd();
     }
+
+    // Initialize with default content first
+    console.log('Initializing with default content');
+    updateContentFromPostHog();
     
-    // Form submission handler
-    if (form) {
-      form.addEventListener('submit', async function(event) {
-        event.preventDefault();
-        
-        if (!messageElement || !emailInput) {
-          console.error('Form elements not found');
-          return;
-        }
-        
-        messageElement.textContent = 'Processing...';
-        messageElement.style.color = 'gray';
-        
-        if (emailInput.checkValidity()) {
-          const formData = new FormData(form);
-          
-          try {
-            const response = await fetch('/api/subscribe', {
-              method: 'POST',
-              body: formData
-            });
-            
-            const result = await response.json();
-            
-            if (response.ok) {
-              messageElement.textContent = 'Thank you! Please check your email to confirm.';
-              messageElement.style.color = 'green';
-              form.reset();
-              
-              // Track conversion in PostHog - wait for it to be ready first
-              waitForPostHog().then(posthog => {
-                posthog.capture('email_signup', {
-                  $set: {
-                    email: emailInput.value,
-                    ab_test_variant: abTestVariantInput ? abTestVariantInput.value : 'unknown',
-                    signup_source: 'hero'
-                  }
-                });
-              });
-            } else {
-              messageElement.textContent = result.message || 'An error occurred. Please try again.';
-              messageElement.style.color = 'red';
-            }
-          } catch (error) {
-            console.error('Error:', error);
-            messageElement.textContent = 'An error occurred. Please try again.';
-            messageElement.style.color = 'red';
-          }
-        } else {
-          messageElement.textContent = 'Please enter a valid email address.';
-          messageElement.style.color = 'red';
-        }
+    // Function to check if PostHog is ready
+    function checkPostHogReady() {
+      if (window.posthog && typeof window.posthog.getFeatureFlag === 'function') {
+        console.log('PostHog is ready');
+        updateContentFromPostHog();
+        return true;
+      }
+      return false;
+    }
+
+    // Check if PostHog is already loaded
+    if (!checkPostHogReady()) {
+      // If not, wait for the ready event
+      console.log('Waiting for PostHog to be ready...');
+      window.addEventListener('posthog:ready', function onReady() {
+        console.log('PostHog ready event received');
+        updateContentFromPostHog();
+        window.removeEventListener('posthog:ready', onReady);
       });
     }
   });
