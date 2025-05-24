@@ -137,6 +137,11 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
         
       } catch (error) {
         console.error('Error updating content from PostHog:', error);
+        // Fallback to showing the form even if there's an error
+        const loading = document.getElementById('content-loading');
+        const form = document.getElementById('hero-page-form');
+        if (loading) loading.style.display = 'none';
+        if (form) form.style.display = 'flex';
       }
       
       console.groupEnd();
@@ -164,6 +169,68 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
         console.log('PostHog ready event received');
         updateContentFromPostHog();
         window.removeEventListener('posthog:ready', onReady);
+      });
+    }
+
+    // Add form submission handler
+    const form = document.getElementById('hero-page-form');
+    if (form) {
+      form.addEventListener('submit', async function(event) {
+        event.preventDefault();
+        
+        const emailInput = form.querySelector('input[type="email"]');
+        const messageElement = document.getElementById('hero-page-form-message');
+        const submitButton = form.querySelector('button[type="submit"]');
+        
+        if (!emailInput || !messageElement || !submitButton) return;
+        
+        const email = emailInput.value.trim();
+        
+        // Basic validation
+        if (!email || !email.includes('@')) {
+          messageElement.textContent = 'Please enter a valid email address.';
+          messageElement.style.color = 'red';
+          return;
+        }
+        
+        // Show loading state
+        submitButton.disabled = true;
+        messageElement.textContent = 'Subscribing...';
+        messageElement.style.color = 'inherit';
+        
+        try {
+          const formData = new FormData(form);
+          const response = await fetch('/api/subscribe', {
+            method: 'POST',
+            body: formData
+          });
+          
+          const result = await response.json();
+          
+          if (response.ok) {
+            messageElement.textContent = 'Thank you for subscribing! Please check your email to confirm.';
+            messageElement.style.color = 'green';
+            form.reset();
+            
+            // Track successful subscription in PostHog
+            if (window.posthog) {
+              const variant = window.posthog.getFeatureFlag('hero-section-headline-test') || 'control';
+              window.posthog.capture('newsletter_subscribed', {
+                email: email,
+                variant: variant,
+                source: 'hero'
+              });
+            }
+          } else {
+            throw new Error(result.message || 'Subscription failed');
+          }
+        } catch (error) {
+          console.error('Subscription error:', error);
+          messageElement.textContent = error.message || 'Failed to subscribe. Please try again.';
+          messageElement.style.color = 'red';
+        } finally {
+          submitButton.disabled = false;
+        }
       });
     }
   });
