@@ -1,7 +1,7 @@
 ---
 // src/pages/index.astro
 import Layout from '~/layouts/PageLayout.astro';
-import type { MediaResource } from '~/types'; // Assuming MediaResource is in src/types.d.ts
+import type { MediaResource } from '~/types';
 
 // Your Core Widgets & Custom Components
 import Hero from '~/components/widgets/Hero.astro'; // AstroWind's Hero
@@ -17,7 +17,7 @@ import EmailCaptureModal from '~/components/ui/EmailCaptureModal.astro';
 // Hero Image
 import imgHeroMain from '~/assets/images/jj.jpg';
 // About JJ Image
-import imgAboutJJ from '~/assets/images/jj_upscale.jpg'; // Using the one from your previous Content example
+import imgAboutJJ from '~/assets/images/jj_upscale.jpg';
 // Book Image
 import imgBookCover from '~/assets/images/book_thin.png';
 
@@ -38,12 +38,15 @@ import imgPodcastPlaceholder2 from '~/assets/images/jj.jpg';
 const metadata = {
   title: 'JJ Roberts | Upgrade Your Love Life Now',
   description: "Escape painful relationship cycles with JJ Roberts' revolutionary approach. Get free chapters and discover connections built on honesty, freedom, and lasting joy.",
-  ignoreTitleTemplate: true, // AstroWind setting
+  ignoreTitleTemplate: true,
 };
 
-// === HERO DATA ===
-const heroTitle = "Is Your Love Life Stuck on Repeat? <br class=\"block sm:hidden\"/> <span class=\"text-brand-green\">Discover the Upgrade.</span>";
-const heroSubtitle = "Stop the painful cycles. Learn the revolutionary principles for relationships built on true freedom, radical honesty, and lasting mutual reward. Get your FREE chapters now and transform your connections.";
+// === HERO DATA (Default/Fallback values for A/B test) ===
+// These are the default values that will be displayed initially
+// before PostHog loads and updates them.
+const defaultHeroTitle = "Is Your Love Life Stuck on Repeat? <br class=\"block sm:hidden\"/> <span class=\"text-brand-green\">Discover the Upgrade.</span>";
+const defaultHeroSubtitle = "Stop the painful cycles. Learn the revolutionary principles for relationships built on true freedom, radical honesty, and lasting mutual reward. Get your FREE chapters now and transform your connections.";
+
 const heroActions = [
   { variant: 'primary', text: 'Get Free Chapters Now', href: '#hero-form-section', icon: 'tabler:book-download' },
   { text: 'See the Benefits', href: '#benefits' },
@@ -68,7 +71,6 @@ const myTestimonials = [
 ];
 
 // === ABOUT JJ DATA (Part 1) ===
-
 const aboutJJTagline = "Architect of a New Relationship Paradigm";
 const aboutJJTitle = "Meet JJ Roberts";
 const aboutJJsubtitle="Discover the journey and insights that led to a revolutionary framework for transforming modern relationships"
@@ -99,32 +101,36 @@ const allMyResources: MediaResource[] = [
 // === FINAL CALL TO ACTION (Quiz) DATA ===
 const finalCtaTagline = "Your Next Step to a Better Love Life";
 const finalCtaTitle = "Unlock Your Relationship Blueprint";
-const finalCtaImage = { src: imgHeroMain, alt: 'Abstract graphic representing a blueprint or pathway' }; // Re-using hero image as placeholder, replace
+const finalCtaImage = { src: imgHeroMain, alt: 'Abstract graphic representing a blueprint or pathway' };
 const finalCtaDescription = `
-  Ready to understand what's *really* going on in your relationships and how to make lasting positive changes? 
-  Our quick, insightful quiz will help you identify key patterns and provide a starting point for your personal transformation. 
+  Ready to understand what's *really* going on in your relationships and how to make lasting positive changes?
+  Our quick, insightful quiz will help you identify key patterns and provide a starting point for your personal transformation.
   Plus, you'll get exclusive free chapters from "Sex 3.0: A Sexual Revolution Manual" to guide you further!
 `;
-// We will define the button manually, so this might not be strictly needed if not using Content's 'actions' prop
 const finalCtaButton = {
-    text: 'Enter The Love Lab', // Updated text
-    href: '/quiz', // Link to your quiz page
-    icon: 'tabler:flask' // Example icon
+    text: 'Enter The Love Lab',
+    href: '/quiz',
+    icon: 'tabler:flask'
 };
 
-
+// Variables to hold dynamic content from PostHog.
+// These are initialized with default values, but will be updated by client-side JS.
+let heroHeadline = defaultHeroTitle;
+let heroSubheadline = defaultHeroSubtitle;
+let heroAbTestVariantKey = 'control'; // Default variant key
 
 ---
 
 <Layout metadata={metadata}>
-
   <main>
-
     {/* --- HERO WIDGET --- */}
-    <Hero actions={heroActions} image={heroImageForWidget}>
-      <Fragment slot="title" set:html={heroTitle} />
-      <Fragment slot="subtitle" set:html={heroSubtitle} />
-    </Hero>
+    <Hero 
+      title={defaultHeroTitle}
+      subtitle={defaultHeroSubtitle}
+      actions={heroActions}
+      image={heroImageForWidget}
+      abTestVariantKey="control"
+    />
 
     {/* --- FEATURES WIDGET (Your Benefits Section) --- */}
     <Features
@@ -156,7 +162,7 @@ const finalCtaButton = {
         id="about-jj-roberts"
         isReversed={false}
         tagline={aboutJJTagline}
-        title={aboutJJTitle}    
+        title={aboutJJTitle}
         subtitle={aboutJJsubtitle}
         image={aboutJJImageForWidget}
         classes={{ container: 'pt-16 md:pt-20 pb-0 md:pb-0 bg-transparent', panel: 'gap-8 md:gap-12 lg:gap-16 items-center', content: 'prose prose-lg dark:prose-invert max-w-none text-left', image: 'max-w-xs sm:max-w-sm md:max-w-md mx-auto md:mx-0 rounded-lg shadow-lg'}}
@@ -182,7 +188,7 @@ const finalCtaButton = {
                     href="https://www.amazon.com/Sex-3-0-J-Roberts-ebook/dp/B006PU2DLI"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="inline-flex items-center justify-center gap-2 px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap" 
+                    class="inline-flex items-center justify-center gap-2 px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap"
                 >
                     <Icon name="tabler:brand-amazon" class="w-5 h-5 md:w-6 md:h-6" />
                     <span>Order Your Copy Now</span>
@@ -225,15 +231,15 @@ const finalCtaButton = {
     {/* --- FINAL CALL TO ACTION (Quiz) using Content Widget --- */}
   <Content
       id="final-cta-quiz-section"
-      isReversed={false} 
+      isReversed={false}
       tagline={finalCtaTagline}
       title={finalCtaTitle}
       image={finalCtaImage}
       classes={{
-        container: 'py-16 md:py-24 bg-brand-orange/5 dark:bg-brand-orange/5', 
+        container: 'py-16 md:py-24 bg-brand-orange/5 dark:bg-brand-orange/5',
         panel: 'gap-8 md:gap-12 lg:gap-16 items-center',
         content: 'prose prose-lg dark:prose-invert max-w-none text-center md:text-left',
-        image: 'max-w-md lg:max-w-lg mx-auto md:mx-0 rounded-lg shadow-xl order-first md:order-last', // Image on right for this layout
+        image: 'max-w-md lg:max-w-lg mx-auto md:mx-0 rounded-lg shadow-xl order-first md:order-last',
       }}
     >
       <Fragment slot="content">
@@ -242,10 +248,10 @@ const finalCtaButton = {
         <div class="mt-8 flex justify-center md:justify-start">
           <a
             href={finalCtaButton.href}
-            class="inline-flex items-center justify-center gap-2 
-                   px-8 py-3 bg-orange-500 hover:bg-orange-600 
-                   text-white text-lg font-semibold rounded-full 
-                   shadow-md transition duration-300 ease-in-out 
+            class="inline-flex items-center justify-center gap-2
+                   px-8 py-3 bg-orange-500 hover:bg-orange-600
+                   text-white text-lg font-semibold rounded-full
+                   shadow-md transition duration-300 ease-in-out
                    transform hover:scale-105 whitespace-nowrap
                    focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-orange-700 dark:focus-visible:ring-offset-slate-900"
             target={finalCtaButton.href.startsWith('http') ? '_blank' : '_self'}
@@ -260,52 +266,8 @@ const finalCtaButton = {
 
   </main>
 
-
-
-  {/* Scripts for Forms */}
   <script is:inline>
-    function handleFormSubmit(formId, emailInputId, messageElementId, successMessage, quizRedirectUrl = null) {
-      const form = document.getElementById(formId);
-      const emailInput = document.getElementById(emailInputId);
-      const messageElement = document.getElementById(messageElementId);
-
-      form?.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        if (!messageElement || !(emailInput instanceof HTMLInputElement)) return; // Type guards
-
-        messageElement.textContent = '';
-        messageElement.style.color = 'inherit';
-
-        if (emailInput.checkValidity()) {
-           messageElement.textContent = 'Processing...';
-           messageElement.style.color = 'gray';
-           console.log(`Form ${formId} submitted with email:`, emailInput.value);
-           // ** ACTUAL EMAIL SENDING LOGIC (e.g., fetch to API) WOULD GO HERE **
-           setTimeout(() => {
-            messageElement.textContent = successMessage;
-            messageElement.style.color = 'green';
-            form.reset();
-            if (quizRedirectUrl) {
-                alert("Redirecting to quiz (placeholder)... You also get free chapters!");
-                // window.location.href = quizRedirectUrl; // Uncomment for actual redirect
-            } else {
-                alert("Free chapters would be sent now (placeholder)!");
-            }
-          }, 1000);
-        } else {
-          messageElement.textContent = 'Please enter a valid email address.';
-          messageElement.style.color = 'red';
-          emailInput.focus();
-        }
-      });
-    }
-    // Initialize Hero Form
-    handleFormSubmit('hero-page-form', 'hero-page-email', 'hero-page-form-message', "Thanks! Your free chapters are on their way (simulated).");
-
-    // Note: The Final CTA section now uses AstroWind's Content widget with an 'actions' prop,
-    // which renders a button that's an <a> tag. If you want an email form for the quiz CTA,
-    // you'd build a form section similar to the 'hero-form-section' instead of using the Content widget's action button.
-    // If finalCtaActions links to a /quiz page that has its own form, no JS needed here for *that specific form*.
+    // Remove any duplicate PostHog initialization or form handling code here
+    // as it's now handled in the Hero component
   </script>
-
 </Layout>

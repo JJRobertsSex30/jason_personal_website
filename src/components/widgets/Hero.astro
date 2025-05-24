@@ -1,4 +1,5 @@
 ---
+// src/components/widgets/Hero.astro
 import { Image } from 'astro:assets';
 
 // VERIFY THIS PATH AND FILENAME MATCH YOUR ACTUAL IMAGE FILE
@@ -7,13 +8,38 @@ import heroBgImage from '~/assets/images/jj.jpg';
 // Define overlay color and opacity here for easy modification
 const overlayColor = 'bg-gray-900';
 const overlayOpacity = 'opacity-60';
----
-<section class="relative overflow-hidden py-24 md:py-32">
 
+// Define props interface
+export interface Props {
+  title?: string;
+  subtitle?: string;
+  actions?: Array<{
+    variant?: string;
+    text: string;
+    href: string;
+    icon?: string;
+  }>;
+  image?: {
+    src: any;
+    alt: string;
+  };
+  abTestVariantKey?: string;
+}
+
+const {
+  title = "Default Title",
+  subtitle = "Default subtitle text",
+  actions = [],
+  image = { src: heroBgImage, alt: 'Default alt text' },
+  abTestVariantKey = 'control'
+} = Astro.props;
+---
+
+<section class="relative overflow-hidden py-24 md:py-32">
   {/* Background Image */}
   <Image
-    src={heroBgImage}
-    alt="JJ Roberts"
+    src={image.src}
+    alt={image.alt}
     width={1920}
     height={1080}
     format="webp"
@@ -23,20 +49,23 @@ const overlayOpacity = 'opacity-60';
   />
 
   {/* Dark Overlay */}
-  <div class=`absolute inset-0 w-full h-full ${overlayColor} ${overlayOpacity} -z-10`></div>
+  <div class={`absolute inset-0 w-full h-full ${overlayColor} ${overlayOpacity} -z-10`}></div>
 
   {/* Content Container */}
   <div class="container mx-auto px-4 relative z-10 text-center">
-
     {/* Headline & Form */}
     <div class="max-w-3xl mx-auto">
-      <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight drop-shadow-md">
-        Upgrade Your Love Life
-      </h1>
-      <p class="text-lg text-gray-200 mb-8 drop-shadow-sm">
-        Uncover society's dirty little secret which causes relationships to fail. Then, learn the principles to take your connections to a brand new level.</p>
+      <h1 id="hero-headline" class="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight drop-shadow-md" set:html={title}></h1>
+      <p id="hero-subheadline" class="text-lg text-gray-200 mb-8 drop-shadow-sm" set:html={subtitle}></p>
+      
       {/* Basic Form */}
-      <form id="hero-page-form" class="flex flex-col sm:flex-row gap-4 justify-center max-w-xl mx-auto">
+      <form 
+        id="hero-page-form" 
+        class="flex flex-col sm:flex-row gap-4 justify-center max-w-xl mx-auto"
+      >
+        <input type="hidden" name="ab_test_variant" id="ab-test-variant" value={abTestVariantKey} />
+        <input type="hidden" name="signup_source" value="hero" />
+        
         <label for="hero-email-bg" class="sr-only">Email address</label>
         <input
           type="email"
@@ -56,58 +85,114 @@ const overlayOpacity = 'opacity-60';
       {/* Added message area */}
       <p id="hero-page-form-message" class="text-sm text-gray-300 mt-4 drop-shadow-sm"></p>
     </div>
-
   </div>
 </section>
 
----
-<script>
-  if (typeof window !== 'undefined') {
-    document.addEventListener('DOMContentLoaded', () => {
-      const form = document.getElementById('hero-page-form') as HTMLFormElement | null;
-      const emailInput = document.getElementById('hero-email-bg') as HTMLInputElement | null;
-      const message = document.getElementById('hero-page-form-message') as HTMLParagraphElement | null;
-      const submitBtn = form ? form.querySelector('button[type="submit"]') as HTMLButtonElement | null : null;
-      if (form && emailInput && message && submitBtn) {
-        form.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          const email = emailInput.value.trim();
-          // Simple email validation
-          const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-          if (!valid) {
-            message.textContent = 'Please enter a valid email address.';
-            message.style.color = '#f87171'; // red-400
-            return;
-          }
-          message.textContent = 'Submitting...';
-          message.style.color = '#fbbf24'; // amber-400
-          submitBtn.disabled = true;
-submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
-          try {
-            const res = await fetch('/api/subscribe', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: new URLSearchParams({ email })
-            });
-            const data = await res.json();
-            if (res.ok) {
-              message.textContent = 'You are now a member of the inner circle. Please check your email.';
-              message.style.color = '#34d399'; // green-400
-              form.reset();
-            } else {
-              message.textContent = data.message || 'Subscription failed. Please try again.';
-              message.style.color = '#f87171'; // red-400
-            }
-          } catch {
-
-            message.textContent = 'Network error. Please try again.';
-            message.style.color = '#f87171'; // red-400
-          } finally {
-            submitBtn.disabled = false;
-submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-          }
-        });
-      }
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('hero-page-form');
+    const messageElement = document.getElementById('hero-page-form-message');
+    const emailInput = document.getElementById('hero-email-bg');
+    const abTestVariantInput = document.getElementById('ab-test-variant');
+    
+    // Wait for PostHog to be ready before doing anything
+    function waitForPostHog() {
+      return new Promise((resolve) => {
+        if (window.posthog && window.posthog.__loaded) {
+          resolve(window.posthog);
+        } else {
+          window.addEventListener('posthog:ready', () => {
+            resolve(window.posthog);
+          }, { once: true });
+        }
+      });
+    }
+    
+    // Initialize PostHog and update content
+    waitForPostHog().then(posthog => {
+      // Wait for feature flags to be loaded
+      posthog.onFeatureFlags(function() {
+        updateContent();
+      });
+      
+      // Also update immediately in case flags are already loaded
+      updateContent();
     });
-  }
+    
+    function updateContent() {
+      if (!window.posthog) return;
+      
+      // Get the feature flag value
+      const variant = window.posthog.getFeatureFlag('hero-messaging-ab-test') || 'control';
+      
+      // Update the hidden input with the variant
+      if (abTestVariantInput) {
+        abTestVariantInput.value = variant;
+      }
+      
+      // Update the headline and subheadline based on the variant
+      const headlineElement = document.getElementById('hero-headline');
+      const subheadlineElement = document.getElementById('hero-subheadline');
+      
+      if (variant === 'variant1' && headlineElement && subheadlineElement) {
+        headlineElement.innerHTML = "New Way to Transform Your Love Life <br class=\"block sm:hidden\"/> <span class=\"text-brand-green\">Try It Free Today.</span>";
+        subheadlineElement.innerHTML = "Experience relationships like never before with our proven approach. Sign up now to get started on your journey to better connections.";
+      }
+    }
+    
+    // Form submission handler
+    if (form) {
+      form.addEventListener('submit', async function(event) {
+        event.preventDefault();
+        
+        if (!messageElement || !emailInput) {
+          console.error('Form elements not found');
+          return;
+        }
+        
+        messageElement.textContent = 'Processing...';
+        messageElement.style.color = 'gray';
+        
+        if (emailInput.checkValidity()) {
+          const formData = new FormData(form);
+          
+          try {
+            const response = await fetch('/api/subscribe', {
+              method: 'POST',
+              body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+              messageElement.textContent = 'Thank you! Please check your email to confirm.';
+              messageElement.style.color = 'green';
+              form.reset();
+              
+              // Track conversion in PostHog - wait for it to be ready first
+              waitForPostHog().then(posthog => {
+                posthog.capture('email_signup', {
+                  $set: {
+                    email: emailInput.value,
+                    ab_test_variant: abTestVariantInput ? abTestVariantInput.value : 'unknown',
+                    signup_source: 'hero'
+                  }
+                });
+              });
+            } else {
+              messageElement.textContent = result.message || 'An error occurred. Please try again.';
+              messageElement.style.color = 'red';
+            }
+          } catch (error) {
+            console.error('Error:', error);
+            messageElement.textContent = 'An error occurred. Please try again.';
+            messageElement.style.color = 'red';
+          }
+        } else {
+          messageElement.textContent = 'Please enter a valid email address.';
+          messageElement.style.color = 'red';
+        }
+      });
+    }
+  });
 </script>

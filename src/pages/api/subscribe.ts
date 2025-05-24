@@ -16,7 +16,7 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     // Retrieve secret key and form ID from environment variables
-    const convertKitApiKey = import.meta.env.CONVERTKIT_API_KEY;
+    const convertKitApiKey = import.meta.env.SECRET;
     const convertKitFormId = import.meta.env.PUBLIC_CONVERTKIT_FORM_ID; // Form ID can be public
 
     if (!convertKitApiKey || !convertKitFormId) {
