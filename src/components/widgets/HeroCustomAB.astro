@@ -2,79 +2,38 @@
 // src/components/widgets/HeroCustomAB.astro
 import { Image } from 'astro:assets';
 import type { ImageMetadata } from 'astro';
-import heroBgImage from '~/assets/images/jj.jpg';
-// Client-side script will handle trackConversion, remove import here
+import heroBgImage from '~/assets/images/jj2.jpg'; // This will be used as a regular image, not background
 
 export interface Props {
   headline?: string;
   subheadline?: string;
-  actions?: Array<{
-    variant?: string;
-    text: string;
-    href: string;
-    icon?: string;
-    type?: string;
-    target?: string;
-    rel?: string;
-  }>;
   image?: {
     src: ImageMetadata;
     alt: string;
   };
-  abTestVariantKey?: string; // To identify the variant for tracking
+  abTestVariantKey?: string; 
 }
 
 const { 
   headline = "Default Headline for Custom A/B Test", 
-  subheadline = "Default subheadline for custom A/B test. This content is displayed if no specific props are passed.", 
-  actions,
-  image = { src: heroBgImage, alt: 'Default alt text' },
-  abTestVariantKey = 'control' // Default variant key if not provided
+  subheadline = "Default subheadline for custom A/B test.", 
+  image = { src: heroBgImage, alt: 'JJ Roberts working' }, // Updated default alt
+  abTestVariantKey = 'control' 
 } = Astro.props;
 ---
 
-<section class="relative overflow-hidden py-24 md:py-32">
-  {/* Background Image */}
-  <Image
-    src={image.src}
-    alt={image.alt}
-    width={1920}
-    height={1080}
-    format="webp"
-    quality={75}
-    loading="eager"
-    class="absolute inset-0 w-full h-full object-cover -z-20"
-  />
-
-  {/* Dark Overlay */}
-  <div class="absolute inset-0 w-full h-full bg-gray-900 opacity-60 -z-10"></div>
-
-  {/* Content Container */}
-  <div class="container mx-auto px-4 relative z-10 text-center">
-    <div class="max-w-3xl mx-auto">
-      <h1 id="hero-headline" class="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight drop-shadow-md min-h-[4rem]"
-        set:html={headline} 
-      />
-      <p id="hero-subheadline" class="text-lg text-gray-200 mb-8 drop-shadow-sm min-h-[2rem]"
-        set:html={subheadline}
-      />
+<section class="py-16 md:py-24 bg-slate-50 dark:bg-slate-800/30">
+  <div class="container mx-auto px-4">
+    <div class="grid md:grid-cols-2 gap-8 lg:gap-12 items-center">
       
-      {actions && actions.length > 0 ? (
-        <div class="flex flex-col sm:flex-row gap-4 justify-center max-w-xl mx-auto">
-          {actions.map(action => (
-            <a href={action.href} 
-               class={`px-8 py-3 text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap ${action.variant === 'primary' ? 'bg-orange-500 hover:bg-orange-600 text-white' : 'bg-slate-400 hover:bg-slate-500 text-white'}`}
-               target={action.target}
-               rel={action.rel}
-            >
-              {action.icon && <span class="mr-2"><i class={action.icon}></i></span>} {action.text}
-            </a>
-          ))}
-        </div>
-      ) : (
+      <!-- Left Column: Text Content & Form -->
+      <div class="text-left">
+        <h1 class="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6 leading-tight" set:html={headline} />
+        <p class="text-lg text-gray-700 dark:text-gray-300 mb-8" set:html={subheadline} />
+        
         <form 
           id="hero-custom-ab-form" 
-          class="flex flex-col sm:flex-row gap-4 justify-center max-w-xl mx-auto"
+          class="flex flex-col sm:flex-row gap-4 max-w-md"
         >
           <input type="hidden" name="ab_test_variant" id="ab-test-variant" value={abTestVariantKey} />
           <input type="hidden" name="signup_source" value="hero-custom-ab" />
@@ -86,7 +45,7 @@ const {
             name="email"
             placeholder="your.email@example.com"
             required
-            class="w-full sm:w-auto flex-grow px-4 py-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white/90 dark:bg-gray-800/90 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:outline-none placeholder-gray-500 dark:placeholder-gray-400"
+            class="w-full sm:w-auto flex-grow px-4 py-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:outline-none placeholder-gray-500 dark:placeholder-gray-400"
           />
           <button
             type="submit"
@@ -95,8 +54,22 @@ const {
             Get Started Now
           </button>
         </form>
-      )}
-      <p id="hero-custom-ab-form-message" class="text-sm text-gray-300 mt-4 drop-shadow-sm"></p>
+        <p id="hero-custom-ab-form-message" class="text-sm mt-4"></p>
+      </div>
+
+      <!-- Right Column: Image -->
+      <div class="mt-8 md:mt-0">
+        <Image
+          src={image.src}
+          alt={image.alt}
+          width={768} 
+          height={768} 
+          format="webp"
+          quality={80}
+          class="rounded-lg shadow-xl mx-auto w-full max-w-md md:max-w-full object-cover aspect-square md:aspect-auto"
+        />
+      </div>
+
     </div>
   </div>
 </section>
@@ -105,9 +78,6 @@ const {
   document.addEventListener('DOMContentLoaded', function() {
     console.log('HeroCustomAB component mounted, variantKey:', variantKey);
     
-    // trackConversion will be called from abTester.ts if it's made global or from a shared module.
-    // For now, the form submission logic directly calls it assuming it's available.
-
     const form = document.getElementById('hero-custom-ab-form');
     if (form) {
       form.addEventListener('submit', async function(event) {
@@ -123,13 +93,15 @@ const {
         
         if (!email || !email.includes('@')) {
           messageElement.textContent = 'Please enter a valid email address.';
-          messageElement.style.color = 'red';
+          messageElement.classList.remove('text-green-600', 'dark:text-green-500', 'text-gray-700', 'dark:text-gray-300');
+          messageElement.classList.add('text-red-600', 'dark:text-red-500');
           return;
         }
         
         submitButton.disabled = true;
         messageElement.textContent = 'Subscribing...';
-        messageElement.style.color = 'inherit';
+        messageElement.classList.remove('text-red-600', 'dark:text-red-500', 'text-green-600', 'dark:text-green-500');
+        messageElement.classList.add('text-gray-700', 'dark:text-gray-300');
         
         try {
           const formData = new FormData(form);
@@ -142,7 +114,8 @@ const {
           
           if (response.ok) {
             messageElement.textContent = 'Thank you for subscribing! Please check your email to confirm.';
-            messageElement.style.color = 'green';
+            messageElement.classList.remove('text-red-600', 'dark:text-red-500', 'text-gray-700', 'dark:text-gray-300');
+            messageElement.classList.add('text-green-600', 'dark:text-green-500');
             form.reset();
             
             if (typeof window.trackConversion === 'function') {
@@ -162,7 +135,8 @@ const {
         } catch (error) {
           console.error('Subscription error:', error);
           messageElement.textContent = error.message || 'Failed to subscribe. Please try again.';
-          messageElement.style.color = 'red';
+          messageElement.classList.remove('text-green-600', 'dark:text-green-500', 'text-gray-700', 'dark:text-gray-300');
+          messageElement.classList.add('text-red-600', 'dark:text-red-500');
         } finally {
           submitButton.disabled = false;
         }
