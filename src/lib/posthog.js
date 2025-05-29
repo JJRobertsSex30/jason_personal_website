@@ -16,7 +16,7 @@ const getPosthogConfig = () => {
   
   // In production, use the proxied endpoints
   return {
-    api_host: window.location.origin,
+    api_host: window.location.origin + '/ingest',
     ui_host: 'https://eu.i.posthog.com',
     scriptSrc: '/static/array.js'
   };

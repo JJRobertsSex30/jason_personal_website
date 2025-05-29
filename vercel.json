@@ -16,7 +16,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.vercel.app; connect-src 'self' https://*.vercel.app https://eu.i.posthog.com;"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.vercel.app https://cdn.jsdelivr.net https://unpkg.com https://eu.i.posthog.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' https://*.vercel.app https://eu.i.posthog.com https://*.vercel-insights.com; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
         }
       ]
     }
@@ -29,6 +29,10 @@
     {
       "source": "/static/array.js",
       "destination": "https://eu.i.posthog.com/static/array.js"
+    },
+    {
+      "source": "/array/:path*",
+      "destination": "https://eu.i.posthog.com/array/:path*"
     }
   ]
 }
