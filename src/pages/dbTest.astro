@@ -1,0 +1,223 @@
+---
+import Layout from '~/layouts/PageLayout.astro';
+import { supabase } from '~/lib/supabaseClient'; // This will be created next
+// import type { AstroGlobal } from 'astro'; // Removed unused import
+import type { Session } from '@supabase/supabase-js'; // Import Session from Supabase
+
+// Define a basic UserProfile type. Expand this to match your table structure.
+export interface UserProfile {
+  id: string;
+  username?: string;
+  full_name?: string;
+  website?: string;
+  // Add other fields from your user_profiles table here
+  [key: string]: any; // Allows for other properties not explicitly defined
+}
+
+const metadata = {
+  title: 'Supabase DB Test',
+  description: 'Login to Supabase and view user profiles.',
+};
+
+let userProfiles: UserProfile[] | null = null;
+let error: string | null = null;
+let session: Session | null = null; // Variable to hold session state
+
+// Server-side code to handle POST for login and initial session check
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    const email = formData.get('email')?.toString();
+    const password = formData.get('password')?.toString();
+
+    if (!email || !password) {
+      throw new Error('Email and password are required.');
+    }
+
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (authError) {
+      throw authError;
+    }
+
+    if (data.session) {
+      session = data.session;
+      // Astro.cookies.set('sb-access-token', data.session.access_token, { path: '/', httpOnly: true, secure: import.meta.env.PROD, maxAge: data.session.expires_in });
+      // Astro.cookies.set('sb-refresh-token', data.session.refresh_token, { path: '/', httpOnly: true, secure: import.meta.env.PROD });
+
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('user_profiles')
+        .select('*');
+      
+      if (profilesError) {
+        throw profilesError;
+      }
+      userProfiles = profilesData as UserProfile[];
+    } else {
+      throw new Error('Login failed. Please check your credentials.');
+    }
+  } catch (e: unknown) {
+    if (e instanceof Error) {
+      error = e.message;
+    } else {
+      error = 'An unexpected error occurred during login.';
+    }
+    console.error('Login processing error:', e);
+    session = null; // Ensure session is cleared on error
+    userProfiles = null;
+  }
+} else {
+  // Check for existing session on page load
+  const { data: { session: currentSession } } = await supabase.auth.getSession();
+  if (currentSession) {
+    session = currentSession;
+    try {
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('user_profiles')
+        .select('*'); // Fetch all profiles or filter as needed e.g. .eq('id', currentSession.user.id);
+      
+      if (profilesError) {
+        throw profilesError;
+      }
+      userProfiles = profilesData as UserProfile[];
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        error = e.message;
+      } else {
+        error = 'Failed to fetch profile data on load.';
+      }
+      console.error('Initial profile fetch error:', e);
+      userProfiles = null;
+    }
+  }
+}
+
+---
+<Layout metadata={metadata}>
+  <main class="container mx-auto px-4 py-12">
+    <div class="max-w-2xl mx-auto">
+      <h1 class="text-4xl font-bold text-center mb-10 text-slate-800 dark:text-white">Supabase Login & Data</h1>
+
+      {/* Session Info & Logout Button */}
+      {session && !error && (
+        <div class="mb-6 p-4 bg-green-50 dark:bg-green-800/30 border border-green-300 dark:border-green-600 text-green-700 dark:text-green-300 rounded-lg shadow-sm">
+          <div class="flex justify-between items-center">
+            <div>
+              <p class="font-semibold text-lg">Logged in as:</p>
+              <p class="text-sm break-all">{session.user.email}</p>
+            </div>
+            <form method="POST" action="/api/logout"> {/* Points to the API route for logout */}
+              <button
+                type="submit"
+                class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:shadow-lg transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+              >
+                Logout
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Login Form - Show if not logged in */}
+      {!session && (
+        <form method="POST" class="bg-white dark:bg-slate-800 shadow-xl rounded-lg p-8 pt-6 mb-8">
+          <h2 class="text-2xl font-semibold text-center mb-6 text-slate-700 dark:text-slate-200">User Login</h2>
+          <div class="mb-6">
+            <label for="email" class="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">
+              Email Address
+            </label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              required
+              class="shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md w-full py-3 px-4 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400 dark:placeholder-slate-500"
+              placeholder="you@example.com"
+            />
+          </div>
+          <div class="mb-8">
+            <label for="password" class="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">
+              Password
+            </label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              required
+              class="shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md w-full py-3 px-4 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 mb-3 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400 dark:placeholder-slate-500"
+              placeholder="••••••••••••"
+            />
+          </div>
+          <div class="flex items-center justify-center">
+            <button
+              type="submit"
+              class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-md shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition duration-150 ease-in-out"
+            >
+              Sign In
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Error Display */}
+      {error && (
+        <div class="my-6 p-4 bg-red-50 dark:bg-red-800/30 border border-red-300 dark:border-red-600 text-red-700 dark:text-red-300 rounded-lg shadow-sm" role="alert">
+          <p class="font-bold text-lg">Login Error:</p>
+          <p>{error}</p>
+        </div>
+      )}
+
+      {/* User Profiles Grid - Show if logged in, no errors, and profiles exist */}
+      {session && userProfiles && !error && (
+        <section class="mt-12">
+          <h2 class="text-3xl font-semibold mb-6 text-slate-800 dark:text-white text-center">User Profiles Data</h2>
+          {userProfiles.length > 0 ? (
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {userProfiles.map((profile) => (
+                <div class="bg-white dark:bg-slate-800 shadow-lg rounded-lg p-6 hover:shadow-xl transition-shadow duration-300 ease-in-out flex flex-col">
+                  <h3 class="text-xl font-semibold text-blue-600 dark:text-blue-400 mb-2 capitalize">{profile.username || profile.full_name || 'Unnamed User'}</h3>
+                  <div class="text-sm text-slate-600 dark:text-slate-400 space-y-1 mt-auto">
+                    <p><span class="font-semibold">ID:</span> <span class="break-all">{profile.id}</span></p>
+                    {profile.full_name && <p><span class="font-semibold">Full Name:</span> {profile.full_name}</p>}
+                    {profile.website && 
+                      <p><span class="font-semibold">Website:</span> <a href={profile.website} target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline hover:text-blue-400">{profile.website}</a></p>
+                    }
+                    {/* Display all other available fields dynamically */}
+                    {Object.entries(profile).map(([key, value]) => {
+                      if (!['id', 'username', 'full_name', 'website', 'updated_at', 'avatar_url'].includes(key) && value) {
+                        return <p><span class="font-semibold capitalize">{key.replace(/_/g, ' ')}:</span> {String(value)}</p>;
+                      }
+                      return null;
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div class="text-center py-10 px-4 bg-white dark:bg-slate-800 rounded-lg shadow-md">
+              <svg class="mx-auto h-12 w-12 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2zm3-12V3M16 3v2" />
+              </svg>
+              <h3 class="mt-2 text-lg font-medium text-slate-900 dark:text-white">No User Profiles Found</h3>
+              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">There are currently no user profiles to display from the database, or your profile is empty.</p>
+            </div>
+          )}
+        </section>
+      )}
+      
+      {/* Message if not logged in and no error (initial state) */}
+      {!session && !error && (
+         <div class="text-center py-10 px-4 bg-white dark:bg-slate-800 rounded-lg shadow-md">
+            <svg class="mx-auto h-12 w-12 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <h3 class="mt-2 text-lg font-medium text-slate-900 dark:text-white">Please Log In</h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Enter your Supabase credentials to view the user profiles.</p>
+        </div>
+      )}
+    </div>
+  </main>
+</Layout> 
