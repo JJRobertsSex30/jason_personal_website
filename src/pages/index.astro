@@ -44,8 +44,6 @@ const metadata = {
 // === HERO DATA (Default/Fallback values for A/B test) ===
 // These are the default values that will be displayed initially
 // before PostHog loads and updates them.
-const defaultHeroTitle = "Is Your Love Life Stuck on Repeat? <br class=\"block sm:hidden\"/> <span class=\"text-brand-green\">Discover the Upgrade.</span>";
-const defaultHeroSubtitle = "Stop the painful cycles. Learn the revolutionary principles for relationships built on true freedom, radical honesty, and lasting mutual reward. Get your FREE chapters now and transform your connections.";
 
 const heroActions = [
   { variant: 'primary', text: 'Get Free Chapters Now', href: '#hero-form-section', icon: 'tabler:book-download' },
@@ -112,12 +110,6 @@ const finalCtaButton = {
     href: '/quiz',
     icon: 'tabler:flask'
 };
-
-// Variables to hold dynamic content from PostHog.
-// These are initialized with default values, but will be updated by client-side JS.
-let heroHeadline = defaultHeroTitle;
-let heroSubheadline = defaultHeroSubtitle;
-let heroAbTestVariantKey = 'control'; // Default variant key
 
 ---
 

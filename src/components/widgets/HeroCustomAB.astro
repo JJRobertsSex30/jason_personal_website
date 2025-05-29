@@ -1,0 +1,172 @@
+---
+// src/components/widgets/HeroCustomAB.astro
+import { Image } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
+import heroBgImage from '~/assets/images/jj.jpg';
+// Client-side script will handle trackConversion, remove import here
+
+export interface Props {
+  headline?: string;
+  subheadline?: string;
+  actions?: Array<{
+    variant?: string;
+    text: string;
+    href: string;
+    icon?: string;
+    type?: string;
+    target?: string;
+    rel?: string;
+  }>;
+  image?: {
+    src: ImageMetadata;
+    alt: string;
+  };
+  abTestVariantKey?: string; // To identify the variant for tracking
+}
+
+const { 
+  headline = "Default Headline for Custom A/B Test", 
+  subheadline = "Default subheadline for custom A/B test. This content is displayed if no specific props are passed.", 
+  actions,
+  image = { src: heroBgImage, alt: 'Default alt text' },
+  abTestVariantKey = 'control' // Default variant key if not provided
+} = Astro.props;
+---
+
+<section class="relative overflow-hidden py-24 md:py-32">
+  {/* Background Image */}
+  <Image
+    src={image.src}
+    alt={image.alt}
+    width={1920}
+    height={1080}
+    format="webp"
+    quality={75}
+    loading="eager"
+    class="absolute inset-0 w-full h-full object-cover -z-20"
+  />
+
+  {/* Dark Overlay */}
+  <div class="absolute inset-0 w-full h-full bg-gray-900 opacity-60 -z-10"></div>
+
+  {/* Content Container */}
+  <div class="container mx-auto px-4 relative z-10 text-center">
+    <div class="max-w-3xl mx-auto">
+      <h1 id="hero-headline" class="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight drop-shadow-md min-h-[4rem]"
+        set:html={headline} 
+      />
+      <p id="hero-subheadline" class="text-lg text-gray-200 mb-8 drop-shadow-sm min-h-[2rem]"
+        set:html={subheadline}
+      />
+      
+      {actions && actions.length > 0 ? (
+        <div class="flex flex-col sm:flex-row gap-4 justify-center max-w-xl mx-auto">
+          {actions.map(action => (
+            <a href={action.href} 
+               class={`px-8 py-3 text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap ${action.variant === 'primary' ? 'bg-orange-500 hover:bg-orange-600 text-white' : 'bg-slate-400 hover:bg-slate-500 text-white'}`}
+               target={action.target}
+               rel={action.rel}
+            >
+              {action.icon && <span class="mr-2"><i class={action.icon}></i></span>} {action.text}
+            </a>
+          ))}
+        </div>
+      ) : (
+        <form 
+          id="hero-custom-ab-form" 
+          class="flex flex-col sm:flex-row gap-4 justify-center max-w-xl mx-auto"
+        >
+          <input type="hidden" name="ab_test_variant" id="ab-test-variant" value={abTestVariantKey} />
+          <input type="hidden" name="signup_source" value="hero-custom-ab" />
+          
+          <label for="hero-email-bg-custom-ab" class="sr-only">Email address</label>
+          <input
+            type="email" 
+            id="hero-email-bg-custom-ab"
+            name="email"
+            placeholder="your.email@example.com"
+            required
+            class="w-full sm:w-auto flex-grow px-4 py-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white/90 dark:bg-gray-800/90 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:outline-none placeholder-gray-500 dark:placeholder-gray-400"
+          />
+          <button
+            type="submit"
+            class="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap"
+          >
+            Get Started Now
+          </button>
+        </form>
+      )}
+      <p id="hero-custom-ab-form-message" class="text-sm text-gray-300 mt-4 drop-shadow-sm"></p>
+    </div>
+  </div>
+</section>
+
+<script define:vars={{ variantKey: abTestVariantKey }}>
+  document.addEventListener('DOMContentLoaded', function() {
+    console.log('HeroCustomAB component mounted, variantKey:', variantKey);
+    
+    // trackConversion will be called from abTester.ts if it's made global or from a shared module.
+    // For now, the form submission logic directly calls it assuming it's available.
+
+    const form = document.getElementById('hero-custom-ab-form');
+    if (form) {
+      form.addEventListener('submit', async function(event) {
+        event.preventDefault();
+        
+        const emailInput = form.querySelector('input[type="email"]');
+        const messageElement = document.getElementById('hero-custom-ab-form-message');
+        const submitButton = form.querySelector('button[type="submit"]');
+        
+        if (!emailInput || !messageElement || !submitButton) return;
+        
+        const email = emailInput.value.trim();
+        
+        if (!email || !email.includes('@')) {
+          messageElement.textContent = 'Please enter a valid email address.';
+          messageElement.style.color = 'red';
+          return;
+        }
+        
+        submitButton.disabled = true;
+        messageElement.textContent = 'Subscribing...';
+        messageElement.style.color = 'inherit';
+        
+        try {
+          const formData = new FormData(form);
+          const response = await fetch('/api/subscribe', { 
+            method: 'POST',
+            body: formData
+          });
+          
+          const result = await response.json();
+          
+          if (response.ok) {
+            messageElement.textContent = 'Thank you for subscribing! Please check your email to confirm.';
+            messageElement.style.color = 'green';
+            form.reset();
+            
+            if (typeof window.trackConversion === 'function') {
+              window.trackConversion('heroHeadlineTest', variantKey, { 
+                email: email, 
+                source: 'hero-custom-ab', 
+                type: 'form_submission' 
+              });
+              console.log(`Custom A/B Test: Conversion tracked for variant '${variantKey}' via window.trackConversion`);
+            } else {
+              console.warn('window.trackConversion function not found. Make sure abTester.ts is correctly set up to expose it.');
+            }
+
+          } else {
+            throw new Error(result.message || 'Subscription failed');
+          }
+        } catch (error) {
+          console.error('Subscription error:', error);
+          messageElement.textContent = error.message || 'Failed to subscribe. Please try again.';
+          messageElement.style.color = 'red';
+        } finally {
+          submitButton.disabled = false;
+        }
+      });
+    }
+  });
+</script> 
