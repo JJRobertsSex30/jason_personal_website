@@ -40,14 +40,13 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
         <!-- Content will be populated by PostHog -->
       </p>
       
-      <div id="content-loading" class="text-gray-300 mb-4">
+      <div id="content-loading" class="text-gray-300 mb-4" style="display: none;">
         Loading...
       </div>
       
       <form 
         id="hero-page-form" 
         class="flex flex-col sm:flex-row gap-4 justify-center max-w-xl mx-auto"
-        style="display: none;"
       >
         <input type="hidden" name="ab_test_variant" id="ab-test-variant" />
         <input type="hidden" name="signup_source" value="hero" />
@@ -91,6 +90,12 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
     // Flag to ensure content is updated only once
     let contentUpdated = false;
 
+    // Set default content immediately
+    const heroHeadlineEl = document.getElementById('hero-headline');
+    const heroSubheadlineEl = document.getElementById('hero-subheadline');
+    if (heroHeadlineEl) heroHeadlineEl.textContent = defaultContent.control.headline;
+    if (heroSubheadlineEl) heroSubheadlineEl.textContent = defaultContent.control.subheadline;
+
     async function updateContentFromPostHog() {
       if (contentUpdated) return; // Prevent multiple updates
       contentUpdated = true; 
@@ -100,18 +105,8 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
       try {
         // Ensure posthog is available and getFeatureFlag is a function
         if (!window.posthog || typeof window.posthog.getFeatureFlag !== 'function') {
-          console.warn('PostHog or getFeatureFlag not available when trying to update content. Using default.');
-          // Apply default content directly if PostHog isn't ready
-          const content = defaultContent.control; // Or some other default logic
-          const headline = document.getElementById('hero-headline');
-          const subheadline = document.getElementById('hero-subheadline');
-          if (headline && content.headline) headline.textContent = content.headline;
-          if (subheadline && content.subheadline) subheadline.textContent = content.subheadline;
-          // Hide loading, show form (even if PostHog fails for A/B test, form should work)
-          const loading = document.getElementById('content-loading');
-          const form = document.getElementById('hero-page-form');
-          if (loading) loading.style.display = 'none';
-          if (form) form.style.display = 'flex';
+          console.warn('PostHog or getFeatureFlag not available when trying to update content. Default content remains.');
+          // Default content is already set. Form is visible. Loading is hidden.
           console.groupEnd();
           return;
         }
@@ -129,8 +124,6 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
         
         const headline = document.getElementById('hero-headline');
         const subheadline = document.getElementById('hero-subheadline');
-        const loading = document.getElementById('content-loading');
-        const form = document.getElementById('hero-page-form');
         const variantInput = document.getElementById('ab-test-variant');
         
         if (headline && content.headline) {
@@ -148,22 +141,9 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
           variantInput.value = variant;
         }
         
-        if (loading) {
-          console.log('Hiding loading element');
-          loading.style.display = 'none';
-        }
-        
-        if (form) {
-          console.log('Showing form');
-          form.style.display = 'flex';
-        }
-        
       } catch (error) {
         console.error('Error updating content from PostHog:', error);
-        const loading = document.getElementById('content-loading');
-        const form = document.getElementById('hero-page-form');
-        if (loading) loading.style.display = 'none';
-        if (form) form.style.display = 'flex';
+        // Form is already visible, loading already hidden. Default content remains.
       }
       
       console.groupEnd();
@@ -174,12 +154,9 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
       console.log('PostHog already loaded and ready, updating content immediately.');
       updateContentFromPostHog();
     } else {
-      console.log('Waiting for posthog:ready event to update content...');
-      // Fallback: Set initial placeholder text quickly if desired, before PostHog loads
-      const initialHeadline = document.getElementById('hero-headline');
-      const initialSubheadline = document.getElementById('hero-subheadline');
-      if (initialHeadline && !initialHeadline.textContent) initialHeadline.textContent = defaultContent.control.headline; // Or a generic placeholder
-      if (initialSubheadline && !initialSubheadline.textContent) initialSubheadline.textContent = defaultContent.control.subheadline; // Or a generic placeholder
+      console.log('PostHog not immediately ready. Default content is shown. Waiting for posthog:ready event for potential A/B test update.');
+      // Default content is already set immediately after DOMContentLoaded.
+      // The listener below will handle the update if PostHog becomes ready.
     }
 
     // Listen for the posthog:ready event to update content
