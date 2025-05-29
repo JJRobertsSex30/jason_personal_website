@@ -1,11 +1,12 @@
 ---
 // src/components/widgets/Hero.astro
 import { Image } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
 import heroBgImage from '~/assets/images/jj.jpg';
 
 export interface Props {
   image?: {
-    src: any;
+    src: ImageMetadata;
     alt: string;
   };
 }
@@ -76,7 +77,6 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
   document.addEventListener('DOMContentLoaded', function() {
     console.log('Hero component mounted, initializing...');
     
-    // Default content (fallback)
     const defaultContent = {
       'control': {
         headline: "Unlock Your Potential with AI",
@@ -88,11 +88,34 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
       }
     };
 
+    // Flag to ensure content is updated only once
+    let contentUpdated = false;
+
     async function updateContentFromPostHog() {
+      if (contentUpdated) return; // Prevent multiple updates
+      contentUpdated = true; 
+
       console.group('Updating content from PostHog');
       
       try {
-        // Get the variant and payload
+        // Ensure posthog is available and getFeatureFlag is a function
+        if (!window.posthog || typeof window.posthog.getFeatureFlag !== 'function') {
+          console.warn('PostHog or getFeatureFlag not available when trying to update content. Using default.');
+          // Apply default content directly if PostHog isn't ready
+          const content = defaultContent.control; // Or some other default logic
+          const headline = document.getElementById('hero-headline');
+          const subheadline = document.getElementById('hero-subheadline');
+          if (headline && content.headline) headline.textContent = content.headline;
+          if (subheadline && content.subheadline) subheadline.textContent = content.subheadline;
+          // Hide loading, show form (even if PostHog fails for A/B test, form should work)
+          const loading = document.getElementById('content-loading');
+          const form = document.getElementById('hero-page-form');
+          if (loading) loading.style.display = 'none';
+          if (form) form.style.display = 'flex';
+          console.groupEnd();
+          return;
+        }
+
         const variant = window.posthog.getFeatureFlag('hero-section-headline-test');
         const payload = window.posthog.getFeatureFlagPayload 
           ? await window.posthog.getFeatureFlagPayload('hero-section-headline-test')
@@ -137,7 +160,6 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
         
       } catch (error) {
         console.error('Error updating content from PostHog:', error);
-        // Fallback to showing the form even if there's an error
         const loading = document.getElementById('content-loading');
         const form = document.getElementById('hero-page-form');
         if (loading) loading.style.display = 'none';
@@ -147,32 +169,28 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
       console.groupEnd();
     }
 
-    // Initialize with default content first
-    console.log('Initializing with default content');
-    updateContentFromPostHog();
-    
-    // Function to check if PostHog is ready
-    function checkPostHogReady() {
-      if (window.posthog && typeof window.posthog.getFeatureFlag === 'function') {
-        console.log('PostHog is ready');
-        updateContentFromPostHog();
-        return true;
-      }
-      return false;
+    // Attempt to update content if PostHog is already loaded and ready
+    if (window.posthog && window.posthog.__loaded && typeof window.posthog.getFeatureFlag === 'function') {
+      console.log('PostHog already loaded and ready, updating content immediately.');
+      updateContentFromPostHog();
+    } else {
+      console.log('Waiting for posthog:ready event to update content...');
+      // Fallback: Set initial placeholder text quickly if desired, before PostHog loads
+      const initialHeadline = document.getElementById('hero-headline');
+      const initialSubheadline = document.getElementById('hero-subheadline');
+      if (initialHeadline && !initialHeadline.textContent) initialHeadline.textContent = defaultContent.control.headline; // Or a generic placeholder
+      if (initialSubheadline && !initialSubheadline.textContent) initialSubheadline.textContent = defaultContent.control.subheadline; // Or a generic placeholder
     }
 
-    // Check if PostHog is already loaded
-    if (!checkPostHogReady()) {
-      // If not, wait for the ready event
-      console.log('Waiting for PostHog to be ready...');
-      window.addEventListener('posthog:ready', function onReady() {
-        console.log('PostHog ready event received');
-        updateContentFromPostHog();
-        window.removeEventListener('posthog:ready', onReady);
-      });
-    }
+    // Listen for the posthog:ready event to update content
+    window.addEventListener('posthog:ready', function onPostHogReady() {
+      console.log('posthog:ready event received in Hero.astro');
+      updateContentFromPostHog(); 
+      // Remove listener if you only want it to fire once, though contentUpdated flag handles multiple calls.
+      // window.removeEventListener('posthog:ready', onPostHogReady);
+    });
 
-    // Add form submission handler
+    // Form submission handler (remains the same)
     const form = document.getElementById('hero-page-form');
     if (form) {
       form.addEventListener('submit', async function(event) {
@@ -186,14 +204,12 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
         
         const email = emailInput.value.trim();
         
-        // Basic validation
         if (!email || !email.includes('@')) {
           messageElement.textContent = 'Please enter a valid email address.';
           messageElement.style.color = 'red';
           return;
         }
         
-        // Show loading state
         submitButton.disabled = true;
         messageElement.textContent = 'Subscribing...';
         messageElement.style.color = 'inherit';
@@ -212,8 +228,7 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
             messageElement.style.color = 'green';
             form.reset();
             
-            // Track successful subscription in PostHog
-            if (window.posthog) {
+            if (window.posthog && typeof window.posthog.getFeatureFlag === 'function') {
               const variant = window.posthog.getFeatureFlag('hero-section-headline-test') || 'control';
               window.posthog.capture('newsletter_subscribed', {
                 email: email,
