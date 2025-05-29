@@ -1,0 +1,60 @@
+---
+const { metadata = { title: 'A/B Testing Admin', description: 'Manage A/B Tests' } } = Astro.props;
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width">
+  <title>{metadata.title}</title>
+  <meta name="description" content={metadata.description}>
+  <!-- Using Tailwind CDN for simplicity in this example. Replace with your project's Tailwind setup if you have one. -->
+  <style>
+    /* Global styles for A/B Admin section */
+    body {
+      @apply bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-200;
+    }
+    .btn {
+      @apply px-4 py-2 rounded-md font-semibold shadow-sm transition-colors;
+    }
+    .btn-primary {
+      @apply bg-blue-600 hover:bg-blue-700 text-white;
+    }
+    .btn-secondary {
+      @apply bg-slate-500 hover:bg-slate-600 text-white;
+    }
+    .btn-danger {
+      @apply bg-red-600 hover:bg-red-700 text-white;
+    }
+    .btn-success {
+      @apply bg-green-600 hover:bg-green-700 text-white;
+    }
+    .form-input,
+    .form-textarea {
+      @apply mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-slate-700 dark:text-white placeholder-slate-400 dark:placeholder-slate-500;
+    }
+    .form-label {
+      @apply block text-sm font-medium text-slate-700 dark:text-slate-300;
+    }
+    .card {
+      @apply bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-lg shadow-md;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+  <nav class="bg-slate-700 dark:bg-slate-800 text-white shadow-md">
+    <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+      <a href="/ab-manager" class="text-xl font-bold hover:text-slate-300">A/B Test Dashboard</a>
+      <div>
+        <a href="/experiment-form" class="btn btn-primary text-sm">New Experiment</a>
+      </div>
+    </div>
+  </nav>
+  <main class="container mx-auto px-4 py-6 sm:py-8 flex-grow">
+    <slot />
+  </main>
+  <footer class="bg-slate-700 dark:bg-slate-800 text-white text-center py-4 mt-auto">
+    <p class="text-sm">&copy; {new Date().getFullYear()} Your Company | A/B Testing Admin</p>
+  </footer>
+</body>
+</html> 

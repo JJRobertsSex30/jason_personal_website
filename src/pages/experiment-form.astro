@@ -1,0 +1,151 @@
+import ABPageLayout from '~/layouts/admin/ABPageLayout.astro';
+import { supabase } from '~/lib/supabaseClient.ts';
+
+interface Experiment {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at?: string; 
+}
+
+interface FlashNotification {
+  type: 'success' | 'error';
+  message: string;
+}
+
+const experimentId = Astro.url.searchParams.get('id');
+let experiment: Experiment | null = null;
+let pageTitle = 'Add New Experiment';
+let pageSubtitle = 'Create and configure a new A/B test experiment.';
+let formAction = 'create_experiment';
+
+let notification: FlashNotification | null = null;
+const flashCookie = Astro.cookies.get('form_notification');
+if (flashCookie && flashCookie.value) {
+  try {
+    notification = JSON.parse(flashCookie.value) as FlashNotification;
+  } catch (e) {
+    console.error("Error parsing form notification cookie:", e);
+  }
+  Astro.cookies.delete('form_notification', { path: '/' });
+}
+
+if (experimentId) {
+  const { data, error } = await supabase
+    .from('experiments')
+    .select('id, name, description')
+    .eq('id', experimentId)
+    .single();
+  if (error) {
+    console.error('Error fetching experiment for editing:', error);
+    notification = { type: 'error', message: 'Failed to load experiment data: ' + error.message };
+  } else if (data) {
+    experiment = data as Experiment;
+    pageTitle = `Edit Experiment`;
+    pageSubtitle = `Update the details for "${experiment.name}".`;
+    formAction = 'update_experiment';
+  } else {
+     notification = { type: 'error', message: 'Experiment not found.' };
+  }
+}
+
+if (Astro.request.method === 'POST') {
+  const formData = await Astro.request.formData();
+  const action = formData.get('_action') as string; 
+  const name = formData.get('name') as string;
+  const description = formData.get('description') as string | null;
+  const id = formData.get('id') as string | null; 
+  let successMessage = '';
+
+  try {
+    if (!name || name.trim() === '') throw new Error('Experiment name is required and cannot be empty.');
+
+    if (action === 'create_experiment') {
+      const { error } = await supabase.from('experiments').insert([{ name, description }]);
+      if (error) throw error;
+      successMessage = 'Experiment created successfully!';
+    } else if (action === 'update_experiment') {
+      if (!id) throw new Error('Experiment ID is required for update.');
+      const { error } = await supabase.from('experiments').update({ name, description }).eq('id', id);
+      if (error) throw error;
+      successMessage = 'Experiment updated successfully!';
+    }
+    
+    Astro.cookies.set('flash_notification', JSON.stringify({ type: 'success', message: successMessage }), { path: '/', httpOnly: true, maxAge: 5 });
+    // MODIFIED: Redirect to /ab-manager
+    return Astro.redirect('/ab-manager', 303);
+
+  } catch (err: unknown) {
+    console.error(`Error processing experiment form (${action}):`, err);
+    if (err instanceof Error) {
+      notification = { type: 'error', message: err.message };
+    } else {
+      notification = { type: 'error', message: 'An unknown error occurred.' };
+    }
+    experiment = { id: id || '', name, description }; 
+  }
+}
+
+const metadata = {
+  title: pageTitle,
+  description: pageSubtitle,
+};
+---
+<ABPageLayout metadata={metadata}>
+  <div class="max-w-2xl mx-auto">
+    <div class="mb-8 text-center md:text-left">
+      <h1 class="text-3xl md:text-4xl font-bold text-slate-800 dark:text-white">{pageTitle}</h1>
+      <p class="mt-2 text-lg text-slate-600 dark:text-slate-400">{pageSubtitle}</p>
+    </div>
+
+    {notification && (
+      <div class:list={[
+        'p-4 mb-6 rounded-lg shadow-lg text-sm',
+        notification.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white',
+      ]} role="alert">
+        <strong class="font-semibold">{notification.type === 'success' ? 'Success!' : 'Error:'}</strong>
+        {notification.message}
+      </div>
+    )}
+
+    <form method="POST" class="card p-6 md:p-8 space-y-6 bg-white dark:bg-slate-800 rounded-xl shadow-2xl">
+      <input type="hidden" name="_action" value={formAction} />
+      {experimentId && <input type="hidden" name="id" value={experimentId} />}
+      
+      <div>
+        <label for="name" class="form-label mb-1.5">Experiment Name <span class="text-red-500">*</span></label>
+        <input 
+          type="text" 
+          name="name" 
+          id="name" 
+          required 
+          class="form-input w-full text-base"
+          value={experiment?.name || ''} 
+          placeholder="e.g., Homepage Headline Test"
+        />
+      </div>
+      
+      <div>
+        <label for="description" class="form-label mb-1.5">Description (Optional)</label>
+        <textarea 
+          name="description" 
+          id="description" 
+          rows="4" 
+          class="form-textarea w-full text-base"
+          placeholder="Briefly describe the purpose or hypothesis of this experiment."
+        >{experiment?.description || ''}</textarea>
+      </div>
+      
+      <div class="flex flex-col sm:flex-row justify-end items-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+        {/* MODIFIED: Link to /ab-manager */}
+        <a href="/ab-manager" class="btn btn-secondary w-full sm:w-auto order-2 sm:order-1">Cancel & Back to Dashboard</a>
+        <button type="submit" class="btn btn-primary w-full sm:w-auto order-1 sm:order-2">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 mr-2 inline-block">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
+          </svg>
+          {experimentId ? 'Save Changes' : 'Create Experiment'}
+        </button>
+      </div>
+    </form>
+  </div>
+</ABPageLayout> 

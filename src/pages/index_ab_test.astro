@@ -17,10 +17,12 @@ const metadata = {
 const chosenHeroContent = getVariant('heroHeadlineTest', heroVariants);
 
 // You might need to adapt how actions or image are handled if they are also part of the test
+/*
 const heroActions = [
   { variant: 'primary', text: 'Get Free Chapters Now', href: '#hero-form-section', icon: 'tabler:book-download' },
   { text: 'See the Benefits', href: '#benefits' },
 ];
+*/
 
 // Assuming HeroCustomAB's 'image' prop expects an object like: { src: ImageMetadata, alt: string }
 const heroImageForWidget = { src: imgHeroMain, alt: 'JJ Roberts - Relationship Expert' };
@@ -40,7 +42,6 @@ const heroImageForWidget = { src: imgHeroMain, alt: 'JJ Roberts - Relationship E
     <HeroCustomAB 
       headline={chosenHeroContent.headline}
       subheadline={chosenHeroContent.subheadline}
-      actions={heroActions} {/* Or make actions part of the variant */}
       image={heroImageForWidget} {/* Or make image part of the variant */}
       {/* Ensure any other necessary props for HeroCustomAB are passed */}
       {/* This is where you'd also pass the variant ID for conversion tracking if needed */}

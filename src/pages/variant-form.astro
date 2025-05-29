@@ -1,0 +1,232 @@
+---
+import ABPageLayout from '~/layouts/admin/ABPageLayout.astro';
+import { supabase } from '~/lib/supabaseClient.ts';
+
+interface VariantData {
+  headline?: string;
+  subheadline?: string;
+  [key: string]: unknown;
+}
+
+interface Variant {
+  id: string;
+  name: string;
+  data: VariantData;
+  experiment_id: string;
+  created_at?: string;
+}
+
+interface FlashNotification {
+  type: 'success' | 'error';
+  message: string;
+}
+
+const experimentIdQuery = Astro.url.searchParams.get('experiment_id');
+const variantId = Astro.url.searchParams.get('id');
+
+let variant: Variant | null = null;
+let experimentName: string | null = "Unknown Experiment";
+let pageTitle = 'Add New Variant';
+let pageSubtitle = 'Define a new variation for your A/B test.';
+let formAction = 'create_variant';
+
+let notification: FlashNotification | null = null;
+const flashCookie = Astro.cookies.get('form_notification');
+if (flashCookie && flashCookie.value) {
+  try {
+    notification = JSON.parse(flashCookie.value) as FlashNotification;
+  } catch (e) {
+    console.error("Error parsing form notification cookie:", e);
+  }
+  Astro.cookies.delete('form_notification', { path: '/' });
+}
+
+if (!experimentIdQuery) {
+  Astro.cookies.set('flash_notification', JSON.stringify({ type: 'error', message: 'Experiment ID is missing. Cannot manage variant.' }), { path: '/', httpOnly: true, maxAge: 5 });
+  // MODIFIED: Redirect to /ab-manager
+  return Astro.redirect('/ab-manager');
+}
+
+const { data: expData, error: expError } = await supabase
+  .from('experiments')
+  .select('name')
+  .eq('id', experimentIdQuery)
+  .single();
+
+if (expError || !expData) {
+  console.error('Error fetching experiment name:', expError);
+  Astro.cookies.set('flash_notification', JSON.stringify({ type: 'error', message: 'Could not find the parent experiment. Please ensure it exists.' }), { path: '/', httpOnly: true, maxAge: 5 });
+  notification = { type: 'error', message: `Parent experiment (ID: ${experimentIdQuery}) not found.` };
+} else {
+  experimentName = expData.name;
+  pageTitle = `Add Variant to "${experimentName}"`;
+  pageSubtitle = `Configure a new variant for the "${experimentName}" experiment.`;
+}
+
+if (variantId && experimentName !== "Unknown Experiment") {
+  const { data, error: variantFetchError } = await supabase
+    .from('variants')
+    .select('id, name, data, experiment_id')
+    .eq('id', variantId)
+    .eq('experiment_id', experimentIdQuery)
+    .single();
+  if (variantFetchError) {
+    console.error('Error fetching variant for editing:', variantFetchError);
+    notification = { type: 'error', message: 'Failed to load variant data: ' + variantFetchError.message };
+  } else if (data) {
+    variant = data as Variant;
+    pageTitle = `Edit Variant "${variant.name}"`;
+    pageSubtitle = `Update details for variant "${variant.name}" in "${experimentName}".`;
+    formAction = 'update_variant';
+  } else {
+    notification = { type: 'error', message: 'Variant not found or does not belong to this experiment.' };
+  }
+}
+
+if (Astro.request.method === 'POST') {
+  const formData = await Astro.request.formData();
+  const action = formData.get('_action') as string;
+  const name = formData.get('name') as string;
+  const headline = formData.get('headline') as string;
+  const subheadline = formData.get('subheadline') as string;
+  const currentVariantId = formData.get('id') as string | null;
+  const currentExperimentId = formData.get('experiment_id') as string;
+  let successMessage = '';
+
+  try {
+    if (!name || name.trim() === '' || !currentExperimentId) {
+      throw new Error('Variant name and Experiment ID are required.');
+    }
+    const variantDataPayload: VariantData = { headline: headline || '', subheadline: subheadline || '' };
+
+    if (action === 'create_variant') {
+      const { error } = await supabase.from('variants').insert([{
+        experiment_id: currentExperimentId,
+        name,
+        data: variantDataPayload
+      }]);
+      if (error) throw error;
+      successMessage = 'Variant created successfully!';
+    } else if (action === 'update_variant') {
+      if (!currentVariantId) throw new Error('Variant ID is required for update.');
+      const { error } = await supabase.from('variants').update({
+        name,
+        data: variantDataPayload
+      }).eq('id', currentVariantId);
+      if (error) throw error;
+      successMessage = 'Variant updated successfully!';
+    }
+    
+    Astro.cookies.set('flash_notification', JSON.stringify({ type: 'success', message: successMessage }), { path: '/', httpOnly: true, maxAge: 5 });
+    // MODIFIED: Redirect to /ab-manager
+    return Astro.redirect(`/ab-manager`, 303);
+
+  } catch (err: unknown) {
+    console.error(`Error processing variant form (${action}):`, err);
+    if (err instanceof Error) {
+      notification = { type: 'error', message: err.message };
+    } else {
+      notification = { type: 'error', message: 'An unknown error occurred.' };
+    }
+    variant = { 
+      id: currentVariantId || '', 
+      name, 
+      data: { headline, subheadline }, 
+      experiment_id: currentExperimentId 
+    }; 
+  }
+}
+
+const metadata = {
+  title: pageTitle,
+  description: pageSubtitle,
+};
+---
+<ABPageLayout metadata={metadata}>
+  <div class="max-w-2xl mx-auto">
+    <div class="mb-8 text-center md:text-left">
+      <h1 class="text-3xl md:text-4xl font-bold text-slate-800 dark:text-white">{pageTitle}</h1>
+      <p class="mt-2 text-lg text-slate-600 dark:text-slate-400">{pageSubtitle}</p>
+    </div>
+
+    {notification && (
+      <div class:list={[
+        'p-4 mb-6 rounded-lg shadow-lg text-sm',
+        notification.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white',
+      ]} role="alert">
+        <strong class="font-semibold">{notification.type === 'success' ? 'Success!' : 'Error:'}</strong>
+        {notification.message}
+      </div>
+    )}
+    
+    {experimentIdQuery && experimentName !== "Unknown Experiment" ? (
+      <form method="POST" class="card p-6 md:p-8 space-y-6 bg-white dark:bg-slate-800 rounded-xl shadow-2xl">
+        <input type="hidden" name="_action" value={formAction} />
+        <input type="hidden" name="experiment_id" value={experimentIdQuery} />
+        {variantId && <input type="hidden" name="id" value={variantId} />}
+        
+        <div>
+          <label for="name" class="form-label mb-1.5">Variant Name <span class="text-red-500">*</span></label>
+          <input 
+            type="text" 
+            name="name" 
+            id="name" 
+            required 
+            class="form-input w-full text-base"
+            value={variant?.name || ''} 
+            placeholder="e.g., Control, Variation A, Blue Button"
+          />
+        </div>
+        
+        <fieldset class="border border-slate-300 dark:border-slate-600 rounded-lg p-4 pt-2">
+          <legend class="text-sm font-medium text-slate-700 dark:text-slate-300 px-2">Variant Content Data</legend>
+          <div class="space-y-4 mt-2">
+            <div>
+              <label for="headline" class="form-label mb-1.5 text-sm">Headline</label>
+              <input 
+                type="text" 
+                name="headline" 
+                id="headline" 
+                class="form-input w-full text-base"
+                value={variant?.data?.headline || ''} 
+                placeholder="Enter headline for this variant"
+              />
+            </div>
+
+            <div>
+              <label for="subheadline" class="form-label mb-1.5 text-sm">Subheadline</label>
+              <input 
+                type="text" 
+                name="subheadline" 
+                id="subheadline" 
+                class="form-input w-full text-base"
+                value={variant?.data?.subheadline || ''} 
+                placeholder="Enter subheadline for this variant"
+              />
+            </div>
+          </div>
+        </fieldset>
+        
+        <div class="flex flex-col sm:flex-row justify-end items-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+          {/* MODIFIED: Link to /ab-manager */}
+          <a href={`/ab-manager`} class="btn btn-secondary w-full sm:w-auto order-2 sm:order-1">Cancel & Back to Dashboard</a>
+          <button type="submit" class="btn btn-primary w-full sm:w-auto order-1 sm:order-2">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 mr-2 inline-block">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
+            </svg>
+            {variantId ? 'Save Variant Changes' : 'Create New Variant'}
+          </button>
+        </div>
+      </form>
+    ) : (
+      <div class="card p-6 md:p-8 text-center bg-white dark:bg-slate-800 rounded-xl shadow-2xl">
+        <h2 class="text-xl font-semibold text-red-600 dark:text-red-400">Error Loading Variant Form</h2>
+        <p class="mt-2 text-slate-600 dark:text-slate-400">
+          Could not load the form because the parent experiment (ID: {experimentIdQuery}) was not found or is invalid.
+        </p>
+        {/* MODIFIED: Link to /ab-manager */}
+        <a href="/ab-manager" class="btn btn-primary mt-6">Return to Dashboard</a>
+      </div>
+    )}
+  </div>
+</ABPageLayout>
