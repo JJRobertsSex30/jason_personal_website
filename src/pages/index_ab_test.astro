@@ -1,10 +1,10 @@
 ---
 import Layout from '~/layouts/PageLayout.astro';
-import HeroCustomAB from '~/components/widgets/HeroCustomAB.astro'; // Use the new custom A/B hero
+import HeroCustomAB from '~/components/widgets/HeroCustomAB.astro';
 
-// Import your A/B testing logic
-import { getVariant, heroVariants } from '~/lib/abTester';
-import imgHeroMain from '~/assets/images/jj2.png'; // Default image
+// Import your A/B testing logic - ABVariant for type, getVariant for function
+import { getVariant, type ABVariant } from '~/lib/abTester';
+import imgHeroMain from '~/assets/images/jj2.png'; // Default image for fallback or if not in variant
 
 // --- METADATA (can be same as index.astro or simplified) ---
 const metadata = {
@@ -12,20 +12,20 @@ const metadata = {
   description: "Testing A/B variations.",
 };
 
-// === A/B TEST LOGIC FOR HERO ===
-// For this test page, we'll directly use the heroVariants from abTester.ts
-const chosenHeroContent = getVariant('heroHeadlineTest', heroVariants);
+// Fetch the chosen variant content asynchronously
+// We specify the experiment name, e.g., "heroHeadlineTest"
+// Ensure this experiment name exists in your 'experiments' table and has variants defined with config_json containing 'headline' and 'subheadline'.
+const chosenHeroContent: ABVariant = await getVariant('Hero Headline AB Test 1');
 
-// You might need to adapt how actions or image are handled if they are also part of the test
-/*
-const heroActions = [
-  { variant: 'primary', text: 'Get Free Chapters Now', href: '#hero-form-section', icon: 'tabler:book-download' },
-  { text: 'See the Benefits', href: '#benefits' },
-];
-*/
-
-// Assuming HeroCustomAB's 'image' prop expects an object like: { src: ImageMetadata, alt: string }
-const heroImageForWidget = { src: imgHeroMain, alt: 'JJ Roberts - Relationship Expert' };
+// Image can either be part of the variant's config_json or a static default like this.
+// If you want the image to be A/B tested, it should be part of the config_json in your variants table,
+// and then extracted in abTester.ts similar to headline/subheadline.
+const heroImageForWidget = { 
+  src: imgHeroMain, // Default or fallback image
+  alt: chosenHeroContent.raw_config_json?.image_alt || 'JJ Roberts - Relationship Expert' // Example: get alt from config or default
+};
+// If image source itself is from config:
+// const imageSrcFromConfig = chosenHeroContent.raw_config_json?.image_src; // you would need to resolve this path or use a full URL
 
 ---
 
@@ -42,11 +42,20 @@ const heroImageForWidget = { src: imgHeroMain, alt: 'JJ Roberts - Relationship E
     <HeroCustomAB 
       headline={chosenHeroContent.headline}
       subheadline={chosenHeroContent.subheadline}
-      image={heroImageForWidget} {/* Or make image part of the variant */}
-      {/* Ensure any other necessary props for HeroCustomAB are passed */}
-      {/* This is where you'd also pass the variant ID for conversion tracking if needed */}
-      abTestVariantKey={chosenHeroContent.id} {/* Pass the variant ID */}
+      image={heroImageForWidget}
+      abTestVariantKey={chosenHeroContent.id}
     />
+
+    {/* You can add a notice for testing if needed */}
+    {Astro.cookies.has('astro_developer_toolbar') && (
+      <div class="fixed bottom-0 right-0 bg-yellow-300 text-black p-2 m-4 rounded shadow-lg text-xs z-50">
+        <p><strong>A/B Test Active</strong></p>
+        <p>Experiment: heroHeadlineTest</p>
+        <p>Variant ID: {chosenHeroContent.id}</p>
+        <p>Variant Name: {chosenHeroContent.name}</p>
+        <p>Headline: {chosenHeroContent.headline}</p>
+      </div>
+    )}
 
     {/* Add other sections from your original index.astro if you want them on this test page */}
     {/* For example: */}
@@ -57,7 +66,7 @@ const heroImageForWidget = { src: imgHeroMain, alt: 'JJ Roberts - Relationship E
 </Layout>
 
 <script>
-  // Client-side conversion tracking is now handled within HeroCustomAB.astro itself.
-  // Ensure that abTester.ts makes the trackConversion function available globally (e.g., window.trackConversion)
-  // or that HeroCustomAB.astro can import it if your bundler/setup supports client-side module imports for Astro components.
+  // Client-side conversion tracking is handled within HeroCustomAB.astro.
+  // It calls window.trackConversion, which is set up by abTester.ts.
+  // Ensure your variants in the database (config_json) have 'headline' and 'subheadline' fields.
 </script> 
