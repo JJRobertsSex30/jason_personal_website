@@ -579,7 +579,7 @@ if (Astro.request.method === 'GET' || abTestError || error) {
                         {exp.variants && exp.variants.length > 0 ? (
                           <ul class="list-disc list-inside pl-1 space-y-0.5 text-sm text-slate-500 dark:text-slate-400">
                             {exp.variants.map(variant => (
-                              <li key={variant.id}>
+                              <li>
                                 {variant.name} <span class="text-xs text-slate-400">(ID: {variant.id})</span>
                                 {typeof variant.impressions_count === 'number' && (
                                   <span class="text-xs text-slate-400 ml-2">
@@ -641,7 +641,7 @@ if (Astro.request.method === 'GET' || abTestError || error) {
                         <h5 class="text-md font-medium text-slate-600 dark:text-slate-300 mb-2">Existing Variants:</h5>
                         <ul class="space-y-2">
                           {exp.variants.map(variant => (
-                            <li key={variant.id} class="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-md shadow-sm flex justify-between items-center">
+                            <li class="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-md shadow-sm flex justify-between items-center">
                               <div>
                                 <p class="font-semibold text-slate-700 dark:text-slate-200">{variant.name}</p>
                                 <p class="text-xs text-slate-500 dark:text-slate-400">{variant.description || 'No description'}</p>
@@ -719,7 +719,7 @@ if (Astro.request.method === 'GET' || abTestError || error) {
                     }
                     {Object.entries(profile).map(([key, value]) => {
                       if (!['id', 'username', 'full_name', 'website', 'updated_at', 'avatar_url'].includes(key) && value) {
-                        return <p key={key}><span class="font-semibold capitalize">{key.replace(/_/g, ' ')}:</span> {String(value)}</p>;
+                        return <p><span class="font-semibold capitalize">{key.replace(/_/g, ' ')}:</span> {String(value)}</p>;
                       }
                       return null;
                     })}
@@ -754,32 +754,42 @@ if (Astro.request.method === 'GET' || abTestError || error) {
 </Layout> 
 
 <script>
-  document.addEventListener('DOMContentLoaded', () => {
+  // Define an interface for the variant data used in the chart
+  interface ChartVariantData {
+    name: string;
+    rate: number | null | undefined; // Allow for null or undefined if data is missing
+    impressions: number | null | undefined;
+    conversions: number | null | undefined;
+  }
+
+  function initializePageScripts() {
+    // Manage Variants toggle
     const manageVariantBtns = document.querySelectorAll('.manage-variants-btn');
-    manageVariantBtns.forEach(btn => {
+    manageVariantBtns.forEach(btnEl => {
+      const btn = btnEl as HTMLButtonElement; // Type assertion
       btn.addEventListener('click', () => {
         const experimentId = btn.dataset.experimentId;
+        if (!experimentId) return;
         const variantSection = document.getElementById(`manage-variants-section-${experimentId}`);
         const isExpanded = btn.getAttribute('aria-expanded') === 'true';
 
         if (variantSection) {
           variantSection.classList.toggle('hidden');
-          btn.setAttribute('aria-expanded', !isExpanded + '');
+          btn.setAttribute('aria-expanded', String(!isExpanded));
           btn.textContent = !isExpanded ? 'Hide Variants' : 'Manage Variants';
           
+          const currentUrl = new URL(window.location.href);
           if (!isExpanded) {
-            const currentUrl = new URL(window.location.href);
             currentUrl.searchParams.set('openExperiment', experimentId);
-            window.history.pushState({ path: currentUrl.href }, '', currentUrl.href);
           } else {
-            const currentUrl = new URL(window.location.href);
             currentUrl.searchParams.delete('openExperiment');
-            window.history.pushState({ path: currentUrl.href }, '', currentUrl.href);
           }
+          window.history.pushState({ path: currentUrl.href }, '', currentUrl.href);
         }
       });
     });
 
+    // Restore state on popstate (browser back/forward)
     window.addEventListener('popstate', () => {
       const params = new URLSearchParams(window.location.search);
       const openExperimentId = params.get('openExperiment');
@@ -787,14 +797,15 @@ if (Astro.request.method === 'GET' || abTestError || error) {
       document.querySelectorAll('[id^="manage-variants-section-"]').forEach(section => {
         section.classList.add('hidden');
       });
-      manageVariantBtns.forEach(btn => {
+      manageVariantBtns.forEach(btnEl => {
+        const btn = btnEl as HTMLButtonElement;
         btn.setAttribute('aria-expanded', 'false');
         btn.textContent = 'Manage Variants';
       });
 
       if (openExperimentId) {
         const sectionToOpen = document.getElementById(`manage-variants-section-${openExperimentId}`);
-        const buttonForSection = document.querySelector(`.manage-variants-btn[data-experiment-id="${openExperimentId}"]`);
+        const buttonForSection = document.querySelector(`.manage-variants-btn[data-experiment-id="${openExperimentId}"]`) as HTMLButtonElement | null;
         if (sectionToOpen) {
           sectionToOpen.classList.remove('hidden');
         }
@@ -806,28 +817,42 @@ if (Astro.request.method === 'GET' || abTestError || error) {
     });
 
     // Event listeners for Edit Experiment buttons
-    document.querySelectorAll('.edit-experiment-btn').forEach(btn => {
+    document.querySelectorAll('.edit-experiment-btn').forEach(btnEl => {
+      const btn = btnEl as HTMLButtonElement;
       btn.addEventListener('click', () => {
         const experimentId = btn.dataset.experimentId;
-        document.querySelector(`.experiment-display-section-${experimentId}`).classList.add('hidden');
-        document.querySelector(`.experiment-actions-section-${experimentId}`).classList.add('hidden');
-        const editFormSection = document.querySelector(`.experiment-edit-form-section-${experimentId}`);
-        editFormSection.classList.remove('hidden');
-        // Focus on the first input field in the edit form
-        const firstInput = editFormSection.querySelector('input[name="experiment_name"]');
-        if (firstInput) {
-          firstInput.focus();
+        if (!experimentId) return;
+
+        const displaySection = document.querySelector(`.experiment-display-section-${experimentId}`);
+        const actionsSection = document.querySelector(`.experiment-actions-section-${experimentId}`);
+        const editFormSection = document.querySelector(`.experiment-edit-form-section-${experimentId}`) as HTMLElement | null;
+
+        if (displaySection) displaySection.classList.add('hidden');
+        if (actionsSection) actionsSection.classList.add('hidden');
+        if (editFormSection) {
+          editFormSection.classList.remove('hidden');
+          const firstInput = editFormSection.querySelector('input[name="experiment_name"]') as HTMLInputElement | null;
+          if (firstInput) {
+            firstInput.focus();
+          }
         }
       });
     });
 
     // Event listeners for Cancel Edit Experiment buttons
-    document.querySelectorAll('.cancel-edit-experiment-btn').forEach(btn => {
+    document.querySelectorAll('.cancel-edit-experiment-btn').forEach(btnEl => {
+      const btn = btnEl as HTMLButtonElement;
       btn.addEventListener('click', () => {
         const experimentId = btn.dataset.experimentId;
-        document.querySelector(`.experiment-display-section-${experimentId}`).classList.remove('hidden');
-        document.querySelector(`.experiment-actions-section-${experimentId}`).classList.remove('hidden');
-        document.querySelector(`.experiment-edit-form-section-${experimentId}`).classList.add('hidden');
+        if (!experimentId) return;
+
+        const displaySection = document.querySelector(`.experiment-display-section-${experimentId}`);
+        const actionsSection = document.querySelector(`.experiment-actions-section-${experimentId}`);
+        const editFormSection = document.querySelector(`.experiment-edit-form-section-${experimentId}`);
+
+        if (displaySection) displaySection.classList.remove('hidden');
+        if (actionsSection) actionsSection.classList.remove('hidden');
+        if (editFormSection) editFormSection.classList.add('hidden');
       });
     });
 
@@ -835,28 +860,42 @@ if (Astro.request.method === 'GET' || abTestError || error) {
     const chartContainers = document.querySelectorAll('.chart-container');
     if (chartContainers.length > 0) {
       import('chart.js/auto').then(({default: Chart}) => {
-        chartContainers.forEach(container => {
+        chartContainers.forEach(containerEl => {
+          const container = containerEl as HTMLElement; // Type assertion
           const experimentId = container.dataset.experimentId;
-          const canvas = container.querySelector(`canvas#chart-${experimentId}`);
+          if (!experimentId) {
+            console.error("Chart container missing experiment ID");
+            return;
+          }
+          const canvas = container.querySelector(`canvas#chart-${experimentId}`) as HTMLCanvasElement | null;
           if (!canvas) {
-            console.error(`Canvas not found for experiment ${experimentId}`);
+            // console.warn(`Canvas not found for experiment ${experimentId}, chart not rendered.`);
+            // HTML already shows a message if no data, so just log if canvas itself is missing.
             return;
           }
           
-          let variantsData = [];
+          let variantsData: ChartVariantData[] = [];
           try {
-            variantsData = JSON.parse(container.dataset.variants || '[]');
+            const variantsJson = container.dataset.variants;
+            if (variantsJson) {
+              variantsData = JSON.parse(variantsJson);
+            } else {
+              // console.log(`No variant data provided for experiment ${experimentId}, chart not rendered.`);
+              return;
+            }
           } catch (e) {
             console.error('Failed to parse variants data for chart:', e);
             return;
           }
 
-          if (variantsData.length > 0 && variantsData.some(v => typeof v.rate === 'number' && v.rate > 0)) {
-            const labels = variantsData.map(v => `${v.name} (Imp: ${v.impressions}, Conv: ${v.conversions}, Rate: ${v.rate.toFixed(1)}%)`);
-            const data = variantsData.map(v => v.rate);
+          // Filter out variants that don't have valid rate for charting
+          const chartableVariants = variantsData.filter(v => typeof v.rate === 'number');
+
+          if (chartableVariants.length > 0) {
+            const labels = chartableVariants.map(v => `${v.name} (Imp: ${v.impressions ?? 0}, Conv: ${v.conversions ?? 0}, Rate: ${(v.rate ?? 0).toFixed(1)}%)`);
+            const data = chartableVariants.map(v => v.rate ?? 0);
             
-            // Generate distinct, appealing colors for pie chart slices
-            const N = variantsData.length;
+            const N = chartableVariants.length;
             const baseColors = [
               { r: 54, g: 162, b: 235 }, // blue
               { r: 255, g: 99, b: 132 }, // red
@@ -865,13 +904,20 @@ if (Astro.request.method === 'GET' || abTestError || error) {
               { r: 153, g: 102, b: 255 },// purple
               { r: 255, g: 159, b: 64 }  // orange
             ];
-            const backgroundColors = [];
-            const borderColors = [];
+            const backgroundColors: string[] = []; // Explicitly type as string[]
+            const borderColors: string[] = [];   // Explicitly type as string[]
 
             for (let i = 0; i < N; i++) {
               const color = baseColors[i % baseColors.length];
               backgroundColors.push(`rgba(${color.r}, ${color.g}, ${color.b}, 0.6)`);
               borderColors.push(`rgba(${color.r}, ${color.g}, ${color.b}, 1)`);
+            }
+            
+            // Check if a chart instance already exists on the canvas
+            // If so, destroy it before creating a new one to prevent conflicts/memory leaks
+            const existingChart = Chart.getChart(canvas);
+            if (existingChart) {
+                existingChart.destroy();
             }
 
             new Chart(canvas, {
@@ -906,7 +952,7 @@ if (Astro.request.method === 'GET' || abTestError || error) {
                         if (label) {
                           label += ': ';
                         }
-                        if (context.parsed !== null) {
+                        if (context.parsed !== null && typeof context.parsed === 'number') {
                           label += context.parsed.toFixed(2) + '%';
                         }
                         return label;
@@ -917,13 +963,23 @@ if (Astro.request.method === 'GET' || abTestError || error) {
               }
             });
           } else {
-             // console.log(`No positive conversion rate data for experiment ${experimentId}, chart not rendered.`);
-             // The Astro template already handles the message for no data.
+             // console.log(`No valid conversion rate data for experiment ${experimentId}, chart not rendered.`);
+             // The Astro template already handles the message for no data if variants exist but rates are bad.
+             // If chartableVariants is empty, ensure any old chart is cleared if canvas existed.
+            const existingChart = Chart.getChart(canvas);
+            if (existingChart) {
+                existingChart.destroy();
+            }
           }
         });
       }).catch(error => {
         console.error('Failed to load Chart.js dynamically:', error);
       });
     }
-  });
+  }
+
+  // Use astro:page-load event for Astro's client-side navigation
+  document.addEventListener('astro:page-load', initializePageScripts);
+  // The 'astro:page-load' event handles initial load as well as subsequent navigations.
+  // The redundant check for document.readyState is removed.
 </script> 
