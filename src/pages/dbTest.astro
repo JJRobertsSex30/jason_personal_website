@@ -145,6 +145,43 @@ if (Astro.request.method === 'POST') {
       }
     }
 
+  } else if (action === 'update_experiment') {
+    if (!session) {
+      abTestError = "Authentication required. Please log in again to update an experiment.";
+    } else {
+      try {
+        const experimentId = formData.get('experiment_id')?.toString();
+        const name = formData.get('experiment_name')?.toString();
+        const description = formData.get('experiment_description')?.toString();
+        const is_active = formData.get('experiment_is_active') === 'on';
+
+        if (!experimentId || !name || name.trim() === '') {
+          throw new Error('Experiment ID and Experiment name are required for an update.');
+        }
+
+        const { error: updateError } = await supabase
+          .from('experiments')
+          .update({ name, description, is_active, updated_at: new Date().toISOString() })
+          .eq('id', experimentId);
+
+        if (updateError) {
+          console.error('Supabase update experiment error:', updateError);
+          throw new Error(updateError.message || 'Failed to update experiment in the database.');
+        }
+        
+        // PRG: Redirect to the same page, optionally keeping the relevant experiment open if applicable
+        // For simplicity now, just redirect to the page. Can add #experiment-id later if needed.
+        return Astro.redirect(Astro.url.pathname, 303);
+
+      } catch (e: unknown) {
+        if (e instanceof Error) {
+          abTestError = e.message;
+        } else {
+          abTestError = 'An unexpected error occurred while updating the experiment.';
+        }
+        console.error('Update experiment processing error:', e);
+      }
+    }
   } else { 
     try {
       const email = formData.get('email')?.toString();
@@ -461,80 +498,144 @@ if (Astro.request.method === 'GET' || abTestError || error) {
             <div class="space-y-6">
               {experiments.map((exp) => (
                 <div class="bg-white dark:bg-slate-800 shadow-lg rounded-lg p-6" id={`experiment-${exp.id}`}>
-                  <div class="flex justify-between items-start mb-2">
-                    <div>
-                      <h4 class="text-xl font-semibold text-blue-600 dark:text-blue-400">{exp.name}</h4>
-                      <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">ID: {exp.id}</p>
-                    </div>
-                    <span class={`px-3 py-1 text-xs font-medium rounded-full ${exp.is_active ? 'bg-green-100 text-green-800 dark:bg-green-700/30 dark:text-green-300' : 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300'}`}>
-                      {exp.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                  <p class="text-sm text-slate-600 dark:text-slate-300 mb-3">{exp.description || 'No description provided.'}</p>
-                  
-                  <div class="mb-4">
-                    <h5 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">Current Variants ({exp.variants?.length || 0}):</h5>
-                    {exp.variants && exp.variants.length > 0 ? (
-                      <ul class="list-disc list-inside pl-1 space-y-0.5 text-sm text-slate-500 dark:text-slate-400">
-                        {exp.variants.map(variant => (
-                          <li key={variant.id}>
-                            {variant.name} <span class="text-xs text-slate-400">(ID: {variant.id})</span>
-                            {typeof variant.impressions_count === 'number' && (
-                              <span class="text-xs text-slate-400 ml-2">
-                                (Imp: {variant.impressions_count}, Conv: {variant.conversions_count ?? 0}, Rate: {variant.conversion_rate?.toFixed(1) ?? 'N/A'}%)
-                              </span>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p class="text-sm text-slate-500 dark:text-slate-400 italic">No variants defined for this experiment yet.</p>
-                    )}
-                  </div>
-                  
-                  {/* Pie Chart Section */}
-                  {exp.variants && exp.variants.filter(v => typeof v.conversion_rate === 'number').length > 0 ? (
-                    <div class="mt-6 pt-6 border-t border-dashed border-slate-300 dark:border-slate-600">
-                      <h5 class="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-3 text-center">Variant Conversion Rates</h5>
-                      <div 
-                        class="chart-container relative mx-auto"
-                        style="max-width: 350px; height: 350px;" 
-                        data-experiment-id={exp.id}
-                        data-variants={JSON.stringify(exp.variants.map(v => ({ name: v.name, rate: v.conversion_rate ?? 0, impressions: v.impressions_count ?? 0, conversions: v.conversions_count ?? 0 })) )}
-                      >
-                        {/* Canvas will be injected here by client-side script, or a message if no data */}
-                        <canvas id={`chart-${exp.id}`}></canvas> 
+                  {/* SECTION 1: Just the core details, always visible unless editing */}
+                  <div class={`experiment-display-section-${exp.id}`}>
+                    <div class="flex justify-between items-start mb-2">
+                      <div>
+                        <h4 class="text-xl font-semibold text-blue-600 dark:text-blue-400">{exp.name}</h4>
+                        <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">ID: {exp.id}</p>
                       </div>
+                      <span class={`px-3 py-1 text-xs font-medium rounded-full ${exp.is_active ? 'bg-green-100 text-green-800 dark:bg-green-700/30 dark:text-green-300' : 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300'}`}>
+                        {exp.is_active ? 'Active' : 'Inactive'}
+                      </span>
                     </div>
-                  ) : (
-                    <div class="mt-6 pt-6 border-t border-dashed border-slate-300 dark:border-slate-600">
-                      <h5 class="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-3 text-center">Variant Conversion Rates</h5>
-                      <p class="text-sm text-slate-400 dark:text-slate-500 text-center italic">No conversion data available to display chart.</p>
-                    </div>
-                  )}
-
-                  <div class="flex items-center justify-end space-x-3 mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
-                    <button type="button" class="text-sm bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 edit-experiment-btn" data-experiment-id={exp.id}>Edit Details</button>
-                    <button 
-                      type="button" 
-                      class="text-sm bg-purple-500 hover:bg-purple-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 manage-variants-btn"
-                      data-experiment-id={exp.id}
-                      aria-expanded={exp.managingVariants ? 'true' : 'false'}
-                      aria-controls={`manage-variants-section-${exp.id}`}
-                    >
-                      {exp.managingVariants ? 'Hide Variants' : 'Manage Variants'}
-                    </button>
-                    <button type="button" class="text-sm bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 delete-experiment-btn" data-experiment-id={exp.id}>Delete Exp.</button>
+                    <p class="text-sm text-slate-600 dark:text-slate-300 mb-3">{exp.description || 'No description provided.'}</p>
                   </div>
 
-                  {/* Variant Management Section - Toggled by button */}
+                  {/* SECTION 2: The form for editing core details, hidden by default */}
+                  <div class={`experiment-edit-form-section-${exp.id} hidden`}>
+                    <h4 class="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-4">Edit Experiment: <span class="italic">{exp.name}</span></h4>
+                    <form method="POST" action={Astro.url.pathname} class="space-y-4">
+                      <input type="hidden" name="_action" value="update_experiment" />
+                      <input type="hidden" name="experiment_id" value={exp.id} />
+                      <div>
+                        <label for={`edit_experiment_name-${exp.id}`} class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                          Experiment Name <span class="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          id={`edit_experiment_name-${exp.id}`}
+                          name="experiment_name"
+                          required
+                          value={exp.name}
+                          class="shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md w-full py-2.5 px-3 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400 dark:placeholder-slate-500"
+                        />
+                      </div>
+                      <div>
+                        <label for={`edit_experiment_description-${exp.id}`} class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                          Description (Optional)
+                        </label>
+                        <textarea
+                          id={`edit_experiment_description-${exp.id}`}
+                          name="experiment_description"
+                          rows="3"
+                          class="shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md w-full py-2.5 px-3 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400 dark:placeholder-slate-500"
+                        >{exp.description}</textarea>
+                      </div>
+                      <div class="flex items-center">
+                        <input
+                          id={`edit_experiment_is_active-${exp.id}`}
+                          name="experiment_is_active"
+                          type="checkbox"
+                          checked={exp.is_active}
+                          class="h-4 w-4 text-blue-600 border-slate-300 dark:border-slate-600 rounded focus:ring-blue-500 bg-white dark:bg-slate-700 dark:checked:bg-blue-500"
+                        />
+                        <label for={`edit_experiment_is_active-${exp.id}`} class="ml-2 block text-sm text-slate-700 dark:text-slate-300">
+                          Activate this experiment
+                        </label>
+                      </div>
+                      <div class="flex justify-end space-x-3">
+                        <button
+                          type="button"
+                          class="cancel-edit-experiment-btn text-sm bg-slate-500 hover:bg-slate-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150"
+                          data-experiment-id={exp.id}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          class="text-sm bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-md shadow-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition duration-150 ease-in-out"
+                        >
+                          Save Changes
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+
+                  {/* SECTION 3: Variants, Chart, and Main Actions, visible unless editing */}
+                  <div class={`experiment-actions-section-${exp.id}`}>
+                    <div class="mt-4 pt-4 border-t border-dashed border-slate-300 dark:border-slate-600">
+                        <h5 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">Current Variants ({exp.variants?.length || 0}):</h5>
+                        {exp.variants && exp.variants.length > 0 ? (
+                          <ul class="list-disc list-inside pl-1 space-y-0.5 text-sm text-slate-500 dark:text-slate-400">
+                            {exp.variants.map(variant => (
+                              <li key={variant.id}>
+                                {variant.name} <span class="text-xs text-slate-400">(ID: {variant.id})</span>
+                                {typeof variant.impressions_count === 'number' && (
+                                  <span class="text-xs text-slate-400 ml-2">
+                                    (Imp: {variant.impressions_count}, Conv: {variant.conversions_count ?? 0}, Rate: {variant.conversion_rate?.toFixed(1) ?? 'N/A'}%)
+                                  </span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p class="text-sm text-slate-500 dark:text-slate-400 italic">No variants defined for this experiment yet.</p>
+                        )}
+                    </div>
+                    
+                    {/* Pie Chart Section */}
+                    {exp.variants && exp.variants.filter(v => typeof v.conversion_rate === 'number').length > 0 ? (
+                      <div class="mt-6 pt-6 border-t border-dashed border-slate-300 dark:border-slate-600">
+                        <h5 class="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-3 text-center">Variant Conversion Rates</h5>
+                        <div 
+                          class="chart-container relative mx-auto"
+                          style="max-width: 350px; height: 350px;" 
+                          data-experiment-id={exp.id}
+                          data-variants={JSON.stringify(exp.variants.map(v => ({ name: v.name, rate: v.conversion_rate ?? 0, impressions: v.impressions_count ?? 0, conversions: v.conversions_count ?? 0 })) ) }
+                        >
+                          <canvas id={`chart-${exp.id}`}></canvas> 
+                        </div>
+                      </div>
+                    ) : (
+                      <div class="mt-6 pt-6 border-t border-dashed border-slate-300 dark:border-slate-600">
+                        <h5 class="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-3 text-center">Variant Conversion Rates</h5>
+                        <p class="text-sm text-slate-400 dark:text-slate-500 text-center italic">No conversion data available to display chart.</p>
+                      </div>
+                    )}
+
+                    <div class="flex items-center justify-end space-x-3 mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
+                      <button type="button" class="text-sm bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 edit-experiment-btn" data-experiment-id={exp.id}>Edit Details</button>
+                      <button 
+                        type="button" 
+                        class="text-sm bg-purple-500 hover:bg-purple-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 manage-variants-btn"
+                        data-experiment-id={exp.id}
+                        aria-expanded={exp.managingVariants ? 'true' : 'false'}
+                        aria-controls={`manage-variants-section-${exp.id}`}
+                      >
+                        {exp.managingVariants ? 'Hide Variants' : 'Manage Variants'}
+                      </button>
+                      <button type="button" class="text-sm bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 delete-experiment-btn" data-experiment-id={exp.id}>Delete Exp.</button>
+                    </div>
+                  </div>
+
+                  {/* SECTION 4: Form for managing/adding variants, toggled independently */}
                   <div 
                     id={`manage-variants-section-${exp.id}`}
                     class={`mt-6 pt-6 border-t border-dashed border-slate-300 dark:border-slate-600 ${!exp.managingVariants ? 'hidden' : ''}`}
                   >
                     <h4 class="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-4">Manage Variants for: <span class="italic">{exp.name}</span></h4>
-                    
-                    {/* List Existing Variants for this experiment */}
+                    {/* ... existing variant management form and list ... */}
                     {exp.variants && exp.variants.length > 0 ? (
                       <div class="mb-6">
                         <h5 class="text-md font-medium text-slate-600 dark:text-slate-300 mb-2">Existing Variants:</h5>
@@ -559,8 +660,6 @@ if (Astro.request.method === 'GET' || abTestError || error) {
                     ) : (
                       <p class="text-sm text-slate-500 dark:text-slate-400 italic mb-4">No variants currently exist for this experiment.</p>
                     )}
-
-                    {/* Form to Add New Variant */}
                     <h5 class="text-md font-medium text-slate-600 dark:text-slate-300 mb-3 pt-4 border-t border-slate-200 dark:border-slate-700">Add New Variant</h5>
                     <form method="POST" action={Astro.url.pathname} class="space-y-4 p-4 bg-slate-50 dark:bg-slate-800/30 rounded-lg shadow">
                       <input type="hidden" name="_action" value="create_variant" />
@@ -704,6 +803,32 @@ if (Astro.request.method === 'GET' || abTestError || error) {
           buttonForSection.textContent = 'Hide Variants';
         }
       }
+    });
+
+    // Event listeners for Edit Experiment buttons
+    document.querySelectorAll('.edit-experiment-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const experimentId = btn.dataset.experimentId;
+        document.querySelector(`.experiment-display-section-${experimentId}`).classList.add('hidden');
+        document.querySelector(`.experiment-actions-section-${experimentId}`).classList.add('hidden');
+        const editFormSection = document.querySelector(`.experiment-edit-form-section-${experimentId}`);
+        editFormSection.classList.remove('hidden');
+        // Focus on the first input field in the edit form
+        const firstInput = editFormSection.querySelector('input[name="experiment_name"]');
+        if (firstInput) {
+          firstInput.focus();
+        }
+      });
+    });
+
+    // Event listeners for Cancel Edit Experiment buttons
+    document.querySelectorAll('.cancel-edit-experiment-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const experimentId = btn.dataset.experimentId;
+        document.querySelector(`.experiment-display-section-${experimentId}`).classList.remove('hidden');
+        document.querySelector(`.experiment-actions-section-${experimentId}`).classList.remove('hidden');
+        document.querySelector(`.experiment-edit-form-section-${experimentId}`).classList.add('hidden');
+      });
     });
 
     // Chart.js rendering logic
