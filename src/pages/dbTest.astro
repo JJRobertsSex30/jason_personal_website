@@ -27,6 +27,7 @@ export interface Variant {
   updated_at: string; // Timestamptz
   impressions_count?: number;
   conversions_count?: number;
+  conversion_rate?: number; 
 }
 
 export interface Experiment {
@@ -132,14 +133,11 @@ if (Astro.request.method === 'POST') {
           console.error('Supabase create variant error:', createVariantError);
           throw new Error(createVariantError.message || 'Failed to save variant to the database.');
         }
-
-        // Redirect, potentially with a URL hash to keep the variant section open
-        // For now, simple redirect, user will need to re-open manage variants section
         return Astro.redirect(Astro.url.pathname + `?openExperiment=${experimentId}`, 303);
 
       } catch (e: unknown) {
         if (e instanceof Error) {
-          abTestError = e.message; // This error will be displayed in the A/B test section
+          abTestError = e.message; 
         } else {
           abTestError = 'An unexpected error occurred while creating the variant.';
         }
@@ -148,13 +146,11 @@ if (Astro.request.method === 'POST') {
     }
 
   } else { 
-    // Existing login logic (assuming any POST not 'create_experiment' or 'create_variant' is a login attempt for this page)
     try {
       const email = formData.get('email')?.toString();
       const password = formData.get('password')?.toString();
 
       if (!email || !password) {
-         // If no action and no email/password, it's an invalid submission to the login form.
         throw new Error('Email and password are required for login.');
       }
 
@@ -168,112 +164,154 @@ if (Astro.request.method === 'POST') {
       }
 
       if (data.session) {
-        session = data.session; // Update session state
-        // Fetch user profiles immediately after successful login
+        session = data.session;
         const { data: profilesData, error: profilesError } = await supabase
           .from('user_profiles')
           .select('*');
         
         if (profilesError) {
           console.error("Error fetching user profiles post-login:", profilesError);
-          // Don't throw, allow login to proceed but profiles might be missing
           error = "Logged in, but failed to fetch user profiles: " + profilesError.message;
         } else {
           userProfiles = profilesData as UserProfile[];
         }
-        // On successful login, also attempt to fetch experiments
-        // This ensures the A/B test section is populated immediately
-        // Duplicates GET logic slightly but ensures data is fresh post-login action
-        const { data: experimentsData, error: experimentsDbError } = await supabase
-          .from('experiments')
-          .select('id, name, description, is_active, created_at, updated_at, variants (id, name, description, created_at)')
-          .order('created_at', { ascending: false });
-
-        if (experimentsDbError) {
-            console.error('Supabase fetch experiments error post-login:', experimentsDbError);
-            abTestError = "Logged in, but failed to fetch A/B test experiments: " + experimentsDbError.message;
-        } else {
-            experiments = experimentsData as Experiment[];
-        }
-
+        // POST login logic will now also fetch experiments with stats, so GET logic will be simpler
       } else {
         throw new Error('Login failed. Please check your credentials.');
       }
     } catch (e: unknown) {
       if (e instanceof Error) {
-        error = e.message; // This is the general page error for login
+        error = e.message;
       } else {
         error = 'An unexpected error occurred during login.';
       }
       console.error('Login processing error:', e);
       session = null; 
       userProfiles = null;
-      experiments = null; // Clear experiments if login fails
+      experiments = null;
     }
   }
 } 
 
-// This block now runs for GET requests, or after a POST if no redirect occurred (e.g., due to an error).
-if (Astro.request.method === 'GET' || abTestError || error) { // also run if errors occurred during POST
-  const { data: { session: currentSession } } = await supabase.auth.getSession();
-  // If session was already set by a successful login POST, don't overwrite it with null if getSession is slow
-  if (currentSession) session = currentSession;
+// Common function to fetch experiments and their stats
+async function fetchExperimentsWithStats(currentSession: Session | null, openExperimentIdParam: string | null) {
+  if (!currentSession) return null;
 
+  let fetchedExperiments: Experiment[] = [];
+  try {
+    const { data: experimentsData, error: experimentsDbError } = await supabase
+      .from('experiments')
+      .select('*, variants(*)') // Fetch all columns for variants initially
+      .order('created_at', { ascending: false });
+
+    if (experimentsDbError) {
+      console.error('Supabase fetch experiments error:', experimentsDbError);
+      throw new Error(experimentsDbError.message || 'Failed to retrieve experiments from database.');
+    }
+
+    if (experimentsData) {
+      for (const exp of experimentsData) {
+        let variantsWithStats: Variant[] = [];
+        if (exp.variants && exp.variants.length > 0) {
+          for (const variant of exp.variants) {
+            const { count: impressionsCount, error: impError } = await supabase
+              .from('impressions')
+              .select('*', { count: 'exact', head: true })
+              .eq('variant_id', variant.id)
+              .eq('experiment_id', exp.id);
+
+            const { count: conversionsCount, error: convError } = await supabase
+              .from('conversions')
+              .select('*', { count: 'exact', head: true })
+              .eq('variant_id', variant.id)
+              .eq('experiment_id', exp.id);
+
+            if (impError) console.error(`Error fetching impressions for variant ${variant.id}:`, impError.message);
+            if (convError) console.error(`Error fetching conversions for variant ${variant.id}:`, convError.message);
+            
+            const impressions = impressionsCount ?? 0;
+            const conversions = conversionsCount ?? 0;
+            const conversionRate = impressions > 0 ? (conversions / impressions) * 100 : 0;
+
+            variantsWithStats.push({
+              ...variant,
+              impressions_count: impressions,
+              conversions_count: conversions,
+              conversion_rate: parseFloat(conversionRate.toFixed(2)) // Store as number with 2 decimal places
+            });
+          }
+        }
+        fetchedExperiments.push({
+          ...exp,
+          variants: variantsWithStats,
+          managingVariants: exp.id === openExperimentIdParam,
+        });
+      }
+    }
+    return fetchedExperiments;
+  } catch (e: unknown) {
+    if (e instanceof Error) {
+      abTestError = e.message; // Set module-level abTestError
+    } else {
+      abTestError = 'An unexpected error occurred while fetching A/B test experiments with stats.';
+    }
+    console.error('A/B Test experiment fetch with stats error:', e);
+    return []; // Return empty array on error
+  }
+}
+
+
+// Data fetching for GET requests or if errors occurred during POST
+if (Astro.request.method === 'GET' || abTestError || error) {
+  const { data: { session: currentSessionFromSupabase } } = await supabase.auth.getSession();
+  // Preserve session if already set by a successful login POST that didn't have other errors
+  if (currentSessionFromSupabase && !session) {
+    session = currentSessionFromSupabase;
+  }
+  
   const openExperimentId = Astro.url.searchParams.get('openExperiment');
 
   if (session) {
-    // Fetch user profiles if not already fetched (e.g. by login POST)
-    if (!userProfiles && !error) { // Check error to avoid re-fetching if login failed to get profiles
-        try {
+    // Fetch user profiles if not already fetched by a successful login POST
+    if (!userProfiles && !error) {
+      try {
         const { data: profilesData, error: profilesError } = await supabase
-            .from('user_profiles')
-            .select('*'); 
-        
-        if (profilesError) {
-            throw profilesError;
-        }
+          .from('user_profiles')
+          .select('*'); 
+        if (profilesError) throw profilesError;
         userProfiles = profilesData as UserProfile[];
-        } catch (e: unknown) {
-        if (e instanceof Error) {
-            error = `Failed to fetch profile data: ${e.message}`;
-        } else {
-            error = 'An unexpected error occurred while fetching profile data.';
-        }
+      } catch (e: unknown) {
+        if (e instanceof Error) { error = `Failed to fetch profile data: ${e.message}`; } 
+        else { error = 'An unexpected error occurred while fetching profile data.'; }
         console.error('Initial profile fetch error:', e);
         userProfiles = null;
-        }
+      }
     }
 
-    // Fetch A/B test experiments if not already fetched (e.g. by login POST or create_experiment error handling)
-    if (!experiments || openExperimentId || abTestError) { // Re-fetch if opening a specific one or error occurred
-        try {
-        const { data: experimentsData, error: experimentsDbError } = await supabase
-            .from('experiments')
-            .select('id, name, description, is_active, created_at, updated_at, variants (id, name, description, created_at)')
-            .order('created_at', { ascending: false });
-
-        if (experimentsDbError) {
-            console.error('Supabase fetch experiments error:', experimentsDbError);
-            throw new Error(experimentsDbError.message || 'Failed to retrieve experiments from database.');
-        }
-        experiments = (experimentsData as Experiment[]).map(exp => ({
-          ...exp,
-          managingVariants: exp.id === openExperimentId // Set managingVariants based on URL param
-        }));
-        } catch (e: unknown) {
-        if (e instanceof Error) {
-            abTestError = e.message; 
-        } else {
-            abTestError = 'An unexpected error occurred while fetching A/B test experiments.';
-        }
-        console.error('A/B Test experiment fetch error:', e);
-        experiments = []; 
-        }
+    // Fetch A/B test experiments with stats
+    // This will run on GET, or if a POST had an error, or if experiments weren't fetched by login.
+    // The fetchExperimentsWithStats function handles its own error display via abTestError.
+    const fetchedExperiments = await fetchExperimentsWithStats(session, openExperimentId);
+    if (fetchedExperiments) { // fetchExperimentsWithStats returns null if no session
+        experiments = fetchedExperiments;
+    } else if (!session) { // If session became null somehow (e.g. expired during complex POST/GET)
+        experiments = null;
+        userProfiles = null;
     }
+
+
   } else {
-    // If no session, clear any potentially stale data from a previous session state
     userProfiles = null;
     experiments = null;
+  }
+} else if (Astro.request.method === 'POST' && session && !abTestError && !error) {
+  // If it was a POST, session is valid, and no errors occurred during specific POST actions (like create_experiment)
+  // then we should fetch/refresh experiments data now, as it might have changed.
+  // This handles the case after a successful experiment/variant creation.
+  const openExperimentId = Astro.url.searchParams.get('openExperiment'); // Relevant after creating a variant
+  const fetchedExperiments = await fetchExperimentsWithStats(session, openExperimentId);
+  if (fetchedExperiments) {
+      experiments = fetchedExperiments;
   }
 }
 ---
@@ -439,15 +477,43 @@ if (Astro.request.method === 'GET' || abTestError || error) { // also run if err
                     {exp.variants && exp.variants.length > 0 ? (
                       <ul class="list-disc list-inside pl-1 space-y-0.5 text-sm text-slate-500 dark:text-slate-400">
                         {exp.variants.map(variant => (
-                          <li key={variant.id}>{variant.name} <span class="text-xs text-slate-400">(ID: {variant.id})</span></li>
+                          <li key={variant.id}>
+                            {variant.name} <span class="text-xs text-slate-400">(ID: {variant.id})</span>
+                            {typeof variant.impressions_count === 'number' && (
+                              <span class="text-xs text-slate-400 ml-2">
+                                (Imp: {variant.impressions_count}, Conv: {variant.conversions_count ?? 0}, Rate: {variant.conversion_rate?.toFixed(1) ?? 'N/A'}%)
+                              </span>
+                            )}
+                          </li>
                         ))}
                       </ul>
                     ) : (
                       <p class="text-sm text-slate-500 dark:text-slate-400 italic">No variants defined for this experiment yet.</p>
                     )}
                   </div>
+                  
+                  {/* Pie Chart Section */}
+                  {exp.variants && exp.variants.filter(v => typeof v.conversion_rate === 'number').length > 0 ? (
+                    <div class="mt-6 pt-6 border-t border-dashed border-slate-300 dark:border-slate-600">
+                      <h5 class="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-3 text-center">Variant Conversion Rates</h5>
+                      <div 
+                        class="chart-container relative mx-auto"
+                        style="max-width: 350px; height: 350px;" 
+                        data-experiment-id={exp.id}
+                        data-variants={JSON.stringify(exp.variants.map(v => ({ name: v.name, rate: v.conversion_rate ?? 0, impressions: v.impressions_count ?? 0, conversions: v.conversions_count ?? 0 })) )}
+                      >
+                        {/* Canvas will be injected here by client-side script, or a message if no data */}
+                        <canvas id={`chart-${exp.id}`}></canvas> 
+                      </div>
+                    </div>
+                  ) : (
+                    <div class="mt-6 pt-6 border-t border-dashed border-slate-300 dark:border-slate-600">
+                      <h5 class="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-3 text-center">Variant Conversion Rates</h5>
+                      <p class="text-sm text-slate-400 dark:text-slate-500 text-center italic">No conversion data available to display chart.</p>
+                    </div>
+                  )}
 
-                  <div class="flex items-center justify-end space-x-3 mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <div class="flex items-center justify-end space-x-3 mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
                     <button type="button" class="text-sm bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 edit-experiment-btn" data-experiment-id={exp.id}>Edit Details</button>
                     <button 
                       type="button" 
@@ -524,7 +590,7 @@ if (Astro.request.method === 'GET' || abTestError || error) { // also run if err
               ))}
             </div>
           ) : (
-            (!abTestError && experiments && experiments.length === 0) && ( // Show only if no error and experiments array is present but empty
+            (!abTestError && experiments && experiments.length === 0) && ( 
                 <div class="text-center py-8 px-4 bg-white dark:bg-slate-800 rounded-lg shadow-md">
                 <svg class="mx-auto h-10 w-10 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                     <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
@@ -602,8 +668,6 @@ if (Astro.request.method === 'GET' || abTestError || error) { // also run if err
           btn.setAttribute('aria-expanded', !isExpanded + '');
           btn.textContent = !isExpanded ? 'Hide Variants' : 'Manage Variants';
           
-          // If opening a section, construct URL and push state to allow refresh/bookmarking
-          // If closing, remove the specific openExperiment from URL or go to base URL
           if (!isExpanded) {
             const currentUrl = new URL(window.location.href);
             currentUrl.searchParams.set('openExperiment', experimentId);
@@ -611,16 +675,12 @@ if (Astro.request.method === 'GET' || abTestError || error) { // also run if err
           } else {
             const currentUrl = new URL(window.location.href);
             currentUrl.searchParams.delete('openExperiment');
-            // If you want to also remove other params or reset to base path:
-            // window.history.pushState({ path: currentUrl.pathname }, '', currentUrl.pathname);
-            // For now, just removing the specific param to allow other potential params to persist
             window.history.pushState({ path: currentUrl.href }, '', currentUrl.href);
           }
         }
       });
     });
 
-    // Handle back/forward navigation for open sections
     window.addEventListener('popstate', () => {
       const params = new URLSearchParams(window.location.search);
       const openExperimentId = params.get('openExperiment');
@@ -646,13 +706,99 @@ if (Astro.request.method === 'GET' || abTestError || error) { // also run if err
       }
     });
 
-    // On initial load, if URL has openExperiment, ensure that section is visible
-    // This is now handled by server-side rendering `exp.managingVariants`
-    // const initialParams = new URLSearchParams(window.location.search);
-    // const initialOpenExperimentId = initialParams.get('openExperiment');
-    // if (initialOpenExperimentId) {
-    //   const btn = document.querySelector(`.manage-variants-btn[data-experiment-id="${initialOpenExperimentId}"]`);
-    //   if (btn) btn.click(); // Simulate a click to open it via the event listener logic
-    // }
+    // Chart.js rendering logic
+    const chartContainers = document.querySelectorAll('.chart-container');
+    if (chartContainers.length > 0) {
+      import('chart.js/auto').then(({default: Chart}) => {
+        chartContainers.forEach(container => {
+          const experimentId = container.dataset.experimentId;
+          const canvas = container.querySelector(`canvas#chart-${experimentId}`);
+          if (!canvas) {
+            console.error(`Canvas not found for experiment ${experimentId}`);
+            return;
+          }
+          
+          let variantsData = [];
+          try {
+            variantsData = JSON.parse(container.dataset.variants || '[]');
+          } catch (e) {
+            console.error('Failed to parse variants data for chart:', e);
+            return;
+          }
+
+          if (variantsData.length > 0 && variantsData.some(v => typeof v.rate === 'number' && v.rate > 0)) {
+            const labels = variantsData.map(v => `${v.name} (Imp: ${v.impressions}, Conv: ${v.conversions}, Rate: ${v.rate.toFixed(1)}%)`);
+            const data = variantsData.map(v => v.rate);
+            
+            // Generate distinct, appealing colors for pie chart slices
+            const N = variantsData.length;
+            const baseColors = [
+              { r: 54, g: 162, b: 235 }, // blue
+              { r: 255, g: 99, b: 132 }, // red
+              { r: 255, g: 206, b: 86 }, // yellow
+              { r: 75, g: 192, b: 192 }, // green
+              { r: 153, g: 102, b: 255 },// purple
+              { r: 255, g: 159, b: 64 }  // orange
+            ];
+            const backgroundColors = [];
+            const borderColors = [];
+
+            for (let i = 0; i < N; i++) {
+              const color = baseColors[i % baseColors.length];
+              backgroundColors.push(`rgba(${color.r}, ${color.g}, ${color.b}, 0.6)`);
+              borderColors.push(`rgba(${color.r}, ${color.g}, ${color.b}, 1)`);
+            }
+
+            new Chart(canvas, {
+              type: 'pie',
+              data: {
+                labels: labels,
+                datasets: [{
+                  label: 'Conversion Rate (%)',
+                  data: data,
+                  backgroundColor: backgroundColors,
+                  borderColor: borderColors,
+                  borderWidth: 1
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'top',
+                    labels: {
+                      boxWidth: 20,
+                      font: {
+                        size: 10
+                      }
+                    }
+                  },
+                  tooltip: {
+                    callbacks: {
+                      label: function(context) {
+                        let label = context.label || '';
+                        if (label) {
+                          label += ': ';
+                        }
+                        if (context.parsed !== null) {
+                          label += context.parsed.toFixed(2) + '%';
+                        }
+                        return label;
+                      }
+                    }
+                  }
+                }
+              }
+            });
+          } else {
+             // console.log(`No positive conversion rate data for experiment ${experimentId}, chart not rendered.`);
+             // The Astro template already handles the message for no data.
+          }
+        });
+      }).catch(error => {
+        console.error('Failed to load Chart.js dynamically:', error);
+      });
+    }
   });
 </script> 
