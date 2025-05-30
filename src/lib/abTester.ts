@@ -1,3 +1,5 @@
+console.log('[abTester.ts] Module loading/starting...'); // VERY TOP LEVEL LOG
+
 import { supabase } from './supabaseClient'; // Import your Supabase client
 
 // Updated interface to reflect variant structure from DB
@@ -10,6 +12,24 @@ export interface ABVariant {
   subheadline: string; // Expected to be in config_json
   // raw_config_json for other potential testable elements
   raw_config_json?: Record<string, unknown> | null; 
+}
+
+// Type for Supabase impression insert payload
+interface ImpressionPayload {
+  variant_id: string;
+  user_identifier: string;
+  experiment_id: string;
+  session_identifier?: string | null;
+}
+
+// Type for Supabase conversion insert payload
+interface ConversionPayload {
+  variant_id: string;
+  experiment_id: string;
+  user_identifier: string;
+  conversion_type: string;
+  details?: Record<string, unknown> | null;
+  session_identifier?: string | null;
 }
 
 // Helper to safely get properties from config_json or provide defaults
@@ -75,125 +95,152 @@ async function fetchExperimentVariants(experimentName: string): Promise<ABVarian
   });
 }
 
-// Simplified: always uses localStorage or generates a new UUID if not in browser.
-function generateUserIdentifier(): string {
-  if (typeof localStorage !== 'undefined') {
-    let userId = localStorage.getItem('ab_user_identifier');
-    if (!userId) {
-      userId = crypto.randomUUID();
-      localStorage.setItem('ab_user_identifier', userId);
-    }
-    return userId;
+// This function should now primarily run on the client for consistent ID generation.
+function getClientUserIdentifier(): string {
+  if (typeof localStorage === 'undefined') {
+    // This case should ideally be avoided for client-specific ID generation.
+    console.warn("Client user identifier requested in non-browser environment.");
+    return 'client_anon_' + crypto.randomUUID(); 
   }
-  // Fallback for non-browser environments (e.g., during SSR if getVariant is called server-side without localStorage access)
-  return 'server_anon_' + crypto.randomUUID(); 
+  let userId = localStorage.getItem('ab_user_identifier');
+  if (!userId) {
+    userId = crypto.randomUUID();
+    localStorage.setItem('ab_user_identifier', userId);
+  }
+  return userId;
 }
 
-export async function getVariant(experimentName: string): Promise<ABVariant> {
-  const userIdentifier = generateUserIdentifier();
-  const localStorageKey = `ab_variant_${experimentName}`; // e.g., ab_variant_heroHeadlineTest
-  let chosenVariant: ABVariant | undefined;
+function getClientSessionIdentifier(): string | null {
+  if (typeof sessionStorage === 'undefined') {
+    console.warn("Client session identifier requested in non-browser environment.");
+    return null;
+  }
+  let sessionId = sessionStorage.getItem('ab_session_identifier');
+  if (!sessionId) {
+    sessionId = crypto.randomUUID();
+    sessionStorage.setItem('ab_session_identifier', sessionId);
+  }
+  return sessionId;
+}
 
-  // Fetch variants dynamically for the given experiment name
+// Determines variant (can be called SSR or client-side for re-evaluation if needed)
+// Does NOT log impression itself anymore.
+export async function getVariant(experimentName: string): Promise<ABVariant> {
   const activeVariants = await fetchExperimentVariants(experimentName);
 
   if (!activeVariants || activeVariants.length === 0) {
     console.error(`A/B Test: No active variants for experiment '${experimentName}'. Cannot proceed.`);
-    // Return a hardcoded fallback variant to prevent site breakage
     return { 
-      id: 'fallback_no_variants', 
-      name: 'Fallback', 
-      experiment_id: 'unknown',
+      id: 'fallback_no_variants', name: 'Fallback', experiment_id: 'unknown',
       headline: 'Error: Experiment Not Found', 
-      subheadline: 'Please check A/B test configuration.',
-      raw_config_json: {}
+      subheadline: 'Please check A/B test configuration.', raw_config_json: {}
     };
   }
 
+  let chosenVariant: ABVariant | undefined;
+  // Variant selection logic (localStorage first, then random)
+  // This part primarily makes sense on the client, but can run on server with no localStorage effect.
   if (typeof localStorage !== 'undefined') {
+    const localStorageKey = `ab_variant_${experimentName}`;
     const storedVariantId = localStorage.getItem(localStorageKey);
     if (storedVariantId) {
       chosenVariant = activeVariants.find(v => v.id === storedVariantId);
-      if (chosenVariant) {
-        console.log(`A/B Test: User '${userIdentifier}' already assigned to variant '${chosenVariant.name}' (ID: ${chosenVariant.id}) for experiment '${experimentName}' from localStorage.`);
-      } else {
-        // Stored variant ID no longer exists or is invalid for the current set of active variants
-        localStorage.removeItem(localStorageKey); // Clear invalid stored ID
-        console.warn(`A/B Test: Stored variant ID '${storedVariantId}' for experiment '${experimentName}' is invalid or no longer active. Will assign a new one.`);
+      if (!chosenVariant) {
+        localStorage.removeItem(localStorageKey); // Clean up invalid/outdated stored variant
       }
     }
-  }
-
-  if (!chosenVariant) {
-    const randomIndex = Math.floor(Math.random() * activeVariants.length);
-    chosenVariant = activeVariants[randomIndex];
-
-    if (typeof localStorage !== 'undefined' && chosenVariant) {
+    if (!chosenVariant) {
+      const randomIndex = Math.floor(Math.random() * activeVariants.length);
+      chosenVariant = activeVariants[randomIndex];
       localStorage.setItem(localStorageKey, chosenVariant.id);
-      console.log(`A/B Test: User '${userIdentifier}' newly assigned to variant '${chosenVariant.name}' (ID: ${chosenVariant.id}) for experiment '${experimentName}'. Stored in localStorage.`);
-    }
-  }
-  
-  // This should theoretically not be hit if activeVariants has items, but as a safeguard:
-  if (!chosenVariant) {
-    console.warn(`A/B Test: Could not determine variant for experiment '${experimentName}' after fetch and random assignment. Using first available as default.`);
-    chosenVariant = activeVariants[0]; 
-  }
-
-  // Log impression
-  if (chosenVariant && chosenVariant.id !== 'fallback_no_variants') {
-    console.log(`A/B Test IMPRESSION: Experiment '${experimentName}', Variant ID: '${chosenVariant.id}', Name: '${chosenVariant.name}', User: '${userIdentifier}'`);
-    const { error: impressionError } = await supabase
-      .from('impressions')
-      .insert({
-        variant_id: chosenVariant.id, // This is the actual UUID from the DB
-        user_identifier: userIdentifier,
-        experiment_id: chosenVariant.experiment_id // Log experiment_id with impression
-      });
-
-    if (impressionError) {
-      console.error('Supabase error logging impression:', impressionError.message);
     }
   } else {
-     console.error("A/B Test: chosenVariant is undefined or fallback, cannot log impression.");
+    // SSR: Just pick randomly, no localStorage stickiness applied here.
+    const randomIndex = Math.floor(Math.random() * activeVariants.length);
+    chosenVariant = activeVariants[randomIndex];
   }
   
+  if (!chosenVariant) { // Should be extremely rare if activeVariants is populated
+    chosenVariant = activeVariants[0];
+  }
   return chosenVariant;
 }
 
+// NEW: Client-side only impression logger
+export async function logClientImpression(variant: ABVariant | null, experimentName: string) {
+  if (typeof window === 'undefined' || !variant || variant.id === 'fallback_no_variants') {
+    // console.log("Impression logging skipped (not client-side or invalid variant).");
+    return; // Only run on client and if variant is valid
+  }
+
+  const userIdentifier = getClientUserIdentifier();
+  const sessionIdentifier = getClientSessionIdentifier();
+  const impressionKey = `impression_logged_${experimentName}_${variant.id}_${sessionIdentifier || 'no_session'}`;
+
+  // Prevent logging multiple impressions for the same variant in the same session
+  if (sessionStorage.getItem(impressionKey)) {
+    // console.log(`Impression for ${variant.name} in session ${sessionIdentifier} already logged.`);
+    return;
+  }
+
+  console.log(`A/B Test CLIENT IMPRESSION: Experiment '${experimentName}', Variant ID: '${variant.id}', Name: '${variant.name}', User: '${userIdentifier}', Session: '${sessionIdentifier}'`);
+  
+  const impressionData: ImpressionPayload = {
+    variant_id: variant.id,
+    user_identifier: userIdentifier,
+    experiment_id: variant.experiment_id,
+  };
+  if (sessionIdentifier) {
+    impressionData.session_identifier = sessionIdentifier;
+  }
+
+  const { error: impressionError } = await supabase
+    .from('impressions')
+    .insert(impressionData);
+
+  if (impressionError) {
+    console.error('Supabase error logging client impression:', impressionError.message);
+  } else {
+    sessionStorage.setItem(impressionKey, 'true'); // Mark as logged for this session
+  }
+}
+
 export async function trackConversion(
-  experimentName: string, // e.g. "heroHeadlineTest"
-  variantId: string,      // The actual UUID of the variant from the DB
+  experimentName: string, 
+  variantId: string, 
   details?: Record<string, unknown>
 ) {
-  const userIdentifier = generateUserIdentifier();
-  console.log(`A/B Test CONVERSION: Experiment '${experimentName}', Variant ID: '${variantId}', User: '${userIdentifier}', Details:`, details);
+  const userIdentifier = getClientUserIdentifier();
+  const sessionIdentifier = getClientSessionIdentifier();
   
-  // We need experiment_id to log conversion. The variantId should belong to an experiment.
-  // We can fetch the experiment_id using the variantId if not passed directly.
-  let associatedExperimentId: string | null = null;
-
+  console.log(`A/B Test CLIENT CONVERSION: Experiment '${experimentName}', Variant ID: '${variantId}', User: '${userIdentifier}', Session: '${sessionIdentifier}', Details:`, details);
+  
   const { data: variantData, error: variantError } = await supabase
     .from('variants')
     .select('experiment_id')
     .eq('id', variantId)
     .single();
 
-  if (variantError || !variantData) {
-    console.error(`Supabase: Could not find experiment_id for variant_id: ${variantId}. Conversion not logged. Error:`, variantError?.message);
+  if (variantError || !variantData || !variantData.experiment_id) {
+    console.error(`Supabase: Could not find valid experiment_id for variant_id: ${variantId}. Conversion not logged. Error:`, variantError?.message);
     return;
   }
-  associatedExperimentId = variantData.experiment_id;
+  const associatedExperimentId: string = variantData.experiment_id;
+
+  const conversionData: ConversionPayload = {
+    variant_id: variantId, 
+    experiment_id: associatedExperimentId,
+    user_identifier: userIdentifier,
+    conversion_type: typeof details?.type === 'string' ? details.type : 'form_submission',
+    details: details,
+  };
+  if (sessionIdentifier) {
+    conversionData.session_identifier = sessionIdentifier;
+  }
 
   const { error: conversionError } = await supabase
     .from('conversions')
-    .insert({
-      variant_id: variantId, 
-      experiment_id: associatedExperimentId, 
-      user_identifier: userIdentifier,
-      conversion_type: typeof details?.type === 'string' ? details.type : 'form_submission', // Default to form_submission
-      details: details, 
-    });
+    .insert(conversionData);
 
   if (conversionError) {
     console.error('Supabase error logging conversion:', conversionError.message);
@@ -202,15 +249,19 @@ export async function trackConversion(
   }
 }
 
-// Extend the Window interface
 declare global {
   interface Window {
-    // trackConversion remains async due to Supabase calls within it
-    trackConversion?: (experimentName: string, variantId: string, details?: Record<string, unknown>) => Promise<void>; 
+    trackConversion?: (experimentName: string, variantId: string, details?: Record<string, unknown>) => Promise<void>;
+    logClientImpression?: (variant: ABVariant | null, experimentName: string) => Promise<void>;
   }
 }
 
-// Expose to client-side scripts
 if (typeof window !== 'undefined') {
+  console.log('[abTester.ts] Running in browser, attempting to set window functions.'); // DEBUG LOG
   window.trackConversion = trackConversion;
-} 
+  window.logClientImpression = logClientImpression; 
+  console.log('[abTester.ts] window.trackConversion assigned:', typeof window.trackConversion);
+  console.log('[abTester.ts] window.logClientImpression assigned:', typeof window.logClientImpression);
+}
+
+export const abTesterInitialized = true; // Dummy export 

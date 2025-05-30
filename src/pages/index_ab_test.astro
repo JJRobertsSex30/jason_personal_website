@@ -2,8 +2,12 @@
 import Layout from '~/layouts/PageLayout.astro';
 import HeroCustomAB from '~/components/widgets/HeroCustomAB.astro';
 
-// Import your A/B testing logic - ABVariant for type, getVariant for function
+// Import AB testing logic - getVariant for SSR, ABVariant for type.
+// Crucially, also import abTester here to ensure its client-side window setup runs.
 import { getVariant, type ABVariant } from '~/lib/abTester';
+// Re-enable side-effect import to ensure abTester.ts is in the client bundle
+import '~/lib/abTester'; 
+
 import imgHeroMain from '~/assets/images/jj2.png'; // Default image for fallback or if not in variant
 
 // --- METADATA (can be same as index.astro or simplified) ---
@@ -12,10 +16,8 @@ const metadata = {
   description: "Testing A/B variations.",
 };
 
-// Fetch the chosen variant content asynchronously
-// We specify the experiment name, e.g., "heroHeadlineTest"
-// Ensure this experiment name exists in your 'experiments' table and has variants defined with config_json containing 'headline' and 'subheadline'.
-const chosenHeroContent: ABVariant = await getVariant('Hero Headline AB Test 1');
+const EXPERIMENT_NAME = 'Hero Headline AB Test 1'; // Define as a constant
+const chosenHeroContent: ABVariant = await getVariant(EXPERIMENT_NAME);
 
 // Image can either be part of the variant's config_json or a static default like this.
 // If you want the image to be A/B tested, it should be part of the config_json in your variants table,
@@ -44,13 +46,14 @@ const heroImageForWidget = {
       subheadline={chosenHeroContent.subheadline}
       image={heroImageForWidget}
       abTestVariantKey={chosenHeroContent.id}
+      experimentName={EXPERIMENT_NAME}
     />
 
     {/* You can add a notice for testing if needed */}
     {Astro.cookies.has('astro_developer_toolbar') && (
       <div class="fixed bottom-0 right-0 bg-yellow-300 text-black p-2 m-4 rounded shadow-lg text-xs z-50">
         <p><strong>A/B Test Active</strong></p>
-        <p>Experiment: heroHeadlineTest</p>
+        <p>Experiment: {EXPERIMENT_NAME}</p>
         <p>Variant ID: {chosenHeroContent.id}</p>
         <p>Variant Name: {chosenHeroContent.name}</p>
         <p>Headline: {chosenHeroContent.headline}</p>
@@ -63,10 +66,53 @@ const heroImageForWidget = {
     {/* <Testimonials ... /> */}
 
   </main>
+
+  {/* This script's sole purpose is to ensure abTester.ts is loaded and executed on the client */}
+  <script>
+    import '~/lib/abTester';
+    console.log('[Astro Page Client Script] ~/lib/abTester imported to trigger its execution.');
+  </script>
 </Layout>
 
-<script>
-  // Client-side conversion tracking is handled within HeroCustomAB.astro.
-  // It calls window.trackConversion, which is set up by abTester.ts.
-  // Ensure your variants in the database (config_json) have 'headline' and 'subheadline' fields.
+<script define:vars={{ clientChosenVariant: chosenHeroContent, clientExperimentName: EXPERIMENT_NAME }}>
+  console.log('[index_ab_test.astro define:vars script] Loaded. clientChosenVariant:', clientChosenVariant);
+
+  const variantToLog = clientChosenVariant;
+  const experimentNameForLog = clientExperimentName;
+
+  function attemptImpressionLog() {
+    if (variantToLog && experimentNameForLog && variantToLog.id !== 'fallback_no_variants') {
+      console.log('[index_ab_test.astro define:vars script] Attempting to log impression via window object for:', variantToLog, experimentNameForLog);
+      if (window.logClientImpression) {
+        console.log('[index_ab_test.astro define:vars script] window.logClientImpression IS defined. Calling it.');
+        window.logClientImpression(variantToLog, experimentNameForLog);
+      } else {
+        console.warn('[index_ab_test.astro define:vars script] window.logClientImpression is NOT YET DEFINED. Will retry or give up.');
+        return false; // Indicates it's not ready
+      }
+    } else {
+      if (variantToLog && variantToLog.id === 'fallback_no_variants') {
+        console.log('[index_ab_test.astro define:vars script] Impression logging skipped for fallback variant.');
+      } else {
+        console.error('[index_ab_test.astro define:vars script] Missing variant or experiment name for impression logging.');
+      }
+    }
+    return true; // Indicates logging was attempted or not needed
+  }
+
+  // Try immediately, then poll if not ready
+  if (!attemptImpressionLog()) {
+    let attempts = 0;
+    const maxAttempts = 10; // e.g., try for 5 seconds (10 * 500ms)
+    const intervalId = setInterval(() => {
+      attempts++;
+      console.log(`[index_ab_test.astro define:vars script] Retrying to find window.logClientImpression (Attempt: ${attempts})`);
+      if (attemptImpressionLog() || attempts >= maxAttempts) {
+        clearInterval(intervalId);
+        if (attempts >= maxAttempts && !window.logClientImpression) {
+            console.error('[index_ab_test.astro define:vars script] Gave up waiting for window.logClientImpression.');
+        }
+      }
+    }, 500); // Check every 500ms
+  }
 </script> 
