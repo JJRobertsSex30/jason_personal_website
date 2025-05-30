@@ -12,13 +12,15 @@ export interface Props {
     alt: string;
   };
   abTestVariantKey?: string; 
+  experimentName?: string;
 }
 
 const { 
   headline = "Default Headline for Custom A/B Test", 
   subheadline = "Default subheadline for custom A/B test.", 
   image = { src: heroBgImage, alt: 'JJ Roberts working' }, // Updated default alt
-  abTestVariantKey = 'control' 
+  abTestVariantKey = 'control',
+  experimentName
 } = Astro.props;
 ---
 
@@ -74,9 +76,9 @@ const {
   </div>
 </section>
 
-<script define:vars={{ variantKey: abTestVariantKey }}>
+<script define:vars={{ variantKey: abTestVariantKey, experimentName: experimentName }}>
   document.addEventListener('DOMContentLoaded', function() {
-    console.log('HeroCustomAB component mounted, variantKey:', variantKey);
+    console.log('HeroCustomAB component mounted, variantKey:', variantKey, 'Experiment Name:', experimentName);
     
     const form = document.getElementById('hero-custom-ab-form');
     if (form) {
@@ -87,7 +89,15 @@ const {
         const messageElement = document.getElementById('hero-custom-ab-form-message');
         const submitButton = form.querySelector('button[type="submit"]');
         
-        if (!emailInput || !messageElement || !submitButton) return;
+        if (!(emailInput instanceof HTMLInputElement) || !(messageElement instanceof HTMLElement) || !(submitButton instanceof HTMLButtonElement)) {
+            console.error("HeroCustomAB: Essential form elements not found or are of incorrect type.");
+            if(messageElement) {
+                messageElement.textContent = "Error: Could not process form. Please try again later.";
+                messageElement.classList.remove('text-green-600', 'dark:text-green-500', 'text-gray-700', 'dark:text-gray-300');
+                messageElement.classList.add('text-red-600', 'dark:text-red-500');
+            }
+            return;
+        }
         
         const email = emailInput.value.trim();
         
@@ -100,7 +110,7 @@ const {
         
         submitButton.disabled = true;
         messageElement.textContent = 'Subscribing...';
-        messageElement.classList.remove('text-red-600', 'dark:text-red-500', 'text-green-600', 'dark:text-green-500');
+        messageElement.classList.remove('text-red-600', 'dark:text-red-500', 'text-green-600', 'dark:text-green-500', 'text-orange-600', 'dark:text-orange-500');
         messageElement.classList.add('text-gray-700', 'dark:text-gray-300');
         
         try {
@@ -111,31 +121,54 @@ const {
           });
           
           const result = await response.json();
+          let conversionDisplayMessage = '';
           
           if (response.ok) {
-            messageElement.textContent = 'Thank you for subscribing! Please check your email to confirm.';
-            messageElement.classList.remove('text-red-600', 'dark:text-red-500', 'text-gray-700', 'dark:text-gray-300');
+            // Default success message from subscription API
+            conversionDisplayMessage = 'Thank you for subscribing! Please check your email to confirm.'; 
+            messageElement.classList.remove('text-red-600', 'dark:text-red-500', 'text-gray-700', 'dark:text-gray-300', 'text-orange-600', 'dark:text-orange-500');
             messageElement.classList.add('text-green-600', 'dark:text-green-500');
             form.reset();
             
             if (typeof window.trackConversion === 'function') {
-              window.trackConversion('heroHeadlineTest', variantKey, { 
-                email: email, 
+              console.log(`HeroCustomAB: Attempting to track conversion. Experiment: '${experimentName}', Variant: '${variantKey}', Email: '${email}'`);
+              const abResult = await window.trackConversion(experimentName, variantKey, email, { 
                 source: 'hero-custom-ab', 
                 type: 'form_submission' 
               });
-              console.log(`Custom A/B Test: Conversion tracked for variant '${variantKey}' via window.trackConversion`);
+              console.log(`HeroCustomAB: A/B Test Conversion track result:`, abResult);
+              
+              if (abResult.status === 'DUPLICATE') {
+                console.warn('A/B Test: Duplicate conversion detected for email:', email);
+                conversionDisplayMessage = abResult.message; // Update the message
+                // Adjust styling for duplicate message
+                messageElement.classList.remove('text-green-600', 'dark:text-green-500', 'text-red-600', 'dark:text-red-500', 'text-gray-700', 'dark:text-gray-300');
+                messageElement.classList.add('text-orange-600', 'dark:text-orange-500'); 
+              } else if (abResult.status === 'ERROR') {
+                console.error('A/B Test: Error tracking conversion:', abResult.message);
+                // Optional: append to the existing message or change it entirely if the A/B error is critical
+                // For now, we'll just log the error, the primary message reflects the /api/subscribe status.
+                // If you wanted to show the A/B error:
+                // conversionDisplayMessage = `Subscription succeeded, but A/B tracking failed: ${abResult.message}`;
+                // messageElement.classList.remove('text-green-600', 'dark:text-green-500');
+                // messageElement.classList.add('text-red-600', 'dark:text-red-500');
+              }
             } else {
-              console.warn('window.trackConversion function not found. Make sure abTester.ts is correctly set up to expose it.');
+              console.warn('HeroCustomAB: window.trackConversion function not found.');
             }
 
           } else {
-            throw new Error(result.message || 'Subscription failed');
+            // Error from subscription API
+            conversionDisplayMessage = result.message || 'Subscription failed';
+            messageElement.classList.remove('text-green-600', 'dark:text-green-500', 'text-gray-700', 'dark:text-gray-300', 'text-orange-600', 'dark:text-orange-500');
+            messageElement.classList.add('text-red-600', 'dark:text-red-500');
           }
+          messageElement.textContent = conversionDisplayMessage;
+
         } catch (error) {
-          console.error('Subscription error:', error);
-          messageElement.textContent = error.message || 'Failed to subscribe. Please try again.';
-          messageElement.classList.remove('text-green-600', 'dark:text-green-500', 'text-gray-700', 'dark:text-gray-300');
+          console.error('Subscription or A/B tracking error:', error);
+          messageElement.textContent = (error instanceof Error ? error.message : 'An unexpected error occurred.') || 'Failed to subscribe. Please try again.';
+          messageElement.classList.remove('text-green-600', 'dark:text-green-500', 'text-gray-700', 'dark:text-gray-300', 'text-orange-600', 'dark:text-orange-500');
           messageElement.classList.add('text-red-600', 'dark:text-red-500');
         } finally {
           submitButton.disabled = false;

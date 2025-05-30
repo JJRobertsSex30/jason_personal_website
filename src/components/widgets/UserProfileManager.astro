@@ -1,0 +1,101 @@
+---
+import type { UserProfile } from '~/pages/dashboard.astro'; // Adjust path if dashboard moves or UserProfile type is centralized
+
+export interface Props {
+  userProfiles: UserProfile[] | null;
+  userProfilesError: string | null;
+  isUserLoggedIn: boolean;
+  // Astro.url is globally available, no need to pass as prop
+}
+
+const { userProfiles, userProfilesError, isUserLoggedIn } = Astro.props;
+---
+<section class="my-8">
+  <h2 class="text-3xl font-semibold mb-8 text-slate-800 dark:text-white text-center">User Profiles & Admin Login</h2>
+
+  {userProfilesError && (
+    <div class="mb-6 p-4 bg-orange-50 dark:bg-orange-800/30 border border-orange-300 dark:border-orange-600 text-orange-700 dark:text-orange-300 rounded-lg shadow-sm" role="alert">
+      <p class="font-bold text-lg">User Profile Error:</p>
+      <p>{userProfilesError}</p>
+    </div>
+  )}
+
+  {isUserLoggedIn ? (
+    <div class="bg-white dark:bg-slate-800 shadow-xl rounded-lg p-6">
+      <h3 class="text-2xl font-semibold mb-6 text-slate-700 dark:text-slate-200">Registered User Profiles</h3>
+      {userProfiles && userProfiles.length > 0 ? (
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">
+            <thead class="bg-slate-50 dark:bg-slate-700/50">
+              <tr>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">User ID</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">Email</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">Created At</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">Updated At</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
+              {userProfiles.map(profile => (
+                <tr>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900 dark:text-slate-100">{profile.id}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-300">{profile.email}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-300">{profile.created_at ? new Date(profile.created_at as string).toLocaleString() : 'N/A'}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-300">{profile.updated_at ? new Date(profile.updated_at as string).toLocaleString() : 'N/A'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div class="text-center py-8 px-4 border border-dashed border-slate-300 dark:border-slate-600 rounded-lg">
+          <svg class="mx-auto h-10 w-10 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+          </svg>
+          <h3 class="mt-2 text-md font-medium text-slate-700 dark:text-slate-200">No User Profiles Found</h3>
+          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">There are currently no user profiles in the database.</p>
+        </div>
+      )}
+    </div>
+  ) : (
+    <div class="max-w-md mx-auto mt-12 bg-white dark:bg-slate-800 shadow-xl rounded-lg p-8">
+      <h3 class="text-2xl font-semibold text-center text-slate-700 dark:text-slate-200 mb-6">Admin Login</h3>
+      <form method="POST" action={Astro.url.pathname + "#user-profiles-panel"} class="space-y-6">
+        <input type="hidden" name="_action" value="login" />
+        <div>
+          <label for="email" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Email Address</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autocomplete="email"
+            required
+            class="mt-1 block w-full shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md py-2.5 px-3 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400 dark:placeholder-slate-500"
+          />
+        </div>
+        <div>
+          <label for="password" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            required
+            class="mt-1 block w-full shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md py-2.5 px-3 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400 dark:placeholder-slate-500"
+          />
+        </div>
+        <button
+          type="submit"
+          class="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-900 focus:ring-blue-500 transition duration-150 ease-in-out"
+        >
+          Sign In
+        </button>
+      </form>
+    </div>
+  )}
+</section>
+
+<script>
+  // No specific client-side scripts for UserProfileManager other than what might be handled globally by dashboard.astro (like tab switching)
+  // If there were, they would be initialized here, perhaps using astro:page-load if needed.
+  // console.log("UserProfileManager component script loaded and executed");
+</script> 

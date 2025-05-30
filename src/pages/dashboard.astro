@@ -2,6 +2,8 @@
 import Layout from '~/layouts/PageLayout.astro';
 import { supabase } from '~/lib/supabaseClient';
 import type { Session } from '@supabase/supabase-js';
+import ABTestManager from '~/components/widgets/ABTestManager.astro';
+import UserProfileManager from '~/components/widgets/UserProfileManager.astro';
 
 // Define a basic UserProfile type.
 export interface UserProfile {
@@ -9,6 +11,9 @@ export interface UserProfile {
   username?: string;
   full_name?: string;
   website?: string;
+  email?: string; // Added email as it's used in UserProfileManager
+  created_at?: string | null; // Added based on UserProfileManager usage
+  updated_at?: string | null; // Added based on UserProfileManager usage
   [key: string]: unknown; 
 }
 
@@ -44,1402 +49,452 @@ export interface Experiment {
 }
 
 const metadata = {
-  title: 'Supabase DB Test',
-  description: 'Login to Supabase and view user profiles & A/B Tests.',
+  title: 'Admin Dashboard', // Updated title
+  description: 'Manage A/B Tests and view user profiles.', // Updated description
 };
 
 let userProfiles: UserProfile[] | null = null;
-let error: string | null = null;
+let pageError: string | null = null; // Renamed global error to avoid conflict with component prop name
 let session: Session | null = null;
 let experiments: Experiment[] | null = null;
 let abTestError: string | null = null;
+let generalMessage: string | null = null; // For general messages like login success
 
+// Helper function to fetch experiments with their stats
+async function fetchExperimentsWithStats(openExperimentIdFromUrl?: string | null) {
+  const { data: experimentsData, error: experimentsError } = await supabase
+    .from('experiments')
+    .select(`
+      id,
+      name,
+      description,
+      is_active,
+      created_at,
+      updated_at,
+      variants (id, name, description, config_json, created_at, updated_at)
+    `)
+    .order('created_at', { ascending: false });
+
+  if (experimentsError) {
+    console.error('Supabase fetch experiments error:', experimentsError);
+    throw new Error(experimentsError.message || 'Failed to fetch experiments.');
+  }
+
+  if (!experimentsData) return [];
+
+  const experimentsWithStats = await Promise.all(experimentsData.map(async (exp) => {
+    let variantsWithStats: Variant[] = [];
+    const currentVariants = exp.variants as Variant[] | undefined || []; 
+    if (currentVariants.length > 0) {
+      variantsWithStats = await Promise.all(currentVariants.map(async (variant: Variant) => {
+        const { count: impressionsCount, error: impressionsError } = await supabase
+          .from('impressions')
+          .select('*' , { count: 'exact', head: true })
+          .eq('variant_id', variant.id);
+
+        const { count: conversionsCount, error: conversionsError } = await supabase
+          .from('conversions')
+          .select('*' , { count: 'exact', head: true })
+          .eq('variant_id', variant.id);
+        
+        if (impressionsError) console.error(`Error fetching impressions for variant ${variant.id}:`, impressionsError);
+        if (conversionsError) console.error(`Error fetching conversions for variant ${variant.id}:`, conversionsError);
+
+        const impressions = impressionsCount || 0;
+        const conversions = conversionsCount || 0;
+        const conversion_rate = impressions > 0 ? (conversions / impressions) * 100 : 0;
+
+        return {
+          ...variant,
+          impressions_count: impressions,
+          conversions_count: conversions,
+          conversion_rate: conversion_rate
+        };
+      }));
+    }
+    return {
+      ...exp,
+      variants: variantsWithStats.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()), // Sort variants by creation date
+      managingVariants: openExperimentIdFromUrl === exp.id, // Set based on URL param
+      variantsJsonString: JSON.stringify(variantsWithStats.map(v => ({ // Pre-stringify for chart
+        name: v.name,
+        rate: v.conversion_rate,
+        impressions: v.impressions_count,
+        conversions: v.conversions_count
+      })))
+    };
+  }));
+  return experimentsWithStats;
+}
 
 // Server-side code
 if (Astro.request.method === 'POST') {
   const formData = await Astro.request.formData();
   const action = formData.get('_action')?.toString();
 
-  if (!session) { 
-    const { data: { session: freshSession } } = await supabase.auth.getSession();
-    if (freshSession) session = freshSession;
-  }
+  // Ensure session is fresh for POST actions
+  const { data: { session: freshSessionOnPost } } = await supabase.auth.getSession();
+  session = freshSessionOnPost;
 
-  if (action === 'create_experiment') {
-    if (!session) {
-      abTestError = "Authentication required. Please log in again to create an experiment.";
-    } else {
-      try {
-        const name = formData.get('experiment_name')?.toString();
-        const description = formData.get('experiment_description')?.toString();
-        const is_active = formData.get('experiment_is_active') === 'on';
-
-        if (!name || name.trim() === '') {
-          throw new Error('Experiment name is required.');
-        }
-
-        const { error: createError } = await supabase
-          .from('experiments')
-          .insert([{ name, description, is_active }]);
-
-        if (createError) {
-          console.error('Supabase create experiment error:', createError);
-          throw new Error(createError.message || 'Failed to save experiment to the database.');
-        }
-        
-        return Astro.redirect(Astro.url.pathname, 303);
-
-      } catch (e: unknown) {
-        if (e instanceof Error) {
-          abTestError = e.message;
-        } else {
-          abTestError = 'An unexpected error occurred while creating the experiment.';
-        }
-        console.error('Create experiment processing error:', e);
-      }
-    }
-  } else if (action === 'create_variant') {
-    if (!session) {
-      abTestError = "Authentication required. Please log in again to add a variant.";
-    } else {
-      try {
-        const experimentId = formData.get('experiment_id')?.toString();
-        const name = formData.get('variant_name')?.toString();
-        const description = formData.get('variant_description')?.toString();
-        const configJsonString = formData.get('variant_config_json')?.toString();
-
-        if (!experimentId || !name || name.trim() === '') {
-          throw new Error('Experiment ID and Variant Name are required.');
-        }
-
-        let config_json: VariantConfig | null = null;
-        if (configJsonString && configJsonString.trim() !== '') {
-          try {
-            config_json = JSON.parse(configJsonString);
-          } catch {
-            throw new Error('Invalid JSON format for Variant Configuration.');
-          }
-        }
-
-        const { error: createVariantError } = await supabase
-          .from('variants')
-          .insert([{
-            experiment_id: experimentId,
-            name,
-            description,
-            config_json
-          }]);
-
-        if (createVariantError) {
-          console.error('Supabase create variant error:', createVariantError);
-          throw new Error(createVariantError.message || 'Failed to save variant to the database.');
-        }
-        return Astro.redirect(Astro.url.pathname + `?openExperiment=${experimentId}`, 303);
-
-      } catch (e: unknown) {
-        if (e instanceof Error) {
-          abTestError = e.message; 
-        } else {
-          abTestError = 'An unexpected error occurred while creating the variant.';
-        }
-        console.error('Create variant processing error:', e);
-      }
-    }
-
-  } else if (action === 'update_experiment') {
-    if (!session) {
-      abTestError = "Authentication required. Please log in again to update an experiment.";
-    } else {
-      try {
-        const experimentId = formData.get('experiment_id')?.toString();
-        const name = formData.get('experiment_name')?.toString();
-        const description = formData.get('experiment_description')?.toString();
-        const is_active = formData.get('experiment_is_active') === 'on';
-
-        if (!experimentId || !name || name.trim() === '') {
-          throw new Error('Experiment ID and Experiment name are required for an update.');
-        }
-
-        const { error: updateError } = await supabase
-          .from('experiments')
-          .update({ name, description, is_active, updated_at: new Date().toISOString() })
-          .eq('id', experimentId);
-
-        if (updateError) {
-          console.error('Supabase update experiment error:', updateError);
-          throw new Error(updateError.message || 'Failed to update experiment in the database.');
-        }
-        
-        // PRG: Redirect to the same page, optionally keeping the relevant experiment open if applicable
-        // For simplicity now, just redirect to the page. Can add #experiment-id later if needed.
-        return Astro.redirect(Astro.url.pathname, 303);
-
-      } catch (e: unknown) {
-        if (e instanceof Error) {
-          abTestError = e.message;
-        } else {
-          abTestError = 'An unexpected error occurred while updating the experiment.';
-        }
-        console.error('Update experiment processing error:', e);
-      }
-    }
-  } else if (action === 'update_variant') {
-    if (!session) {
-      abTestError = "Authentication required. Please log in again to update a variant.";
-    } else {
-      try {
-        const experimentId = formData.get('experiment_id')?.toString();
-        const variantId = formData.get('variant_id')?.toString();
-        const name = formData.get('variant_name')?.toString();
-        const description = formData.get('variant_description')?.toString();
-        const configJsonString = formData.get('variant_config_json')?.toString();
-
-        if (!experimentId || !variantId || !name || name.trim() === '') {
-          throw new Error('Experiment ID, Variant ID, and Variant Name are required for an update.');
-        }
-
-        // Fetch the existing variant's config and check for impressions
-        const { data: existingVariantConfig, error: fetchConfigError } = await supabase
-          .from('variants')
-          .select('config_json')
-          .eq('id', variantId)
-          .single();
-
-        if (fetchConfigError || !existingVariantConfig) {
-          console.error('Supabase fetch existing variant config error:', fetchConfigError);
-          throw new Error(fetchConfigError?.message || 'Failed to fetch existing variant configuration.');
-        }
-        
-        // Check for impressions separately
-        const { count: impressionsCount, error: impressionsError } = await supabase
-          .from('impressions')
-          .select('*' , { count: 'exact', head: true })
-          .eq('variant_id', variantId);
-
-        if (impressionsError) {
-          console.error('Supabase count impressions error:', impressionsError);
-          throw new Error(impressionsError.message || 'Failed to count impressions for variant.');
-        }
-
-        let newConfigJson: VariantConfig | null = null;
-        if (configJsonString && configJsonString.trim() !== '') {
-          try {
-            newConfigJson = JSON.parse(configJsonString);
-          } catch {
-            throw new Error('Invalid JSON format for Variant Configuration.');
-          }
-        }
-
-        // Check if config_json is being changed when impressions > 0
-        const currentImpressions = impressionsCount || 0;
-        const configChanged = JSON.stringify(existingVariantConfig.config_json) !== JSON.stringify(newConfigJson);
-
-        if (currentImpressions > 0 && configChanged) {
-          throw new Error('Cannot change the configuration of a variant that has existing impressions. Please create a new variant instead.');
-        }
-
-        const { error: updateVariantError } = await supabase
-          .from('variants')
-          .update({
-            name,
-            description,
-            config_json: newConfigJson,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', variantId);
-
-        if (updateVariantError) {
-          console.error('Supabase update variant error:', updateVariantError);
-          throw new Error(updateVariantError.message || 'Failed to update variant in the database.');
-        }
-        return Astro.redirect(Astro.url.pathname + `?openExperiment=${experimentId}#variant-${variantId}`, 303);
-
-      } catch (e: unknown) {
-        if (e instanceof Error) {
-          abTestError = e.message; 
-        } else {
-          abTestError = 'An unexpected error occurred while updating the variant.';
-        }
-        console.error('Update variant processing error:', e);
-        // To ensure the UI re-renders with the error, we need to repopulate experiments
-        // The general data fetching logic at the end of the script block will handle this if abTestError is set.
-      }
-    }
-  } else if (action === 'delete_variant') {
-    if (!session) {
-      abTestError = "Authentication required. Please log in again to delete a variant.";
-    } else {
-      try {
-        const experimentId = formData.get('experiment_id')?.toString();
-        const variantId = formData.get('variant_id')?.toString();
-
-        if (!experimentId || !variantId) {
-          throw new Error('Experiment ID and Variant ID are required to delete a variant.');
-        }
-
-        // Check impressions before deleting
-        const { count: variantImpressions, error: fetchImpressionsError } = await supabase
-          .from('impressions')
-          .select('*' , { count: 'exact', head: true })
-          .eq('variant_id', variantId);
-
-        if (fetchImpressionsError) {
-          console.error('Supabase fetch impressions count for delete error:', fetchImpressionsError);
-          throw new Error(fetchImpressionsError.message || 'Failed to fetch impression count for variant before deletion.');
-        }
-
-        if (variantImpressions && variantImpressions > 0) {
-          throw new Error('Cannot delete a variant that has existing impressions. Consider deactivating the experiment or creating a new one.');
-        }
-
-        // Proceed with deletion if impressions are 0
-        const { error: deleteVariantError } = await supabase
-          .from('variants')
-          .delete()
-          .eq('id', variantId);
-
-        if (deleteVariantError) {
-          console.error('Supabase delete variant error:', deleteVariantError);
-          throw new Error(deleteVariantError.message || 'Failed to delete variant from the database.');
-        }
-        
-        // Also delete any orphaned impressions and conversions, though ideally there shouldn't be any if impressions_count was 0
-        // These are fire-and-forget, as the main variant deletion is the critical part.
-        await supabase.from('impressions').delete().eq('variant_id', variantId);
-        await supabase.from('conversions').delete().eq('variant_id', variantId);
-
-        return Astro.redirect(Astro.url.pathname + `?openExperiment=${experimentId}`, 303); // Redirect to keep the manage section open
-
-      } catch (e: unknown) {
-        if (e instanceof Error) {
-          abTestError = e.message; 
-        } else {
-          abTestError = 'An unexpected error occurred while deleting the variant.';
-        }
-        console.error('Delete variant processing error:', e);
-      }
-    }
-  } else if (action === 'delete_experiment') {
-    if (!session) {
-      abTestError = "Authentication required. Please log in again to delete an experiment.";
-    } else {
-      try {
-        const experimentId = formData.get('experiment_id')?.toString();
-
-        if (!experimentId) {
-          throw new Error('Experiment ID is required to delete an experiment.');
-        }
-
-        // Step 1: Fetch all variant IDs for the experiment
-        const { data: variants, error: fetchVariantsError } = await supabase
-          .from('variants')
-          .select('id')
-          .eq('experiment_id', experimentId);
-
-        if (fetchVariantsError) {
-          console.error('Supabase fetch variants for experiment deletion error:', fetchVariantsError);
-          throw new Error(fetchVariantsError.message || 'Failed to fetch variants for experiment deletion.');
-        }
-
-        const variantIds = variants ? variants.map(v => v.id) : [];
-
-        if (variantIds.length > 0) {
-          // Step 2: Delete all conversions linked to these variant IDs
-          const { error: deleteConversionsError } = await supabase
-            .from('conversions')
-            .delete()
-            .in('variant_id', variantIds);
-          if (deleteConversionsError) {
-            console.error('Supabase delete conversions error:', deleteConversionsError);
-            throw new Error(deleteConversionsError.message || 'Failed to delete conversions for experiment.');
-          }
-
-          // Step 3: Delete all impressions linked to these variant IDs
-          const { error: deleteImpressionsError } = await supabase
-            .from('impressions')
-            .delete()
-            .in('variant_id', variantIds);
-          if (deleteImpressionsError) {
-            console.error('Supabase delete impressions error:', deleteImpressionsError);
-            throw new Error(deleteImpressionsError.message || 'Failed to delete impressions for experiment.');
-          }
-
-          // Step 4: Delete all variants for the experiment
-          const { error: deleteVariantsError } = await supabase
-            .from('variants')
-            .delete()
-            .eq('experiment_id', experimentId);
-          if (deleteVariantsError) {
-            console.error('Supabase delete variants error:', deleteVariantsError);
-            throw new Error(deleteVariantsError.message || 'Failed to delete variants for experiment.');
-          }
-        }
-
-        // Step 5: Finally, delete the experiment itself
-        const { error: deleteExperimentError } = await supabase
-          .from('experiments')
-          .delete()
-          .eq('id', experimentId);
-
-        if (deleteExperimentError) {
-          console.error('Supabase delete experiment error:', deleteExperimentError);
-          throw new Error(deleteExperimentError.message || 'Failed to delete experiment.');
-        }
-        
-        return Astro.redirect(Astro.url.pathname, 303); // Redirect to the main page
-
-      } catch (e: unknown) {
-        if (e instanceof Error) {
-          abTestError = e.message; 
-        } else {
-          abTestError = 'An unexpected error occurred while deleting the experiment.';
-        }
-        console.error('Delete experiment processing error:', e);
-      }
-    }
-  } else { 
-    try {
-      const email = formData.get('email')?.toString();
-      const password = formData.get('password')?.toString();
-
-      if (!email || !password) {
-        throw new Error('Email and password are required for login.');
-      }
-
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
+  if (action === 'login') {
+    const email = formData.get('email')?.toString();
+    const password = formData.get('password')?.toString();
+    if (email && password) {
+      const { data, error: loginError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
-
-      if (authError) {
-        throw authError;
-      }
-
-      if (data.session) {
+      if (loginError) {
+        pageError = loginError.message;
+      } else if (data.session) {
         session = data.session;
-        const { data: profilesData, error: profilesError } = await supabase
-          .from('user_profiles')
-          .select('*');
-        
-        if (profilesError) {
-          console.error("Error fetching user profiles post-login:", profilesError);
-          error = "Logged in, but failed to fetch user profiles: " + profilesError.message;
-        } else {
-          userProfiles = profilesData as UserProfile[];
-        }
-        // POST login logic will now also fetch experiments with stats, so GET logic will be simpler
-      } else {
-        throw new Error('Login failed. Please check your credentials.');
+        // Set a success message and redirect to clear form data and refresh state
+        Astro.cookies.set('auth_message', 'Login successful!', { path: '/', maxAge: 5 }); // expires in 5s
+        return Astro.redirect(Astro.url.pathname + '#user-profiles-panel', 303);
       }
-    } catch (e: unknown) {
-      if (e instanceof Error) {
-        error = e.message;
-      } else {
-        error = 'An unexpected error occurred during login.';
-      }
-      console.error('Login processing error:', e);
-      session = null; 
-      userProfiles = null;
-      experiments = null;
-    }
-  }
-} 
-
-// Common function to fetch experiments and their stats
-async function fetchExperimentsWithStats(currentSession: Session | null, openExperimentIdParam: string | null) {
-  if (!currentSession) return null;
-
-  let fetchedExperiments: Experiment[] = [];
-  try {
-    const { data: experimentsData, error: experimentsDbError } = await supabase
-      .from('experiments')
-      .select('*, variants(*)') // Fetch all columns for variants initially
-      .order('created_at', { ascending: false });
-
-    if (experimentsDbError) {
-      console.error('Supabase fetch experiments error:', experimentsDbError);
-      throw new Error(experimentsDbError.message || 'Failed to retrieve experiments from database.');
-    }
-
-    if (experimentsData) {
-      for (const exp of experimentsData) {
-        let variantsWithStats: Variant[] = [];
-        if (exp.variants && exp.variants.length > 0) {
-          for (const variant of exp.variants) {
-            const { count: impressionsCount, error: impError } = await supabase
-              .from('impressions')
-              .select('*' , { count: 'exact', head: true })
-              .eq('variant_id', variant.id)
-              .eq('experiment_id', exp.id);
-
-            const { count: conversionsCount, error: convError } = await supabase
-              .from('conversions')
-              .select('*' , { count: 'exact', head: true })
-              .eq('variant_id', variant.id)
-              .eq('experiment_id', exp.id);
-
-            if (impError) console.error(`Error fetching impressions for variant ${variant.id}:`, impError.message);
-            if (convError) console.error(`Error fetching conversions for variant ${variant.id}:`, convError.message);
-            
-            const impressions = impressionsCount || 0;
-            const conversions = conversionsCount || 0;
-            const conversionRate = impressions > 0 ? (conversions / impressions) * 100 : 0;
-
-            variantsWithStats.push({
-              ...variant,
-              impressions_count: impressions,
-              conversions_count: conversions,
-              conversion_rate: parseFloat(conversionRate.toFixed(2))
-            });
-          }
-        }
-        // Prepare the JSON string for the chart data here
-        const variantsJsonString = JSON.stringify(
-          variantsWithStats.map(v => ({
-            name: v.name,
-            rate: v.conversion_rate || 0,
-            impressions: v.impressions_count || 0,
-            conversions: v.conversions_count || 0
-          }))
-        );
-
-        fetchedExperiments.push({
-          ...exp,
-          variants: variantsWithStats,
-          managingVariants: exp.id === openExperimentIdParam,
-          variantsJsonString: variantsJsonString // Add the stringified data
-        });
-      }
-    }
-    return fetchedExperiments;
-  } catch (e: unknown) {
-    if (e instanceof Error) {
-      abTestError = e.message; // Set module-level abTestError
     } else {
-      abTestError = 'An unexpected error occurred while fetching A/B test experiments with stats.';
+      pageError = 'Email and password are required.';
     }
-    console.error('A/B Test experiment fetch with stats error:', e);
-    return []; // Return empty array on error
+  } else if (action === 'logout') {
+    const { error: logoutError } = await supabase.auth.signOut();
+    if (logoutError) {
+      pageError = logoutError.message;
+    } else {
+      session = null;
+      Astro.cookies.set('auth_message', 'Logout successful!', { path: '/', maxAge: 5 });
+      return Astro.redirect(Astro.url.pathname, 303);
+    }
+  } 
+  // A/B Test Actions require session
+  else if (action?.startsWith('create_') || action?.startsWith('update_') || action?.startsWith('delete_')) {
+    if (!session) {
+      abTestError = "Authentication required. Please log in again to manage A/B tests.";
+    } else {
+      try {
+        // Consolidate A/B test action handling here for clarity
+        if (action === 'create_experiment') {
+          const name = formData.get('experiment_name')?.toString();
+          const description = formData.get('experiment_description')?.toString();
+          const is_active = formData.get('experiment_is_active') === 'on';
+          if (!name || name.trim() === '') throw new Error('Experiment name is required.');
+          const { error: createExpError } = await supabase.from('experiments').insert([{ name, description, is_active }]);
+          if (createExpError) throw createExpError;
+          return Astro.redirect(Astro.url.pathname + '#ab-testing-panel', 303);
+        }
+        else if (action === 'create_variant') {
+          const experimentId = formData.get('experiment_id')?.toString();
+          const name = formData.get('variant_name')?.toString();
+          const description = formData.get('variant_description')?.toString();
+          const configJsonString = formData.get('variant_config_json')?.toString();
+          if (!experimentId || !name || name.trim() === '') throw new Error('Experiment ID and Variant Name are required.');
+          let config_json: VariantConfig | null = null;
+          if (configJsonString && configJsonString.trim() !== '') {
+            try { config_json = JSON.parse(configJsonString); } 
+            catch { throw new Error('Invalid JSON for Variant Config.'); }
+          }
+          const { error: createVarError } = await supabase.from('variants').insert([{ experiment_id: experimentId, name, description, config_json }]);
+          if (createVarError) throw createVarError;
+          return Astro.redirect(Astro.url.pathname + `?openExperiment=${experimentId}#ab-testing-panel`, 303);
+        }
+        else if (action === 'update_experiment') {
+          const experimentId = formData.get('experiment_id')?.toString();
+          const name = formData.get('experiment_name')?.toString();
+          const description = formData.get('experiment_description')?.toString();
+          const is_active = formData.get('experiment_is_active') === 'on';
+          if (!experimentId || !name || name.trim() === '') throw new Error('Experiment ID and Name required for update.');
+          const { error: updateExpError } = await supabase.from('experiments').update({ name, description, is_active, updated_at: new Date().toISOString() }).eq('id', experimentId);
+          if (updateExpError) throw updateExpError;
+          return Astro.redirect(Astro.url.pathname + `#experiment-${experimentId}`, 303); // Go to specific experiment
+        }
+        else if (action === 'update_variant') {
+          const experimentId = formData.get('experiment_id')?.toString(); // For redirect
+          const variantId = formData.get('variant_id')?.toString();
+          const name = formData.get('variant_name')?.toString();
+          const description = formData.get('variant_description')?.toString();
+          const configJsonString = formData.get('variant_config_json')?.toString();
+          if (!variantId || !name || name.trim() === '') throw new Error('Variant ID and Name required for update.');
+
+          const { count: impressionsCount } = await supabase.from('impressions').select('*' , { count: 'exact', head: true }).eq('variant_id', variantId);
+          let newConfigJson: VariantConfig | null = null;
+          if (configJsonString && configJsonString.trim() !== '') {
+            try { newConfigJson = JSON.parse(configJsonString); } 
+            catch { throw new Error('Invalid JSON for Variant Config.'); }
+          }
+          if ((impressionsCount || 0) > 0) {
+            const { data: existingVariant } = await supabase.from('variants').select('config_json').eq('id', variantId).single();
+            if (JSON.stringify(existingVariant?.config_json) !== JSON.stringify(newConfigJson)) {
+              throw new Error('Cannot change config of variant with impressions.');
+            }
+          }
+          const { error: updateVarError } = await supabase.from('variants').update({ name, description, config_json: newConfigJson, updated_at: new Date().toISOString() }).eq('id', variantId);
+          if (updateVarError) throw updateVarError;
+          return Astro.redirect(Astro.url.pathname + `?openExperiment=${experimentId}#ab-testing-panel`, 303);
+        }
+        else if (action === 'delete_experiment') {
+          const experimentId = formData.get('experiment_id')?.toString();
+          if (!experimentId) throw new Error('Experiment ID is required for deletion.');
+          
+          // With ON DELETE CASCADE from experiments.id to variants.experiment_id,
+          // and from variants.id to impressions/conversions variant_id,
+          // deleting the experiment will automatically cascade to variants, impressions, and conversions.
+          // The explicit deletion of variants is no longer needed here.
+          
+          const { error: deleteExpError } = await supabase.from('experiments').delete().eq('id', experimentId);
+          if (deleteExpError) {
+            console.error('Error deleting experiment:', deleteExpError);
+            // Consider how to surface this error to the user, e.g., setting abTestError
+            // For now, re-throwing to be caught by the outer try-catch block.
+            throw new Error(`Failed to delete experiment: ${deleteExpError.message}`);
+          }
+          
+          return Astro.redirect(Astro.url.pathname + '#ab-testing-panel', 303);
+        }
+        else if (action === 'delete_variant') {
+          const experimentId = formData.get('experiment_id')?.toString(); // For redirect
+          const variantId = formData.get('variant_id')?.toString();
+          if (!variantId) throw new Error('Variant ID is required for deletion.');
+          const { count: impressionsCount } = await supabase.from('impressions').select('*' , { count: 'exact', head: true }).eq('variant_id', variantId);
+          if ((impressionsCount || 0) > 0) throw new Error('Cannot delete variant with existing impressions.');
+          const { error: deleteVarError } = await supabase.from('variants').delete().eq('id', variantId);
+          if (deleteVarError) throw deleteVarError;
+          return Astro.redirect(Astro.url.pathname + `?openExperiment=${experimentId}#ab-testing-panel`, 303);
+        }
+      } catch (e: unknown) {
+        if (e instanceof Error) {
+          abTestError = e.message;
+        } else {
+          abTestError = 'An unexpected error occurred during A/B test action.';
+        }
+        console.error('A/B Test Action Error:', e);
+      }
+    }
   }
 }
 
+// Fetch data on GET requests or after POST redirect
+if (Astro.request.method === 'GET') {
+  const { data: { session: currentSession } } = await supabase.auth.getSession();
+  session = currentSession;
 
-// Data fetching for GET requests or if errors occurred during POST
-if (Astro.request.method === 'GET' || abTestError || error) {
-  const { data: { session: currentSessionFromSupabase } } = await supabase.auth.getSession();
-  // Preserve session if already set by a successful login POST that didn't have other errors
-  if (currentSessionFromSupabase && !session) {
-    session = currentSessionFromSupabase;
+  const authMessage = Astro.cookies.get('auth_message');
+  if (authMessage) {
+    generalMessage = authMessage.value;
+    Astro.cookies.delete('auth_message', { path: '/' });
   }
-  
-  const openExperimentId = Astro.url.searchParams.get('openExperiment');
 
   if (session) {
-    // Fetch user profiles if not already fetched by a successful login POST
-    if (!userProfiles && !error) {
-      try {
-        const { data: profilesData, error: profilesError } = await supabase
-          .from('user_profiles')
-          .select('*'); 
-        if (profilesError) throw profilesError;
-        userProfiles = profilesData as UserProfile[];
-      } catch (e: unknown) {
-        if (e instanceof Error) { error = `Failed to fetch profile data: ${e.message}`; } 
-        else { error = 'An unexpected error occurred while fetching profile data.'; }
-        console.error('Initial profile fetch error:', e);
-        userProfiles = null;
+    try {
+      const { data, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('id, email, created_at, updated_at'); // Removed last_sign_in_at
+      if (profileError) throw profileError;
+      userProfiles = data;
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        pageError = e.message;
+      } else {
+        pageError = 'Failed to fetch user profiles due to an unexpected error.';
       }
+      console.error('Fetch user profiles error:', e);
     }
-
-    // Fetch A/B test experiments with stats
-    // This will run on GET, or if a POST had an error, or if experiments weren't fetched by login.
-    // The fetchExperimentsWithStats function handles its own error display via abTestError.
-    const fetchedExperiments = await fetchExperimentsWithStats(session, openExperimentId);
-    if (fetchedExperiments) { // fetchExperimentsWithStats returns null if no session
-        experiments = fetchedExperiments;
-    } else if (!session) { // If session became null somehow (e.g. expired during complex POST/GET)
-        experiments = null;
-        userProfiles = null;
-    }
-
-
-  } else {
-    userProfiles = null;
-    experiments = null;
   }
-} else if (Astro.request.method === 'POST' && session && !abTestError && !error) {
-  // If it was a POST, session is valid, and no errors occurred during specific POST actions (like create_experiment)
-  // then we should fetch/refresh experiments data now, as it might have changed.
-  // This handles the case after a successful experiment/variant creation.
-  const openExperimentId = Astro.url.searchParams.get('openExperiment'); // Relevant after creating a variant
-  const fetchedExperiments = await fetchExperimentsWithStats(session, openExperimentId);
-  if (fetchedExperiments) {
-      experiments = fetchedExperiments;
+  // Fetch experiments regardless of session, but actions on them require login
+  try {
+    const openExperimentId = new URL(Astro.request.url).searchParams.get('openExperiment');
+    experiments = await fetchExperimentsWithStats(openExperimentId);
+  } catch (e: unknown) {
+    if (e instanceof Error) {
+      abTestError = e.message;
+    } else {
+      abTestError = 'Failed to fetch experiments due to an unexpected error.';
+    }
+    console.error('Fetch experiments error:', e);
   }
 }
+
 ---
 <Layout metadata={metadata}>
-  <main class="container mx-auto px-4 py-12">
-    <div class="max-w-2xl mx-auto">
-      <h1 class="text-4xl font-bold text-center mb-6 text-slate-800 dark:text-white">Supabase Admin Panel</h1>
-
-      {/* Login Form - Show if not logged in (remains outside tab structure) */}
-      {!session && (
-        <form method="POST" class="bg-white dark:bg-slate-800 shadow-xl rounded-lg p-8 pt-6 mb-8">
-          <h2 class="text-2xl font-semibold text-center mb-6 text-slate-700 dark:text-slate-200">User Login</h2>
-          <div class="mb-6">
-            <label for="email" class="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">
-              Email Address
-            </label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              required
-              class="shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md w-full py-3 px-4 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400 dark:placeholder-slate-500"
-              placeholder="you@example.com"
-            />
-          </div>
-          <div class="mb-8">
-            <label for="password" class="block text-slate-700 dark:text-slate-300 text-sm font-bold mb-2">
-              Password
-            </label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              required
-              class="shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md w-full py-3 px-4 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 mb-3 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400 dark:placeholder-slate-500"
-              placeholder="••••••••••••"
-            />
-          </div>
-          <div class="flex items-center justify-center">
-            <button
-              type="submit"
-              class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-md shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition duration-150 ease-in-out"
+  <div class="container mx-auto px-4 py-8 max-w-4xl">
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-3xl font-bold text-slate-800 dark:text-white">Admin Dashboard</h1>
+      {session && (
+        <div class="flex items-center">
+          <p class="text-sm text-slate-600 dark:text-slate-300 mr-3">
+            Logged in as: <span class="font-semibold">{session.user.email}</span>
+          </p>
+          <form method="POST" action={Astro.url.pathname + '#user-profiles-panel'}> 
+            <input type="hidden" name="_action" value="logout" />
+            <button 
+              type="submit" 
+              class="px-4 py-2 text-sm font-medium tracking-wide text-white capitalize transition-colors duration-200 transform bg-red-500 rounded-md hover:bg-red-600 focus:outline-none focus:ring focus:ring-red-300 focus:ring-opacity-80"
             >
-              Sign In
+              Logout
             </button>
-          </div>
-        </form>
-      )}
-
-      {/* General Error Display (for login or major profile fetch issues - remains outside tab structure) */}
-      {error && (
-        <div class="my-6 p-4 bg-red-50 dark:bg-red-800/30 border border-red-300 dark:border-red-600 text-red-700 dark:text-red-300 rounded-lg shadow-sm" role="alert">
-          <p class="font-bold text-lg">Error:</p>
-          <p>{error}</p>
-        </div>
-      )}
-
-      {/* Tabbed Interface - Shows only if logged in AND no critical login/load error */}
-      {session && !error && (
-        <div>
-          {/* Tab Navigation and User Info Flex Container */}
-          <div class="mb-6 flex justify-between items-center border-b border-slate-300 dark:border-slate-700">
-            {/* Tabs */}
-            <div class="flex space-x-1" role="tablist" aria-label="Admin Sections">
-              <button 
-                type="button" 
-                role="tab" 
-                aria-selected="true" 
-                aria-controls="ab-testing-panel" 
-                id="ab-testing-tab"
-                class="tab-button active-tab px-4 py-2.5 -mb-px font-semibold text-sm leading-5 text-blue-600 dark:text-blue-400 bg-transparent border-b-2 border-blue-500 dark:border-blue-400 focus:outline-none hover:text-blue-800 dark:hover:text-blue-300"
-              >
-                A/B Testing
-              </button>
-              <button 
-                type="button" 
-                role="tab" 
-                aria-selected="false" 
-                aria-controls="user-profiles-panel" 
-                id="user-profiles-tab"
-                class="tab-button inactive-tab px-4 py-2.5 font-medium text-sm leading-5 text-slate-500 dark:text-slate-400 bg-transparent border-b-2 border-transparent hover:text-slate-700 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none"
-              >
-                User Profiles
-              </button>
-            </div>
-
-            {/* Session Info & Logout Button - Aligned to the right */}
-            <div class="p-2 text-sm">
-              <div class="flex items-center space-x-3">
-                <div class="text-right">
-                  <p class="font-semibold text-slate-700 dark:text-slate-200">Logged in as:</p>
-                  <p class="text-xs text-slate-500 dark:text-slate-400 break-all">{session.user.email}</p>
-                </div>
-                <form method="POST" action="/api/logout" class="inline-block">
-                  <button
-                    type="submit"
-                    class="bg-red-500 hover:bg-red-600 text-white font-semibold py-1.5 px-3 rounded-md shadow-sm hover:shadow-lg transition duration-150 ease-in-out text-xs focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-1 dark:focus:ring-offset-slate-800"
-                  >
-                    Logout
-                  </button>
-                </form>
-              </div>
-            </div>
-          </div>
-
-          {/* Tab Panels Container */}
-          <div>
-            {/* A/B Testing Panel */}
-            <div id="ab-testing-panel" role="tabpanel" aria-labelledby="ab-testing-tab">
-              <section class="my-8">
-                <h2 class="text-3xl font-semibold mb-8 text-slate-800 dark:text-white text-center">A/B Test Management</h2>
-
-                {/* A/B Test Specific Error Display */}
-                {abTestError && (
-                  <div class="mb-6 p-4 bg-orange-50 dark:bg-orange-800/30 border border-orange-300 dark:border-orange-600 text-orange-700 dark:text-orange-300 rounded-lg shadow-sm" role="alert">
-                    <p class="font-bold text-lg">A/B Test Error:</p>
-                    <p>{abTestError}</p>
-                  </div>
-                )}
-
-                {/* Create New Experiment Form */}
-                <div class="mb-10 p-6 bg-white dark:bg-slate-800 shadow-xl rounded-lg">
-                  <h3 class="text-2xl font-semibold mb-6 text-slate-700 dark:text-slate-200">Create New Experiment</h3>
-                  <form method="POST" action={Astro.url.pathname} class="space-y-6">
-                    <input type="hidden" name="_action" value="create_experiment" />
-                    <div>
-                      <label for="experiment_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                        Experiment Name <span class="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        id="experiment_name"
-                        name="experiment_name"
-                        required
-                        class="shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md w-full py-2.5 px-3 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400 dark:placeholder-slate-500"
-                        placeholder="e.g., Homepage Headline Test"
-                      />
-                    </div>
-                    <div>
-                      <label for="experiment_description" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                        Description (Optional)
-                      </label>
-                      <textarea
-                        id="experiment_description"
-                        name="experiment_description"
-                        rows="3"
-                        class="shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md w-full py-2.5 px-3 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400 dark:placeholder-slate-500"
-                        placeholder="Briefly describe the goal of this experiment."
-                      ></textarea>
-                    </div>
-                    <div class="flex items-center">
-                      <input
-                        id="experiment_is_active"
-                        name="experiment_is_active"
-                        type="checkbox"
-                        checked
-                        class="h-4 w-4 text-blue-600 border-slate-300 dark:border-slate-600 rounded focus:ring-blue-500 bg-white dark:bg-slate-700 dark:checked:bg-blue-500"
-                      />
-                      <label for="experiment_is_active" class="ml-2 block text-sm text-slate-700 dark:text-slate-300">
-                        Activate this experiment immediately
-                      </label>
-                    </div>
-                    <div class="flex justify-end">
-                      <button
-                        type="submit"
-                        class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-5 rounded-md shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition duration-150 ease-in-out"
-                      >
-                        Create Experiment
-                      </button>
-                    </div>
-                  </form>
-                </div>
-
-                {/* List of Existing Experiments */}
-                <h3 class="text-2xl font-semibold mb-6 text-slate-700 dark:text-slate-200 mt-10">Existing Experiments</h3>
-                {experiments && experiments.length > 0 ? (
-                  <div class="space-y-6">
-                    {experiments.map((exp) => (
-                      <div class="bg-white dark:bg-slate-800 shadow-lg rounded-lg p-6" id={`experiment-${exp.id}`}>
-                        {/* SECTION 1: Just the core details, always visible unless editing */}
-                        <div class={`experiment-display-section-${exp.id}`}>
-                          <div class="flex justify-between items-start mb-2">
-                            <div>
-                              <h4 class="text-xl font-semibold text-blue-600 dark:text-blue-400">{exp.name}</h4>
-                              <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">ID: {exp.id}</p>
-                            </div>
-                            <span class={`px-3 py-1 text-xs font-medium rounded-full ${exp.is_active ? 'bg-green-100 text-green-800 dark:bg-green-700/30 dark:text-green-300' : 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300'}`}>
-                              {exp.is_active ? 'Active' : 'Inactive'}
-                            </span>
-                          </div>
-                          <p class="text-sm text-slate-600 dark:text-slate-300 mb-3">{exp.description || 'No description provided.'}</p>
-                        </div>
-
-                        {/* SECTION 2: The form for editing core details, hidden by default */}
-                        <div class={`experiment-edit-form-section-${exp.id} hidden`}>
-                          <h4 class="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-4">Edit Experiment: <span class="italic">{exp.name}</span></h4>
-                          <form method="POST" action={Astro.url.pathname} class="space-y-4">
-                            <input type="hidden" name="_action" value="update_experiment" />
-                            <input type="hidden" name="experiment_id" value={exp.id} />
-                            <div>
-                              <label for={`edit_experiment_name-${exp.id}`} class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                                Experiment Name <span class="text-red-500">*</span>
-                              </label>
-                              <input
-                                type="text"
-                                id={`edit_experiment_name-${exp.id}`}
-                                name="experiment_name"
-                                required
-                                value={exp.name}
-                                class="shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md w-full py-2.5 px-3 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400 dark:placeholder-slate-500"
-                              />
-                            </div>
-                            <div>
-                              <label for={`edit_experiment_description-${exp.id}`} class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                                Description (Optional)
-                              </label>
-                              <textarea
-                                id={`edit_experiment_description-${exp.id}`}
-                                name="experiment_description"
-                                rows="3"
-                                class="shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md w-full py-2.5 px-3 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400 dark:placeholder-slate-500"
-                              >{exp.description}</textarea>
-                            </div>
-                            <div class="flex items-center">
-                              <input
-                                id={`edit_experiment_is_active-${exp.id}`}
-                                name="experiment_is_active"
-                                type="checkbox"
-                                checked={exp.is_active}
-                                class="h-4 w-4 text-blue-600 border-slate-300 dark:border-slate-600 rounded focus:ring-blue-500 bg-white dark:bg-slate-700 dark:checked:bg-blue-500"
-                              />
-                              <label for={`edit_experiment_is_active-${exp.id}`} class="ml-2 block text-sm text-slate-700 dark:text-slate-300">
-                                Activate this experiment
-                              </label>
-                            </div>
-                            <div class="flex justify-end space-x-3">
-                              <button
-                                type="button"
-                                class="cancel-edit-experiment-btn text-sm bg-slate-500 hover:bg-slate-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150"
-                                data-experiment-id={exp.id}
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                type="submit"
-                                class="text-sm bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-md shadow-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition duration-150 ease-in-out"
-                              >
-                                Save Changes
-                              </button>
-                            </div>
-                          </form>
-                        </div>
-
-                        {/* SECTION 3: Variants, Chart, and Main Actions, visible unless editing */}
-                        <div class={`experiment-actions-section-${exp.id}`}>
-                          <div class="mt-4 pt-4 border-t border-dashed border-slate-300 dark:border-slate-600">
-                              <h5 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">Current Variants ({exp.variants?.length || 0}):</h5>
-                              {exp.variants && exp.variants.length > 0 ? (
-                                <ul class="list-disc list-inside pl-1 space-y-0.5 text-sm text-slate-500 dark:text-slate-400">
-                                  {exp.variants.map(variant => (
-                                    <li>
-                                      {variant.name} <span class="text-xs text-slate-400">(ID: {variant.id})</span>
-                                      {typeof variant.impressions_count === 'number' && (
-                                        <span class="text-xs text-slate-400 ml-2">
-                                          (Imp: {variant.impressions_count}, Conv: {variant.conversions_count ?? 0}, Rate: {variant.conversion_rate?.toFixed(1) ?? 'N/A'}%)
-                                        </span>
-                                      )}
-                                    </li>
-                                  ))}
-                                </ul>
-                              ) : (
-                                <p class="text-sm text-slate-500 dark:text-slate-400 italic">No variants defined for this experiment yet.</p>
-                              )}
-                          </div>
-                          
-                          {/* Pie Chart Section */}
-                          {exp.variants && exp.variants.filter(v => typeof v.conversion_rate === 'number').length > 0 ? (
-                            <div class="mt-6 pt-6 border-t border-dashed border-slate-300 dark:border-slate-600">
-                              <h5 class="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-3 text-center">Variant Conversion Rates</h5>
-                              <div 
-                                class="chart-container relative mx-auto"
-                                style="max-width: 350px; height: 350px;" 
-                                data-experiment-id={exp.id}
-                                data-variants={exp.variantsJsonString}
-                              >
-                                <canvas id={`chart-${exp.id}`}></canvas> 
-                              </div>
-                            </div>
-                          ) : (
-                            <div class="mt-6 pt-6 border-t border-dashed border-slate-300 dark:border-slate-600">
-                              <h5 class="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-3 text-center">Variant Conversion Rates</h5>
-                              <p class="text-sm text-slate-400 dark:text-slate-500 text-center italic">No conversion data available to display chart.</p>
-                            </div>
-                          )}
-
-                          <div class="flex items-center justify-end space-x-3 mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
-                            <button type="button" class="text-sm bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 edit-experiment-btn" data-experiment-id={exp.id}>Edit Details</button>
-                            <button 
-                              type="button" 
-                              class="text-sm bg-purple-500 hover:bg-purple-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 manage-variants-btn"
-                              data-experiment-id={exp.id}
-                              aria-expanded={exp.managingVariants ? 'true' : 'false'}
-                              aria-controls={`manage-variants-section-${exp.id}`}
-                            >
-                              {exp.managingVariants ? 'Hide Variants' : 'Manage Variants'}
-                            </button>
-                            <form method="POST" action={Astro.url.pathname} class="inline-block delete-experiment-form" data-experiment-name={exp.name}>
-                              <input type="hidden" name="_action" value="delete_experiment" />
-                              <input type="hidden" name="experiment_id" value={exp.id} />
-                              <button type="submit" class="text-sm bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 delete-experiment-btn-submit">
-                                Delete Exp.
-                              </button>
-                            </form>
-                          </div>
-                        </div>
-
-                        {/* SECTION 4: Form for managing/adding variants, toggled independently */}
-                        <div 
-                          id={`manage-variants-section-${exp.id}`}
-                          class={`mt-6 pt-6 border-t border-dashed border-slate-300 dark:border-slate-600 ${!exp.managingVariants ? 'hidden' : ''}`}
-                        >
-                          <h4 class="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-4">Manage Variants for: <span class="italic">{exp.name}</span></h4>
-                          
-                          {/* Display Existing Variants */}
-                          {exp.variants && exp.variants.length > 0 ? (
-                            <div class="mb-6">
-                              <h5 class="text-md font-medium text-slate-600 dark:text-slate-300 mb-2">Existing Variants:</h5>
-                              <ul class="space-y-3">
-                                {exp.variants.map(variant => (
-                                  <li data-variant-id={variant.id} class="variant-item p-3 bg-slate-50 dark:bg-slate-700/50 rounded-md shadow-sm">
-                                    {/* Variant Display Section */}
-                                    <div class="variant-display-section">
-                                      <div class="flex justify-between items-start">
-                                        <div>
-                                          <p class="font-semibold text-slate-700 dark:text-slate-200">{variant.name}</p>
-                                          <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">ID: {variant.id}</p>
-                                          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{variant.description || 'No description'}</p>
-                                        </div>
-                                        <div class="variant-stats text-xs text-slate-500 dark:text-slate-400 text-right">
-                                          <p>Impressions: {variant.impressions_count ?? 0}</p>
-                                          <p>Conversions: {variant.conversions_count ?? 0}</p>
-                                          <p>Rate: {variant.conversion_rate?.toFixed(1) ?? 'N/A'}%</p>
-                                        </div>
-                                      </div>
-                                      {variant.config_json && (
-                                        <details class="mt-2">
-                                          <summary class="text-xs text-blue-500 dark:text-blue-400 cursor-pointer hover:underline">Show/Hide Config JSON</summary>
-                                          <pre class="mt-1 text-xs p-2 bg-slate-100 dark:bg-slate-600 rounded overflow-x-auto whitespace-pre-wrap break-all">{JSON.stringify(variant.config_json, null, 2)}</pre>
-                                        </details>
-                                      )}
-                                      <div class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-600 flex justify-end space-x-2">
-                                        <button type="button" class="edit-variant-btn text-xs bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-1 px-3 rounded-md shadow-sm transition duration-150" data-experiment-id={exp.id} data-variant-id={variant.id}>
-                                          Edit
-                                        </button>
-                                        <form method="POST" action={Astro.url.pathname} class="inline-block delete-variant-form" data-variant-name={variant.name}>
-                                          <input type="hidden" name="_action" value="delete_variant" />
-                                          <input type="hidden" name="experiment_id" value={exp.id} />
-                                          <input type="hidden" name="variant_id" value={variant.id} />
-                                          <button type="submit" class="delete-variant-btn-submit text-xs bg-red-500 hover:bg-red-600 text-white font-medium py-1 px-3 rounded-md shadow-sm transition duration-150">
-                                            Delete
-                                          </button>
-                                        </form>
-                                      </div>
-                                    </div>
-
-                                    {/* Variant Edit Form Section (Initially Hidden) */}
-                                    <div class="variant-edit-form-section hidden mt-2">
-                                      <h6 class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">Editing Variant: <span class="italic">{variant.name}</span></h6>
-                                      <form method="POST" action={Astro.url.pathname} class="space-y-3">
-                                        <input type="hidden" name="_action" value="update_variant" />
-                                        <input type="hidden" name="experiment_id" value={exp.id} />
-                                        <input type="hidden" name="variant_id" value={variant.id} />
-                                        <div>
-                                          <label for={`edit_variant_name-${variant.id}`} class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-0.5">Variant Name <span class="text-red-500">*</span></label>
-                                          <input type="text" name="variant_name" id={`edit_variant_name-${variant.id}`} required value={variant.name} class="w-full p-1.5 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-white"/>
-                                        </div>
-                                        <div>
-                                          <label for={`edit_variant_description-${variant.id}`} class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-0.5">Variant Description</label>
-                                          <textarea name="variant_description" id={`edit_variant_description-${variant.id}`} rows="2" class="w-full p-1.5 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-white">{variant.description}</textarea>
-                                        </div>
-                                        <div>
-                                          <label for={`edit_variant_config_json-${variant.id}`} class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-0.5">Variant Configuration (JSON)</label>
-                                          <textarea name="variant_config_json" id={`edit_variant_config_json-${variant.id}`} rows="3" class="w-full p-1.5 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm font-mono text-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-white" placeholder='{
-  "headline": "New Headline!",
-  "buttonColor": "blue"
-}'>{JSON.stringify(variant.config_json, null, 2)}</textarea>
-                                          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Enter valid JSON. <strong class="text-orange-500">Cannot be changed if variant has impressions.</strong></p>
-                                        </div>
-                                        <div class="flex justify-end space-x-2 pt-2">
-                                          <button type="button" class="cancel-edit-variant-btn text-xs bg-slate-500 hover:bg-slate-600 text-white font-medium py-1.5 px-3 rounded-md shadow-sm transition duration-150" data-variant-id={variant.id}>
-                                            Cancel
-                                          </button>
-                                          <button type="submit" class="save-variant-btn text-xs bg-green-600 hover:bg-green-700 text-white font-semibold py-1.5 px-3 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500">
-                                            Save Changes
-                                          </button>
-                                        </div>
-                                      </form>
-                                    </div>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          ) : (
-                            <p class="text-sm text-slate-500 dark:text-slate-400 italic mb-4">No variants currently exist for this experiment.</p>
-                          )}
-                          <h5 class="text-md font-medium text-slate-600 dark:text-slate-300 mb-3 pt-4 border-t border-slate-200 dark:border-slate-700">Add New Variant</h5>
-                          <form method="POST" action={Astro.url.pathname} class="space-y-4 p-4 bg-slate-50 dark:bg-slate-800/30 rounded-lg shadow">
-                            <input type="hidden" name="_action" value="create_variant" />
-                            <input type="hidden" name="experiment_id" value={exp.id} />
-                            <div>
-                              <label for={`variant_name-${exp.id}`} class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Variant Name <span class="text-red-500">*</span></label>
-                              <input type="text" name="variant_name" id={`variant_name-${exp.id}`} required class="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-white" placeholder="e.g., Control, Variation A"/>
-                            </div>
-                            <div>
-                              <label for={`variant_description-${exp.id}`} class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Variant Description</label>
-                              <textarea name="variant_description" id={`variant_description-${exp.id}`} rows="2" class="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-white" placeholder="Brief description of this variant"></textarea>
-                            </div>
-                            <div>
-                              <label for={`variant_config_json-${exp.id}`} class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Variant Configuration (JSON)</label>
-                              <textarea name="variant_config_json" id={`variant_config_json-${exp.id}`} rows="3" class="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 font-mono text-sm dark:bg-slate-700 dark:text-white" placeholder='{
-  "headline": "New Headline!",
-  "buttonColor": "blue"
-}'></textarea>
-                              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Enter valid JSON or leave blank.</p>
-                            </div>
-                            <div class="flex justify-end">
-                              <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-md shadow-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900">Add Variant</button>
-                            </div>
-                          </form>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  (!abTestError && experiments && experiments.length === 0) && ( 
-                      <div class="text-center py-8 px-4 bg-white dark:bg-slate-800 rounded-lg shadow-md">
-                      <svg class="mx-auto h-10 w-10 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                          <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
-                      </svg>
-                      <h3 class="mt-2 text-md font-medium text-slate-700 dark:text-slate-200">No Experiments Found</h3>
-                      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Get started by creating your first A/B experiment using the form above.</p>
-                      </div>
-                  )
-                )}
-              </section>
-            </div>
-
-            {/* User Profiles Panel (Initially Hidden) */}
-            <div id="user-profiles-panel" role="tabpanel" aria-labelledby="user-profiles-tab" class="hidden">
-              <section class="my-8">
-                <h2 class="text-3xl font-semibold mb-6 text-slate-800 dark:text-white text-center">User Profiles Data</h2>
-                {userProfiles && userProfiles.length > 0 ? (
-                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {userProfiles.map((profile) => (
-                      <div class="bg-white dark:bg-slate-800 shadow-lg rounded-lg p-6 hover:shadow-xl transition-shadow duration-300 ease-in-out flex flex-col">
-                        <h3 class="text-xl font-semibold text-blue-600 dark:text-blue-400 mb-2 capitalize">{profile.username || profile.full_name || 'Unnamed User'}</h3>
-                        <div class="text-sm text-slate-600 dark:text-slate-400 space-y-1 mt-auto">
-                          <p><span class="font-semibold">ID:</span> <span class="break-all">{profile.id}</span></p>
-                          {profile.full_name && <p><span class="font-semibold">Full Name:</span> {profile.full_name}</p>}
-                          {profile.website && 
-                            <p><span class="font-semibold">Website:</span> <a href={profile.website} target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline hover:text-blue-400">{profile.website}</a></p>
-                          }
-                          {Object.entries(profile).map(([key, value]) => {
-                            if (!['id', 'username', 'full_name', 'website', 'updated_at', 'avatar_url'].includes(key) && value) {
-                              return <p><span class="font-semibold capitalize">{key.replace(/_/g, ' ')}:</span> {String(value)}</p>;
-                            }
-                            return null;
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div class="text-center py-10 px-4 bg-white dark:bg-slate-800 rounded-lg shadow-md">
-                    <svg class="mx-auto h-12 w-12 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                      <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 00-2-2zm3-12V3M16 3v2" />
-                    </svg>
-                    <h3 class="mt-2 text-lg font-medium text-slate-900 dark:text-white">No User Profiles Found</h3>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">There are currently no user profiles to display from the database, or your profile is empty.</p>
-                  </div>
-                )}
-              </section>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Message if not logged in and no error (initial state) */}
-      {!session && !error && (
-         <div class="text-center py-10 px-4 bg-white dark:bg-slate-800 rounded-lg shadow-md">
-            <svg class="mx-auto h-12 w-12 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-            <h3 class="mt-2 text-lg font-medium text-slate-900 dark:text-white">Please Log In</h3>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Enter your Supabase credentials to view the admin panel.</p>
+          </form>
         </div>
       )}
     </div>
-  </main>
-</Layout> 
+
+    <div class="mb-8">
+      <div class="sm:hidden">
+        <label for="tabs" class="sr-only">Select a tab</label>
+        <select id="tabs" name="tabs" class="block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+          <option selected>A/B Testing</option>
+          <option>User Profiles</option>
+        </select>
+      </div>
+      <div class="hidden sm:block">
+        <div class="border-b border-slate-200 dark:border-slate-700">
+          <nav class="-mb-px flex space-x-4" aria-label="Tabs">
+            <a href="#ab-testing-panel" id="ab-testing-tab" 
+               class="tab-button active-tab group whitespace-nowrap py-3 px-3 border-b-2 font-medium text-sm flex items-center"
+               aria-current="page">
+              <svg class="-ml-0.5 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.5 5a2.5 2.5 0 00-4.995.088A2.5 2.5 0 002.5 7.5v5A2.5 2.5 0 005 15h10a2.5 2.5 0 002.5-2.5v-5A2.5 2.5 0 0015 5H7.5zM5 7.5a.5.5 0 01.5-.5h1.086A.5.5 0 017 7.5v5a.5.5 0 01-.5.5H5.5a.5.5 0 01-.5-.5v-5zm9.5 0a.5.5 0 00-.5-.5H13A.5.5 0 0012.5 7.5v5a.5.5 0 00.5.5h1.086A.5.5 0 00.414-.75L13.5 9.5l1.414-2.75A.5.5 0 0014.5 7.5z" clip-rule="evenodd" /></svg>
+              <span>A/B Testing</span>
+            </a>
+            <a href="#user-profiles-panel" id="user-profiles-tab"
+               class="tab-button group whitespace-nowrap py-3 px-3 border-b-2 font-medium text-sm flex items-center"
+               aria-current="false">
+              <svg class="-ml-0.5 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" /></svg>
+              <span>User Profiles</span>
+            </a>
+          </nav>
+        </div>
+      </div>
+    </div>
+
+    {/* Global Error Display - for errors not specific to a tab component, or general page errors */}
+    {pageError && (
+      <div class="mb-6 p-4 bg-red-100 dark:bg-red-800/30 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-300 rounded-lg shadow-sm" role="alert">
+        <p class="font-bold text-lg">Error:</p>
+        <p>{pageError}</p>
+      </div>
+    )}
+    {/* General Message Display - for login/logout success etc */}
+    {generalMessage && (
+      <div class="mb-6 p-4 bg-green-100 dark:bg-green-800/30 border border-green-400 dark:border-green-600 text-green-700 dark:text-green-300 rounded-lg shadow-sm" role="alert">
+        <p>{generalMessage}</p>
+      </div>
+    )}
+    
+    {/* Tab Panels */}
+    <div id="ab-testing-panel" role="tabpanel" class="tab-panel pt-6">
+      <ABTestManager experiments={experiments} abTestError={abTestError} />
+    </div>
+
+    <div id="user-profiles-panel" role="tabpanel" class="tab-panel pt-6 hidden">
+      <UserProfileManager userProfiles={userProfiles} userProfilesError={pageError} isUserLoggedIn={!!session} />
+    </div>
+    
+  </div> {/* End of container div with mx-auto etc. */}
+
+</Layout>
+
+<style>
+  .tab-button {
+    @apply border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500;
+  }
+  .tab-button.active-tab {
+    @apply border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400;
+  }
+  .tab-button svg {
+    @apply text-slate-400 group-hover:text-slate-500 dark:text-slate-500 dark:group-hover:text-slate-400;
+  }
+  .tab-button.active-tab svg {
+    @apply text-blue-500 dark:text-blue-400;
+  }
+  /* .tab-panel no longer needs border/shadow/rounded if tabs are underlined style */
+</style>
 
 <script>
-  // Define an interface for the variant data used in the chart
-  interface ChartVariantData {
-    name: string;
-    rate: number | null | undefined; // Allow for null or undefined if data is missing
-    impressions: number | null | undefined;
-    conversions: number | null | undefined;
-  }
-
-  function initializePageScripts() {
-    // Manage Variants toggle
-    const manageVariantBtns = document.querySelectorAll('.manage-variants-btn');
-    manageVariantBtns.forEach(btnEl => {
-      const btn = btnEl as HTMLButtonElement; // Type assertion
-      btn.addEventListener('click', () => {
-        const experimentId = btn.dataset.experimentId;
-        if (!experimentId) return;
-        const variantSection = document.getElementById(`manage-variants-section-${experimentId}`);
-        const isExpanded = btn.getAttribute('aria-expanded') === 'true';
-
-        if (variantSection) {
-          variantSection.classList.toggle('hidden');
-          btn.setAttribute('aria-expanded', String(!isExpanded));
-          btn.textContent = !isExpanded ? 'Hide Variants' : 'Manage Variants';
-          
-          const currentUrl = new URL(window.location.href);
-          if (!isExpanded) {
-            currentUrl.searchParams.set('openExperiment', experimentId);
-          } else {
-            currentUrl.searchParams.delete('openExperiment');
-          }
-          window.history.pushState({ path: currentUrl.href }, '', currentUrl.href);
-        }
-      });
-    });
-
-    // Restore state on popstate (browser back/forward)
-    window.addEventListener('popstate', () => {
-      const params = new URLSearchParams(window.location.search);
-      const openExperimentId = params.get('openExperiment');
-      
-      document.querySelectorAll('[id^="manage-variants-section-"]').forEach(section => {
-        section.classList.add('hidden');
-      });
-      manageVariantBtns.forEach(btnEl => {
-        const btn = btnEl as HTMLButtonElement;
-        btn.setAttribute('aria-expanded', 'false');
-        btn.textContent = 'Manage Variants';
-      });
-
-      if (openExperimentId) {
-        const sectionToOpen = document.getElementById(`manage-variants-section-${openExperimentId}`);
-        const buttonForSection = document.querySelector(`.manage-variants-btn[data-experiment-id="${openExperimentId}"]`) as HTMLButtonElement | null;
-        if (sectionToOpen) {
-          sectionToOpen.classList.remove('hidden');
-        }
-        if (buttonForSection) {
-          buttonForSection.setAttribute('aria-expanded', 'true');
-          buttonForSection.textContent = 'Hide Variants';
-        }
-      }
-    });
-
-    // Event listeners for Edit Experiment buttons
-    document.querySelectorAll('.edit-experiment-btn').forEach(btnEl => {
-      const btn = btnEl as HTMLButtonElement;
-      btn.addEventListener('click', () => {
-        const experimentId = btn.dataset.experimentId;
-        if (!experimentId) return;
-
-        const displaySection = document.querySelector(`.experiment-display-section-${experimentId}`);
-        const actionsSection = document.querySelector(`.experiment-actions-section-${experimentId}`);
-        const editFormSection = document.querySelector(`.experiment-edit-form-section-${experimentId}`) as HTMLElement | null;
-
-        if (displaySection) displaySection.classList.add('hidden');
-        if (actionsSection) actionsSection.classList.add('hidden');
-        if (editFormSection) {
-          editFormSection.classList.remove('hidden');
-          const firstInput = editFormSection.querySelector('input[name="experiment_name"]') as HTMLInputElement | null;
-          if (firstInput) {
-            firstInput.focus();
-          }
-        }
-      });
-    });
-
-    // Event listeners for Cancel Edit Experiment buttons
-    document.querySelectorAll('.cancel-edit-experiment-btn').forEach(btnEl => {
-      const btn = btnEl as HTMLButtonElement;
-      btn.addEventListener('click', () => {
-        const experimentId = btn.dataset.experimentId;
-        if (!experimentId) return;
-
-        const displaySection = document.querySelector(`.experiment-display-section-${experimentId}`);
-        const actionsSection = document.querySelector(`.experiment-actions-section-${experimentId}`);
-        const editFormSection = document.querySelector(`.experiment-edit-form-section-${experimentId}`);
-
-        if (displaySection) displaySection.classList.remove('hidden');
-        if (actionsSection) actionsSection.classList.remove('hidden');
-        if (editFormSection) editFormSection.classList.add('hidden');
-      });
-    });
-
-    // Event listeners for Edit Variant buttons
-    document.querySelectorAll('.edit-variant-btn').forEach(btnEl => {
-      const btn = btnEl as HTMLButtonElement;
-      btn.addEventListener('click', () => {
-        const variantId = btn.dataset.variantId;
-        if (!variantId) return;
-        const listItem = btn.closest('.variant-item');
-        if (!listItem) return;
-
-        const displaySection = listItem.querySelector('.variant-display-section');
-        const editFormSection = listItem.querySelector('.variant-edit-form-section');
-
-        if (displaySection) displaySection.classList.add('hidden');
-        if (editFormSection) editFormSection.classList.remove('hidden');
-      });
-    });
-
-    // Event listeners for Cancel Edit Variant buttons
-    document.querySelectorAll('.cancel-edit-variant-btn').forEach(btnEl => {
-      const btn = btnEl as HTMLButtonElement;
-      btn.addEventListener('click', () => {
-        const variantId = btn.dataset.variantId;
-        if (!variantId) return;
-        const listItem = btn.closest('.variant-item');
-        if (!listItem) return;
-
-        const displaySection = listItem.querySelector('.variant-display-section');
-        const editFormSection = listItem.querySelector('.variant-edit-form-section');
-
-        if (displaySection) displaySection.classList.remove('hidden');
-        if (editFormSection) editFormSection.classList.add('hidden');
-      });
-    });
-    
-    // Event listener for Delete Variant form submissions
-    document.querySelectorAll('.delete-variant-form').forEach(formEl => {
-      const form = formEl as HTMLFormElement;
-      form.addEventListener('submit', (event) => {
-        const variantName = form.dataset.variantName || 'this variant';
-        if (!confirm(`Are you sure you want to delete "${variantName}"? This action cannot be undone, especially if the variant has no impressions.`)) {
-          event.preventDefault(); // Prevent form submission if user cancels
-        }
-      });
-    });
-
-    // Event listener for Delete Experiment form submissions
-    document.querySelectorAll('.delete-experiment-form').forEach(formEl => {
-      const form = formEl as HTMLFormElement;
-      form.addEventListener('submit', (event) => {
-        const experimentName = form.dataset.experimentName || 'this experiment';
-        if (!confirm(`Are you sure you want to delete the experiment "${experimentName}" and all its associated variants and data? This action cannot be undone.`)) {
-          event.preventDefault(); // Prevent form submission if user cancels
-        }
-      });
-    });
-
-    // Chart.js rendering logic
-    const chartContainers = document.querySelectorAll('.chart-container');
-    if (chartContainers.length > 0) {
-      import('chart.js/auto').then(({default: Chart}) => {
-        chartContainers.forEach(containerEl => {
-          const container = containerEl as HTMLElement; // Type assertion
-          const experimentId = container.dataset.experimentId;
-          if (!experimentId) {
-            console.error("Chart container missing experiment ID");
-            return;
-          }
-          const canvas = container.querySelector(`canvas#chart-${experimentId}`) as HTMLCanvasElement | null;
-          if (!canvas) {
-            // console.warn(`Canvas not found for experiment ${experimentId}, chart not rendered.`);
-            // HTML already shows a message if no data, so just log if canvas itself is missing.
-            return;
-          }
-          
-          let variantsData: ChartVariantData[] = [];
-          try {
-            const variantsJson = container.dataset.variants;
-            if (variantsJson) {
-              variantsData = JSON.parse(variantsJson);
-            } else {
-              // console.log(`No variant data provided for experiment ${experimentId}, chart not rendered.`);
-              return;
-            }
-          } catch (e) {
-            console.error('Failed to parse variants data for chart:', e);
-            return;
-          }
-
-          // Filter out variants that don't have valid rate for charting
-          const chartableVariants = variantsData.filter(v => typeof v.rate === 'number');
-
-          if (chartableVariants.length > 0) {
-            const labels = chartableVariants.map(v => `${v.name} (Imp: ${v.impressions ?? 0}, Conv: ${v.conversions ?? 0}, Rate: ${(v.rate ?? 0).toFixed(1)}%)`);
-            const data = chartableVariants.map(v => v.rate ?? 0);
-            
-            const N = chartableVariants.length;
-            const baseColors = [
-              { r: 54, g: 162, b: 235 }, // blue
-              { r: 255, g: 99, b: 132 }, // red
-              { r: 255, g: 206, b: 86 }, // yellow
-              { r: 75, g: 192, b: 192 }, // green
-              { r: 153, g: 102, b: 255 },// purple
-              { r: 255, g: 159, b: 64 }  // orange
-            ];
-            const backgroundColors: string[] = []; // Explicitly type as string[]
-            const borderColors: string[] = [];   // Explicitly type as string[]
-
-            for (let i = 0; i < N; i++) {
-              const color = baseColors[i % baseColors.length];
-              backgroundColors.push(`rgba(${color.r}, ${color.g}, ${color.b}, 0.6)`);
-              borderColors.push(`rgba(${color.r}, ${color.g}, ${color.b}, 1)`);
-            }
-            
-            // Check if a chart instance already exists on the canvas
-            // If so, destroy it before creating a new one to prevent conflicts/memory leaks
-            const existingChart = Chart.getChart(canvas);
-            if (existingChart) {
-                existingChart.destroy();
-            }
-
-            new Chart(canvas, {
-              type: 'pie',
-              data: {
-                labels: labels,
-                datasets: [{
-                  label: 'Conversion Rate (%)',
-                  data: data,
-                  backgroundColor: backgroundColors,
-                  borderColor: borderColors,
-                  borderWidth: 1
-                }]
-              },
-              options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'top',
-                    labels: {
-                      boxWidth: 20,
-                      font: {
-                        size: 10
-                      }
-                    }
-                  },
-                  tooltip: {
-                    callbacks: {
-                      label: function(context) {
-                        let label = context.label || '';
-                        if (label) {
-                          label += ': ';
-                        }
-                        if (context.parsed !== null && typeof context.parsed === 'number') {
-                          label += context.parsed.toFixed(2) + '%';
-                        }
-                        return label;
-                      }
-                    }
-                  }
-                }
-              }
-            });
-          } else {
-             // console.log(`No valid conversion rate data for experiment ${experimentId}, chart not rendered.`);
-             // The Astro template already handles the message for no data if variants exist but rates are bad.
-             // If chartableVariants is empty, ensure any old chart is cleared if canvas existed.
-            const existingChart = Chart.getChart(canvas);
-            if (existingChart) {
-                existingChart.destroy();
-            }
-          }
-        });
-      }).catch(error => {
-        console.error('Failed to load Chart.js dynamically:', error);
-      });
-    }
-  }
-
-  // Use astro:page-load event for Astro's client-side navigation
-  document.addEventListener('astro:page-load', () => {
-    initializePageScripts();
-    initializeTabs(); // Initialize tabs after other scripts
-  });
-  // The 'astro:page-load' event handles initial load as well as subsequent navigations.
-  
+  // Client-side script for tab navigation
   function initializeTabs() {
-    const tabButtons = document.querySelectorAll('.tab-button[role="tab"]');
-    const tabPanels = document.querySelectorAll('[role="tabpanel"]');
-    const activeTabClasses = ['active-tab', 'text-blue-600', 'dark:text-blue-400', 'border-blue-500', 'dark:border-blue-400'];
-    const inactiveTabClasses = ['inactive-tab', 'text-slate-500', 'dark:text-slate-400', 'border-transparent', 'hover:text-slate-700', 'dark:hover:text-slate-200', 'hover:border-slate-300', 'dark:hover:border-slate-600'];
+    const tabs = document.querySelectorAll('.tab-button');
+    const panels = document.querySelectorAll('.tab-panel');
+    // const abTestingTab = document.getElementById('ab-testing-tab'); // Removed as unused
+    // const userProfilesTab = document.getElementById('user-profiles-tab'); // Removed as unused
 
-    function setActiveTab(targetTabId) {
-      tabButtons.forEach(button => {
-        const btn = button as HTMLButtonElement;
-        if (btn.id === targetTabId) {
-          btn.setAttribute('aria-selected', 'true');
-          btn.classList.remove(...inactiveTabClasses);
-          btn.classList.add(...activeTabClasses);
+    const setActiveTab = (targetId: string) => {
+      tabs.forEach(tab => {
+        const tabElement = tab as HTMLAnchorElement;
+        if (tabElement.hash === targetId) {
+          tabElement.classList.add('active-tab');
+          tabElement.setAttribute('aria-selected', 'true');
         } else {
-          btn.setAttribute('aria-selected', 'false');
-          btn.classList.remove(...activeTabClasses);
-          btn.classList.add(...inactiveTabClasses);
+          tabElement.classList.remove('active-tab');
+          tabElement.setAttribute('aria-selected', 'false');
         }
       });
 
-      tabPanels.forEach(panel => {
-        const p = panel as HTMLElement;
-        const controlledBy = document.getElementById(targetTabId)?.getAttribute('aria-controls');
-        if (p.id === controlledBy) {
-          p.classList.remove('hidden');
+      panels.forEach(panel => {
+        const panelElement = panel as HTMLElement;
+        if (`#${panelElement.id}` === targetId) {
+          panelElement.classList.remove('hidden');
         } else {
-          p.classList.add('hidden');
+          panelElement.classList.add('hidden');
         }
       });
-      
-      const newHash = '#' + document.getElementById(targetTabId)?.getAttribute('aria-controls');
-      if (window.history.pushState) {
-        if (window.location.hash !== newHash) { // Only push state if hash actually changes
-             // Create a new URL object from the current location
-            const newURL = new URL(window.location.href);
-            newURL.hash = newHash;
-            window.history.pushState({path: newURL.href}, '', newURL.href);
-        }
+      // Update URL hash without page jump
+      if (history.pushState) {
+        history.pushState(null, '', targetId);
       } else {
-        // Fallback for older browsers 
-        if (window.location.hash !== newHash) { 
-            window.location.hash = newHash;
-        }
+        location.hash = targetId;
       }
-    }
+    };
 
-    tabButtons.forEach(button => {
-      button.addEventListener('click', (event) => {
-        const targetTabId = (event.currentTarget as HTMLElement).id;
-        if (targetTabId) {
-            setActiveTab(targetTabId);
+    tabs.forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        e.preventDefault();
+        const targetId = (e.currentTarget as HTMLAnchorElement).hash;
+        setActiveTab(targetId);
+        
+        // If A/B testing tab is now active, and an experiment was opened, clear the openExperiment query param
+        // to avoid it persisting if user navigates away and back to this tab manually.
+        if (targetId === '#ab-testing-panel') {
+            const currentUrl = new URL(window.location.href);
+            if (currentUrl.searchParams.has('openExperiment')) {
+                currentUrl.searchParams.delete('openExperiment');
+                window.history.replaceState({ path: currentUrl.href }, '', currentUrl.pathname + currentUrl.search + currentUrl.hash);
+            }
         }
       });
     });
 
-    // Check URL hash on load to set initial tab
-    const currentHash = window.location.hash;
-    let initialTabIdToActivate = '';
-
-    if (currentHash) {
-      const targetPanelId = currentHash.substring(1); // Remove #
-      const correspondingTab = document.querySelector(`.tab-button[aria-controls="${targetPanelId}"]`) as HTMLElement | null;
-      if (correspondingTab) {
-        initialTabIdToActivate = correspondingTab.id;
-      }
+    // Set initial tab based on URL hash or default to A/B testing
+    let initialTabId = window.location.hash;
+    if (!initialTabId || (initialTabId !== '#ab-testing-panel' && initialTabId !== '#user-profiles-panel')) {
+      initialTabId = '#ab-testing-panel';
+    }
+    setActiveTab(initialTabId);
+    
+    // If opening page with ?openExperiment query param, ensure A/B tab is active
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('openExperiment')) {
+        setActiveTab('#ab-testing-panel');
+        // Scroll to the specific experiment if its ID is in the hash (e.g. from form redirect)
+        // This part is a bit tricky because the experiment div might not be immediately available if data is still loading
+        // The #experiment-id part of the URL hash will be handled by the browser naturally if the element exists.
     }
 
-    if (initialTabIdToActivate) {
-      setActiveTab(initialTabIdToActivate);
-    } else {
-      // Default to the first tab if no valid hash or no hash at all
-      const firstTab = document.querySelector('.tab-button[role="tab"]') as HTMLElement | null;
-      if (firstTab) {
-        setActiveTab(firstTab.id);
-      }
-    }
   }
+
+  // Initialize tabs on initial page load and after Astro view transitions
+  document.addEventListener('astro:page-load', () => {
+    console.log("Dashboard astro:page-load: Initializing tabs...");
+    initializeTabs();
+    // The ABTestManager component also has its own 'astro:page-load' listener for its specific scripts (charts, toggles).
+    // No need to explicitly call its init function here, Astro handles it.
+  });
+
+  // Handle popstate for browser back/forward for tabs
+  window.addEventListener('popstate', () => {
+    let hash = window.location.hash;
+    if (!hash || (hash !== '#ab-testing-panel' && hash !== '#user-profiles-panel')) {
+      hash = '#ab-testing-panel'; // Default to A/B tab
+    }
+    // initializeTabs() already contains setActiveTab which reads the hash.
+    // So, re-initializing tabs should correctly set the active tab based on the new hash.
+    initializeTabs();
+  });
 
 </script> 

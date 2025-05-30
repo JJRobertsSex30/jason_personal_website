@@ -208,13 +208,19 @@ export async function logClientImpression(variant: ABVariant | null, experimentN
 export async function trackConversion(
   experimentName: string, 
   variantId: string, 
+  userEmail: string,
   details?: Record<string, unknown>
-) {
-  const userIdentifier = getClientUserIdentifier();
+): Promise<{ status: 'SUCCESS' | 'DUPLICATE' | 'ERROR' | 'INVALID_INPUT'; message: string }> {
   const sessionIdentifier = getClientSessionIdentifier();
   
-  console.log(`A/B Test CLIENT CONVERSION: Experiment '${experimentName}', Variant ID: '${variantId}', User: '${userIdentifier}', Session: '${sessionIdentifier}', Details:`, details);
+  console.log(`A/B Test CLIENT CONVERSION ATTEMPT: Experiment '${experimentName}', Variant ID: '${variantId}', User Email: '${userEmail}', Session: '${sessionIdentifier}', Details:`, details);
   
+  if (!userEmail || userEmail.trim() === '' || !experimentName || !variantId) {
+    const msg = 'A/B Test: User email, experiment name, and variant ID are required for conversion tracking.';
+    console.error(msg);
+    return { status: 'INVALID_INPUT', message: msg };
+  }
+
   const { data: variantData, error: variantError } = await supabase
     .from('variants')
     .select('experiment_id')
@@ -222,15 +228,38 @@ export async function trackConversion(
     .single();
 
   if (variantError || !variantData || !variantData.experiment_id) {
-    console.error(`Supabase: Could not find valid experiment_id for variant_id: ${variantId}. Conversion not logged. Error:`, variantError?.message);
-    return;
+    const msg = `Supabase: Could not find valid experiment_id for variant_id: ${variantId}. Conversion not logged. Error: ${variantError?.message}`;
+    console.error(msg);
+    return { status: 'ERROR', message: msg };
   }
   const associatedExperimentId: string = variantData.experiment_id;
+
+  const { data: existingConversion, error: checkError } = await supabase
+    .from('conversions')
+    .select('id')
+    .eq('experiment_id', associatedExperimentId)
+    .eq('user_identifier', userEmail)
+    .limit(1)
+    .single();
+
+  if (checkError && checkError.code !== 'PGRST116') { // PGRST116 means no rows found
+    const msg = `Supabase error checking for existing conversion: ${checkError.message}`;
+    console.error(msg);
+    return { status: 'ERROR', message: msg }; 
+  }
+
+  if (existingConversion) {
+    const msg = `A/B Test: Conversion already logged for user '${userEmail}' in experiment '${associatedExperimentId}'.`;
+    console.log(msg + " No new conversion logged.");
+    return { status: 'DUPLICATE', message: "You have already subscribed with this email for this offer." }; // User-friendly message
+  }
+
+  console.log(`A/B Test: Logging new conversion for user '${userEmail}' in experiment '${associatedExperimentId}'.`);
 
   const conversionData: ConversionPayload = {
     variant_id: variantId, 
     experiment_id: associatedExperimentId,
-    user_identifier: userIdentifier,
+    user_identifier: userEmail,
     conversion_type: typeof details?.type === 'string' ? details.type : 'form_submission',
     details: details,
   };
@@ -243,15 +272,19 @@ export async function trackConversion(
     .insert(conversionData);
 
   if (conversionError) {
-    console.error('Supabase error logging conversion:', conversionError.message);
+    const msg = `Supabase error logging conversion: ${conversionError.message}`;
+    console.error(msg);
+    return { status: 'ERROR', message: msg };
   } else {
-    console.log(`Supabase: Conversion logged successfully for variant ${variantId} in experiment ${associatedExperimentId}`);
+    const msg = `Supabase: Conversion logged successfully for variant ${variantId}, user '${userEmail}' in experiment ${associatedExperimentId}`;
+    console.log(msg);
+    return { status: 'SUCCESS', message: "Thank you for subscribing!" }; // User-friendly message
   }
 }
 
 declare global {
   interface Window {
-    trackConversion?: (experimentName: string, variantId: string, details?: Record<string, unknown>) => Promise<void>;
+    trackConversion?: (experimentName: string, variantId: string, userEmail: string, details?: Record<string, unknown>) => Promise<{ status: 'SUCCESS' | 'DUPLICATE' | 'ERROR' | 'INVALID_INPUT'; message: string }>;
     logClientImpression?: (variant: ABVariant | null, experimentName: string) => Promise<void>;
   }
 }
