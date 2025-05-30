@@ -318,6 +318,84 @@ if (Astro.request.method === 'POST') {
         console.error('Delete variant processing error:', e);
       }
     }
+  } else if (action === 'delete_experiment') {
+    if (!session) {
+      abTestError = "Authentication required. Please log in again to delete an experiment.";
+    } else {
+      try {
+        const experimentId = formData.get('experiment_id')?.toString();
+
+        if (!experimentId) {
+          throw new Error('Experiment ID is required to delete an experiment.');
+        }
+
+        // Step 1: Fetch all variant IDs for the experiment
+        const { data: variants, error: fetchVariantsError } = await supabase
+          .from('variants')
+          .select('id')
+          .eq('experiment_id', experimentId);
+
+        if (fetchVariantsError) {
+          console.error('Supabase fetch variants for experiment deletion error:', fetchVariantsError);
+          throw new Error(fetchVariantsError.message || 'Failed to fetch variants for experiment deletion.');
+        }
+
+        const variantIds = variants ? variants.map(v => v.id) : [];
+
+        if (variantIds.length > 0) {
+          // Step 2: Delete all conversions linked to these variant IDs
+          const { error: deleteConversionsError } = await supabase
+            .from('conversions')
+            .delete()
+            .in('variant_id', variantIds);
+          if (deleteConversionsError) {
+            console.error('Supabase delete conversions error:', deleteConversionsError);
+            throw new Error(deleteConversionsError.message || 'Failed to delete conversions for experiment.');
+          }
+
+          // Step 3: Delete all impressions linked to these variant IDs
+          const { error: deleteImpressionsError } = await supabase
+            .from('impressions')
+            .delete()
+            .in('variant_id', variantIds);
+          if (deleteImpressionsError) {
+            console.error('Supabase delete impressions error:', deleteImpressionsError);
+            throw new Error(deleteImpressionsError.message || 'Failed to delete impressions for experiment.');
+          }
+
+          // Step 4: Delete all variants for the experiment
+          const { error: deleteVariantsError } = await supabase
+            .from('variants')
+            .delete()
+            .eq('experiment_id', experimentId);
+          if (deleteVariantsError) {
+            console.error('Supabase delete variants error:', deleteVariantsError);
+            throw new Error(deleteVariantsError.message || 'Failed to delete variants for experiment.');
+          }
+        }
+
+        // Step 5: Finally, delete the experiment itself
+        const { error: deleteExperimentError } = await supabase
+          .from('experiments')
+          .delete()
+          .eq('id', experimentId);
+
+        if (deleteExperimentError) {
+          console.error('Supabase delete experiment error:', deleteExperimentError);
+          throw new Error(deleteExperimentError.message || 'Failed to delete experiment.');
+        }
+        
+        return Astro.redirect(Astro.url.pathname, 303); // Redirect to the main page
+
+      } catch (e: unknown) {
+        if (e instanceof Error) {
+          abTestError = e.message; 
+        } else {
+          abTestError = 'An unexpected error occurred while deleting the experiment.';
+        }
+        console.error('Delete experiment processing error:', e);
+      }
+    }
   } else { 
     try {
       const email = formData.get('email')?.toString();
@@ -761,7 +839,13 @@ if (Astro.request.method === 'GET' || abTestError || error) {
                       >
                         {exp.managingVariants ? 'Hide Variants' : 'Manage Variants'}
                       </button>
-                      <button type="button" class="text-sm bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 delete-experiment-btn" data-experiment-id={exp.id}>Delete Exp.</button>
+                      <form method="POST" action={Astro.url.pathname} class="inline-block delete-experiment-form" data-experiment-name={exp.name}>
+                        <input type="hidden" name="_action" value="delete_experiment" />
+                        <input type="hidden" name="experiment_id" value={exp.id} />
+                        <button type="submit" class="text-sm bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 delete-experiment-btn-submit">
+                          Delete Exp.
+                        </button>
+                      </form>
                     </div>
                   </div>
 
@@ -1090,6 +1174,17 @@ if (Astro.request.method === 'GET' || abTestError || error) {
       form.addEventListener('submit', (event) => {
         const variantName = form.dataset.variantName || 'this variant';
         if (!confirm(`Are you sure you want to delete "${variantName}"? This action cannot be undone, especially if the variant has no impressions.`)) {
+          event.preventDefault(); // Prevent form submission if user cancels
+        }
+      });
+    });
+
+    // Event listener for Delete Experiment form submissions
+    document.querySelectorAll('.delete-experiment-form').forEach(formEl => {
+      const form = formEl as HTMLFormElement;
+      form.addEventListener('submit', (event) => {
+        const experimentName = form.dataset.experimentName || 'this experiment';
+        if (!confirm(`Are you sure you want to delete the experiment "${experimentName}" and all its associated variants and data? This action cannot be undone.`)) {
           event.preventDefault(); // Prevent form submission if user cancels
         }
       });
