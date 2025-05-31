@@ -282,10 +282,65 @@ export async function trackConversion(
   }
 }
 
+// Track an impression for an A/B test
+export async function trackImpression(experimentName: string, variantId: string): Promise<boolean> {
+  try {
+    // Don't track if we're on the server
+    if (typeof window === 'undefined') {
+      console.log('[trackImpression] Running on server, skipping impression tracking');
+      return false;
+    }
+
+    // Check if we've already tracked this impression
+    const impressionKey = `ab_impression_${experimentName}_${variantId}`;
+    if (localStorage.getItem(impressionKey)) {
+      console.log(`[trackImpression] Impression already tracked for ${experimentName} - ${variantId}`);
+      return true; // Already tracked
+    }
+
+    // Get the user's session ID or create one
+    let sessionId = localStorage.getItem('session_id');
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
+      localStorage.setItem('session_id', sessionId);
+    }
+
+    // Get the user's ID if they're logged in
+    const userId = localStorage.getItem('user_id') || null;
+
+    // Insert the impression into the database
+    const { error } = await supabase
+      .from('impressions')
+      .insert([{
+        experiment_name: experimentName,
+        variant_id: variantId,
+        session_id: sessionId,
+        user_id: userId,
+        created_at: new Date().toISOString(),
+        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+        page_url: typeof window !== 'undefined' ? window.location.href : null
+      }]);
+
+    if (error) {
+      console.error('Error tracking impression:', error);
+      return false;
+    }
+
+    // Mark this impression as tracked
+    localStorage.setItem(impressionKey, '1');
+    console.log(`[trackImpression] Successfully tracked impression for ${experimentName} - ${variantId}`);
+    return true;
+  } catch (error) {
+    console.error('Error in trackImpression:', error);
+    return false;
+  }
+}
+
 declare global {
   interface Window {
     trackConversion?: (experimentName: string, variantId: string, userEmail: string, details?: Record<string, unknown>) => Promise<{ status: 'SUCCESS' | 'DUPLICATE' | 'ERROR' | 'INVALID_INPUT'; message: string }>;
     logClientImpression?: (variant: ABVariant | null, experimentName: string) => Promise<void>;
+    trackImpression?: (experimentName: string, variantId: string) => Promise<boolean>;
   }
 }
 
@@ -293,6 +348,7 @@ if (typeof window !== 'undefined') {
   console.log('[abTester.ts] Running in browser, attempting to set window functions.'); // DEBUG LOG
   window.trackConversion = trackConversion;
   window.logClientImpression = logClientImpression; 
+  window.trackImpression = trackImpression;
   console.log('[abTester.ts] window.trackConversion assigned:', typeof window.trackConversion);
   console.log('[abTester.ts] window.logClientImpression assigned:', typeof window.logClientImpression);
 }

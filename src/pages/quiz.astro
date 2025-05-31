@@ -21,7 +21,7 @@ const quizQuestions = [
     scoring: [5, 4, 3, 2, 1], // Sex 2.0 Attitude (Agree=Low)
   },
   {
-    text: "Trust and respect are more important that exclusivity and control in a relationship.",
+    text: "Trust and respect are more important than exclusivity and control in a relationship.",
     scoring: [1, 2, 3, 4, 5], // Sex 3.0 Attitude (Agree=High)
   },
   {
@@ -293,6 +293,39 @@ function getResultSummary(score: number) {
   </div>
 
   <script is:inline>
+    // --- A/B Test Impression Tracking ---
+    document.addEventListener('DOMContentLoaded', () => {
+      try {
+        // Get variant info from sessionStorage (set by index_ab_test.astro)
+        const variantInfo = sessionStorage.getItem('quizVariant');
+        if (variantInfo) {
+          const variant = JSON.parse(variantInfo);
+          console.log('A/B Test - Quiz variant loaded:', variant);
+          
+          // Track the impression using the existing trackImpression function
+          if (window.trackImpression) {
+            window.trackImpression(variant.experiment, variant.variantId)
+              .then(success => {
+                if (success) {
+                  console.log('A/B Test - Impression tracked successfully');
+                } else {
+                  console.log('A/B Test - Impression not tracked (may have been tracked already)');
+                }
+              })
+              .catch(error => {
+                console.error('Error tracking A/B test impression:', error);
+              });
+          } else {
+            console.error('trackImpression function not available on window');
+          }
+        } else {
+          console.log('No A/B test variant info found in sessionStorage');
+        }
+      } catch (error) {
+        console.error('Error in A/B test tracking:', error);
+      }
+    });
+
     // --- Referral Tracking ---
     const queryParams = new URLSearchParams(window.location.search);
     const referrerId = queryParams.get("ref");

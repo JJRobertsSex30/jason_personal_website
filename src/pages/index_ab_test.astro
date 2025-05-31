@@ -2,13 +2,19 @@
 import Layout from '~/layouts/PageLayout.astro';
 import HeroCustomAB from '~/components/widgets/HeroCustomAB.astro';
 
+// Your Core Widgets & Custom Components
+import Content from '~/components/widgets/Content.astro'; // For About JJ & Book sections
+import { Icon } from 'astro-icon/components'; // For buttons with icons
+
 // Import AB testing logic - getVariant for SSR, ABVariant for type.
 // Crucially, also import abTester here to ensure its client-side window setup runs.
-import { getVariant, type ABVariant } from '~/lib/abTester';
+import { getVariant, type ABVariant, trackImpression } from '~/lib/abTester';
 // Re-enable side-effect import to ensure abTester.ts is in the client bundle
 import '~/lib/abTester'; 
 
-import imgHeroMain from '~/assets/images/jj2.png'; // Default image for fallback or if not in variant
+// Import the image with type assertion
+// @ts-ignore - We know this is an image import
+import imgHeroMain from '~/assets/images/jj2.png';
 
 // --- METADATA (can be same as index.astro or simplified) ---
 const metadata = {
@@ -19,16 +25,72 @@ const metadata = {
 const EXPERIMENT_NAME = 'Hero Headline AB Test 1'; // Define as a constant
 const chosenHeroContent: ABVariant = await getVariant(EXPERIMENT_NAME);
 
-// Image can either be part of the variant's config_json or a static default like this.
-// If you want the image to be A/B tested, it should be part of the config_json in your variants table,
-// and then extracted in abTester.ts similar to headline/subheadline.
-const heroImageForWidget = { 
-  src: imgHeroMain, // Default or fallback image
-  alt: chosenHeroContent.raw_config_json?.image_alt || 'JJ Roberts - Relationship Expert' // Example: get alt from config or default
-};
-// If image source itself is from config:
-// const imageSrcFromConfig = chosenHeroContent.raw_config_json?.image_src; // you would need to resolve this path or use a full URL
+const LOVELAB_EXPERIMENT_NAME = 'Lovelab Quiz 1 or 2 pages'; // Define as a constant
+const chosenLovelabContent: ABVariant = await getVariant(LOVELAB_EXPERIMENT_NAME);
 
+const QUIZ_EXPERIMENT_NAME = 'Lovelab Quiz 1 or 2 pages';
+let quizVariant;
+
+try {
+  quizVariant = await getVariant(QUIZ_EXPERIMENT_NAME);
+  console.log('Assigned quiz variant:', quizVariant);
+  
+  // Track the impression
+  await trackImpression(QUIZ_EXPERIMENT_NAME, quizVariant.id);
+} catch (error) {
+  console.error('Error getting quiz variant:', error);
+  // Fallback to default quiz
+  quizVariant = {
+    id: 'default_variant',
+    name: 'Default Quiz',
+    experiment_id: 'default_experiment',
+    raw_config_json: {
+      quiz_path: '/quiz',
+      quiz_name: 'Default Quiz'
+    }
+  };
+}
+
+// Store the quiz variant in a script for client-side access
+const quizVariantInfo = {
+  experiment: QUIZ_EXPERIMENT_NAME,
+  variantId: quizVariant.id,
+  variantName: quizVariant.name,
+  quizPath: quizVariant.raw_config_json?.quiz_path || '/quiz',
+  quizName: quizVariant.raw_config_json?.quiz_name || 'Quiz'
+};
+
+// Image configuration for the hero section
+const heroImageForWidget = { 
+  src: imgHeroMain,
+  alt: 'JJ Roberts - Relationship Expert'
+} as const;
+
+// === FINAL CALL TO ACTION (Quiz) DATA ===
+const finalCtaTagline = "Your Next Step to a Better Love Life";
+const finalCtaTitle = "Unlock Your Relationship Blueprint";
+const finalCtaImage = { src: imgHeroMain, alt: 'Abstract graphic representing a blueprint or pathway' };
+const finalCtaDescription = `
+  Ready to understand what's *really* going on in your relationships and how to make lasting positive changes?
+  Our quick, insightful quiz will help you identify key patterns and provide a starting point for your personal transformation.
+  Plus, you'll get exclusive free chapters from "Sex 3.0: A Sexual Revolution Manual" to guide you further!
+`;
+
+// Get the quiz path from the variant config or default to '/quiz'
+const quizPath = quizVariant.raw_config_json?.quiz_path || '/quiz';
+
+// Simple quiz URL without any parameters
+const quizUrl = quizPath;
+
+console.log('Quiz URL:', quizUrl);
+
+const finalCtaButton = {
+    text: 'Enter The Love Lab',
+    href: quizUrl,
+    icon: 'tabler:flask'
+};
+
+console.log('Using quiz path:', quizPath);
 ---
 
 <Layout metadata={metadata}>
@@ -45,7 +107,7 @@ const heroImageForWidget = {
       headline={chosenHeroContent.headline}
       subheadline={chosenHeroContent.subheadline}
       image={heroImageForWidget}
-      abTestVariantKey={chosenHeroContent.id}
+      abTestVariantKey={chosenHeroContent.experiment_id}
       experimentName={EXPERIMENT_NAME}
     />
 
@@ -60,12 +122,59 @@ const heroImageForWidget = {
       </div>
     )}
 
-    {/* Add other sections from your original index.astro if you want them on this test page */}
-    {/* For example: */}
-    {/* <Features ... /> */}
-    {/* <Testimonials ... /> */}
+   {/* --- FINAL CALL TO ACTION (Quiz) using Content Widget --- */}
+   <Content
+   id="final-cta-quiz-section"
+   isReversed={false}
+   tagline={finalCtaTagline}
+   title={finalCtaTitle}
+   image={finalCtaImage}
+   classes={{
+     container: 'py-16 md:py-24 bg-brand-orange/5 dark:bg-brand-orange/5',
+     panel: 'gap-8 md:gap-12 lg:gap-16 items-center',
+     content: 'prose prose-lg dark:prose-invert max-w-none text-center md:text-left',
+     image: 'max-w-md lg:max-lg mx-auto md:mx-0 rounded-lg shadow-xl order-first md:order-last',
+   }}
+ >
+   <Fragment slot="content">
+     <div class="space-y-4" set:html={finalCtaDescription} />
 
-  </main>
+     <div class="mt-8 flex justify-center md:justify-start">
+       <a
+         href={finalCtaButton.href}
+         class="inline-flex items-center justify-center gap-2
+                px-8 py-3 bg-orange-500 hover:bg-orange-600
+                text-white text-lg font-semibold rounded-full
+                shadow-md transition duration-300 ease-in-out
+                transform hover:scale-105 whitespace-nowrap
+                focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-orange-700 dark:focus-visible:ring-offset-slate-900"
+         target={finalCtaButton.href.startsWith('http') ? '_blank' : '_self'}
+         rel={finalCtaButton.href.startsWith('http') ? 'noopener noreferrer' : ''}
+       >
+         {finalCtaButton.icon && <Icon name={finalCtaButton.icon} class="w-5 h-5 md:w-6 md:h-6" />}
+         <span>{finalCtaButton.text}</span>
+       </a>
+     </div>
+   </Fragment>
+ </Content>
+
+</main>
+
+  {/* Store variant data in sessionStorage immediately when page loads */}
+  <script is:inline define:vars={{ quizVariantInfo }}>
+    try {
+      // Store quiz variant info in sessionStorage
+      sessionStorage.setItem('quizVariant', JSON.stringify(quizVariantInfo));
+      console.log('✓ Stored quiz variant in sessionStorage:', quizVariantInfo);
+      
+      // Also store in localStorage as backup
+      localStorage.setItem('quizVariant', JSON.stringify(quizVariantInfo));
+      console.log('✓ Stored quiz variant in localStorage as backup:', quizVariantInfo);
+      
+    } catch (e) {
+      console.error('✗ Error storing quiz variant:', e);
+    }
+  </script>
 
   {/* This script's sole purpose is to ensure abTester.ts is loaded and executed on the client */}
   <script>
@@ -115,4 +224,4 @@ const heroImageForWidget = {
       }
     }, 500); // Check every 500ms
   }
-</script> 
+</script>
