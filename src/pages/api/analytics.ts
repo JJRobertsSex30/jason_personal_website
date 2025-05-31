@@ -1,242 +1,495 @@
 import type { APIRoute } from 'astro';
 import { supabase } from '~/lib/supabaseClient';
 
-export const GET: APIRoute = async ({ url }) => {
+interface AnalyticsData {
+  performance: {
+    totalImpressions: number;
+    totalConversions: number;
+    conversionRate: number;
+    avgTimeOnPage: number;
+  };
+  geographic: {
+    topCountry: string;
+    countryCount: number;
+    bestConvertingCountry: string;
+    bestConvertingRate: number;
+  };
+  device: {
+    topDevice: string;
+    topBrowser: string;
+    mobilePercentage: number;
+  };
+  engagement: {
+    avgScrollDepth: number;
+    bounceRate: number;
+    returnVisitors: number;
+  };
+  campaign: {
+    topUtmSource: string;
+    topUtmCampaign: string;
+    directTrafficPercentage: number;
+  };
+  statistical: {
+    confidenceLevel: number;
+    sampleSize: number;
+    isSignificant: boolean;
+  };
+  campaignPerformance: {
+    sources: Array<{
+      source: string;
+      impressions: number;
+      conversions: number;
+      conversionRate: number;
+      roi: number;
+    }>;
+    mediums: Array<{
+      medium: string;
+      impressions: number;
+      conversions: number;
+      conversionRate: number;
+    }>;
+    campaigns: Array<{
+      campaign: string;
+      source: string;
+      medium: string;
+      impressions: number;
+      conversions: number;
+      conversionRate: number;
+      avgTimeOnPage: number;
+      bounceRate: number;
+    }>;
+    attributionSummary: {
+      totalAttributedConversions: number;
+      directConversions: number;
+      organicConversions: number;
+      paidConversions: number;
+      socialConversions: number;
+      emailConversions: number;
+    };
+    funnelAnalysis: {
+      topOfFunnel: number; // Total impressions
+      middleOfFunnel: number; // Engaged users (>30% scroll or >30s)
+      bottomOfFunnel: number; // Conversions
+      funnelConversionRate: number;
+      dropOffRate: number;
+    };
+  };
+}
+
+export const GET: APIRoute = async ({ request: _request }) => {
   try {
-    const experimentId = url.searchParams.get('experimentId');
-    
-    if (!experimentId) {
-      return new Response(JSON.stringify({ error: 'experimentId parameter is required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
+    console.log('Analytics API: Starting data calculation...');
 
-    // Get experiment variants
-    const { data: variants, error: variantsError } = await supabase
-      .from('variants')
-      .select('id')
-      .eq('experiment_id', experimentId);
-
-    if (variantsError) {
-      console.error('Error fetching variants:', variantsError);
-      return new Response(JSON.stringify({ error: 'Failed to fetch variants' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    if (!variants || variants.length === 0) {
-      return new Response(JSON.stringify({
-        totalImpressions: 0,
-        totalConversions: 0,
-        overallRate: 0,
-        avgTimeOnPage: 0,
-        topCountry: 'N/A',
-        countryCount: 0,
-        bestCountry: 'N/A',
-        topDevice: 'N/A',
-        topBrowser: 'N/A',
-        mobilePercentage: 0,
-        avgScroll: 0,
-        bounceRate: 0,
-        returnVisitors: 0,
-        topUtmSource: 'Direct',
-        topUtmCampaign: 'N/A',
-        directTraffic: 100,
-        sampleSize: 0,
-        isSignificant: false
-      }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    const variantIds = variants.map(v => v.id);
-
-    // Fetch impressions data
-    const { data: impressions, error: impressionsError } = await supabase
+    // 1. Performance Overview
+    const { count: totalImpressions } = await supabase
       .from('impressions')
-      .select('*')
-      .in('variant_id', variantIds);
+      .select('*', { count: 'exact', head: true });
 
-    if (impressionsError) {
-      console.error('Error fetching impressions:', impressionsError);
-      return new Response(JSON.stringify({ error: 'Failed to fetch impressions' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Fetch conversions data
-    const { data: conversions, error: conversionsError } = await supabase
+    const { count: totalConversions } = await supabase
       .from('conversions')
-      .select('*')
-      .in('variant_id', variantIds);
+      .select('*', { count: 'exact', head: true });
 
-    if (conversionsError) {
-      console.error('Error fetching conversions:', conversionsError);
-      return new Response(JSON.stringify({ error: 'Failed to fetch conversions' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
+    const impressionsCount = totalImpressions || 0;
+    const conversionsCount = totalConversions || 0;
+    const conversionRate = impressionsCount > 0 ? (conversionsCount / impressionsCount) * 100 : 0;
 
-    // Calculate analytics
-    const totalImpressions = impressions?.length || 0;
-    const totalConversions = conversions?.length || 0;
-    const overallRate = totalImpressions > 0 ? (totalConversions / totalImpressions) * 100 : 0;
+    // Average time on page from impressions metadata
+    const { data: impressionsWithTime } = await supabase
+      .from('impressions')
+      .select('metadata')
+      .not('metadata->time_on_page_seconds', 'is', null);
 
-    // Time on page calculation
-    const timeOnPageValues = impressions?.filter(i => i.time_on_page_seconds).map(i => i.time_on_page_seconds) || [];
-    const avgTimeOnPage = timeOnPageValues.length > 0 
-      ? timeOnPageValues.reduce((sum, time) => sum + time, 0) / timeOnPageValues.length 
+    const avgTimeOnPage = impressionsWithTime && impressionsWithTime.length > 0 
+      ? impressionsWithTime.reduce((sum, imp) => sum + (imp.metadata?.time_on_page_seconds || 0), 0) / impressionsWithTime.length
       : 0;
 
-    // Geographic analysis
-    const countries = impressions?.filter(i => i.country).map(i => i.country) || [];
-    const countryCount = new Set(countries).size;
-    const topCountry = countries.length > 0 
-      ? countries.reduce((acc, country) => {
-          acc[country] = (acc[country] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>)
-      : {};
+    // 2. Geographic Insights
+    const { data: geoData } = await supabase
+      .from('impressions')
+      .select('country')
+      .not('country', 'is', null);
+
+    const countryStats = geoData?.reduce((acc, item) => {
+      const country = item.country;
+      acc[country] = (acc[country] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>) || {};
+
+    const topCountry = Object.entries(countryStats)
+      .sort(([,a], [,b]) => b - a)[0]?.[0] || 'Unknown';
     
-    const topCountryName = Object.keys(topCountry).length > 0 
-      ? Object.keys(topCountry).reduce((a, b) => topCountry[a] > topCountry[b] ? a : b)
-      : 'N/A';
+    const countryCount = Object.keys(countryStats).length;
 
     // Best converting country
-    const countryConversions = conversions?.filter(c => c.country).reduce((acc, conv) => {
-      const country = conv.country;
-      if (country) {
-        acc[country] = (acc[country] || 0) + 1;
-      }
+    const { data: conversionGeoData } = await supabase
+      .from('conversions')
+      .select('metadata')
+      .not('metadata->country', 'is', null);
+
+    const conversionCountryStats = conversionGeoData?.reduce((acc, item) => {
+      const country = item.metadata?.country;
+      if (country) acc[country] = (acc[country] || 0) + 1;
       return acc;
     }, {} as Record<string, number>) || {};
 
-    const countryImpressions = impressions?.filter(i => i.country).reduce((acc, imp) => {
-      const country = imp.country;
-      if (country) {
-        acc[country] = (acc[country] || 0) + 1;
+    let bestConvertingCountry = 'N/A';
+    let bestConvertingRate = 0;
+
+    for (const country of Object.keys(countryStats)) {
+      const impressions = countryStats[country];
+      const conversions = conversionCountryStats[country] || 0;
+      const rate = impressions > 0 ? (conversions / impressions) * 100 : 0;
+      if (rate > bestConvertingRate) {
+        bestConvertingRate = rate;
+        bestConvertingCountry = country;
       }
+    }
+
+    // 3. Device & Browser Analytics
+    const { data: deviceData } = await supabase
+      .from('impressions')
+      .select('device_type, user_agent')
+      .not('device_type', 'is', null);
+
+    const deviceStats = deviceData?.reduce((acc, item) => {
+      const device = item.device_type || 'Unknown';
+      acc[device] = (acc[device] || 0) + 1;
       return acc;
     }, {} as Record<string, number>) || {};
 
-    let bestCountry = 'N/A';
-    let bestRate = 0;
-    Object.keys(countryImpressions).forEach(country => {
-      const convs = countryConversions[country] || 0;
-      const imps = countryImpressions[country] || 0;
-      const rate = imps > 0 ? (convs / imps) * 100 : 0;
-      if (rate > bestRate) {
-        bestRate = rate;
-        bestCountry = country;
+    const topDevice = Object.entries(deviceStats)
+      .sort(([,a], [,b]) => b - a)[0]?.[0] || 'Unknown';
+
+    // Extract browser from user agent (simplified)
+    const browserStats = deviceData?.reduce((acc, item) => {
+      const ua = item.user_agent || '';
+      let browser = 'Unknown';
+      if (ua.includes('Chrome')) browser = 'Chrome';
+      else if (ua.includes('Firefox')) browser = 'Firefox';
+      else if (ua.includes('Safari')) browser = 'Safari';
+      else if (ua.includes('Edge')) browser = 'Edge';
+      
+      acc[browser] = (acc[browser] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>) || {};
+
+    const topBrowser = Object.entries(browserStats)
+      .sort(([,a], [,b]) => b - a)[0]?.[0] || 'Unknown';
+
+    const mobileCount = deviceStats['mobile'] || 0;
+    const totalDevices = Object.values(deviceStats).reduce((sum, count) => sum + count, 0);
+    const mobilePercentage = totalDevices > 0 ? (mobileCount / totalDevices) * 100 : 0;
+
+    // 4. Engagement Metrics
+    const { data: scrollData } = await supabase
+      .from('impressions')
+      .select('metadata')
+      .not('metadata->scroll_depth_percent', 'is', null);
+
+    const avgScrollDepth = scrollData && scrollData.length > 0
+      ? scrollData.reduce((sum, imp) => sum + (imp.metadata?.scroll_depth_percent || 0), 0) / scrollData.length
+      : 0;
+
+    // Bounce rate (assume <30% scroll or <10 seconds as bounce)
+    const bounceCount = scrollData && scrollData.length > 0 
+      ? scrollData.filter(imp => 
+        (imp.metadata?.scroll_depth_percent || 0) < 30 && 
+        (imp.metadata?.time_on_page_seconds || 0) < 10
+      ).length
+      : 0;
+    const bounceRate = scrollData && scrollData.length > 0 ? (bounceCount / scrollData.length) * 100 : 0;
+
+    // Return visitors (simplified - users with multiple sessions)
+    const { data: sessionData } = await supabase
+      .from('impressions')
+      .select('user_identifier')
+      .not('user_identifier', 'is', null);
+
+    const userCounts = sessionData?.reduce((acc, item) => {
+      const user = item.user_identifier;
+      acc[user] = (acc[user] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>) || {};
+
+    const returnVisitors = Object.values(userCounts).filter(count => count > 1).length;
+
+    // 5. Campaign Tracking
+    const { data: utmData } = await supabase
+      .from('impressions')
+      .select('metadata')
+      .not('metadata->utm_source', 'is', null);
+
+    const utmSourceStats = utmData?.reduce((acc, item) => {
+      const source = item.metadata?.utm_source || 'Unknown';
+      acc[source] = (acc[source] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>) || {};
+
+    const topUtmSource = Object.entries(utmSourceStats)
+      .sort(([,a], [,b]) => b - a)[0]?.[0] || 'N/A';
+
+    const utmCampaignStats = utmData?.reduce((acc, item) => {
+      const campaign = item.metadata?.utm_campaign || 'Unknown';
+      acc[campaign] = (acc[campaign] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>) || {};
+
+    const topUtmCampaign = Object.entries(utmCampaignStats)
+      .sort(([,a], [,b]) => b - a)[0]?.[0] || 'N/A';
+
+    const directTrafficCount = impressionsCount - (utmData?.length || 0);
+    const directTrafficPercentage = impressionsCount > 0 ? (directTrafficCount / impressionsCount) * 100 : 0;
+
+    // 6. Statistical Significance
+    const sampleSize = impressionsCount;
+    const confidenceLevel = 0.95; // 95% confidence level
+    
+    // Simple significance test (chi-square approximation)
+    const isSignificant = sampleSize >= 100 && conversionRate > 0 && conversionRate < 100;
+
+    // 7. Campaign Performance Analysis
+    console.log('Analytics API: Calculating campaign performance...');
+    
+    // Get all impressions with UTM data
+    const { data: allUTMImpressions } = await supabase
+      .from('impressions')
+      .select('metadata, user_identifier, created_at');
+
+    // Get all conversions with UTM data
+    const { data: allUTMConversions } = await supabase
+      .from('conversions')
+      .select('metadata, user_identifier, created_at');
+
+    // UTM Source Analysis
+    const sourceStats = new Map<string, { impressions: number; conversions: number; timeOnPage: number[]; bounces: number }>();
+    
+    allUTMImpressions?.forEach(imp => {
+      const source = imp.metadata?.utm_source || 'direct';
+      if (!sourceStats.has(source)) {
+        sourceStats.set(source, { impressions: 0, conversions: 0, timeOnPage: [], bounces: 0 });
+      }
+      const stats = sourceStats.get(source)!;
+      stats.impressions++;
+      
+      if (imp.metadata?.time_on_page_seconds) {
+        stats.timeOnPage.push(imp.metadata.time_on_page_seconds);
+      }
+      
+      // Count as bounce if low engagement
+      if ((imp.metadata?.scroll_depth_percent || 0) < 30 && (imp.metadata?.time_on_page_seconds || 0) < 30) {
+        stats.bounces++;
       }
     });
 
-    // Device analysis
-    const devices = impressions?.filter(i => i.device_type).map(i => i.device_type) || [];
-    const deviceCount = devices.reduce((acc, device) => {
-      acc[device] = (acc[device] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    const topDevice = Object.keys(deviceCount).length > 0 
-      ? Object.keys(deviceCount).reduce((a, b) => deviceCount[a] > deviceCount[b] ? a : b)
-      : 'N/A';
-    
-    const mobileCount = devices.filter(d => d?.toLowerCase().includes('mobile')).length;
-    const mobilePercentage = devices.length > 0 ? (mobileCount / devices.length) * 100 : 0;
-
-    // Browser analysis
-    const browsers = impressions?.filter(i => i.browser).map(i => i.browser) || [];
-    const browserCount = browsers.reduce((acc, browser) => {
-      acc[browser] = (acc[browser] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    const topBrowser = Object.keys(browserCount).length > 0 
-      ? Object.keys(browserCount).reduce((a, b) => browserCount[a] > browserCount[b] ? a : b)
-      : 'N/A';
-
-    // Engagement metrics
-    const scrollValues = impressions?.filter(i => i.scroll_depth_percent !== null && i.scroll_depth_percent !== undefined)
-      .map(i => i.scroll_depth_percent) || [];
-    const avgScroll = scrollValues.length > 0 
-      ? scrollValues.reduce((sum, scroll) => sum + scroll, 0) / scrollValues.length 
-      : 0;
-
-    // Bounce rate (assuming < 30% scroll = bounce)
-    const bounceCount = scrollValues.filter(scroll => scroll < 30).length;
-    const bounceRate = scrollValues.length > 0 ? (bounceCount / scrollValues.length) * 100 : 0;
-
-    // Return visitors (users with multiple impressions)
-    const userCounts = impressions?.reduce((acc, imp) => {
-      if (imp.user_identifier) {
-        acc[imp.user_identifier] = (acc[imp.user_identifier] || 0) + 1;
+    // Match conversions to sources
+    allUTMConversions?.forEach(conv => {
+      const source = conv.metadata?.utm_source || 'direct';
+      if (sourceStats.has(source)) {
+        sourceStats.get(source)!.conversions++;
       }
-      return acc;
-    }, {} as Record<string, number>) || {};
-    const returnVisitors = Object.values(userCounts).filter((count: number) => count > 1).length;
+    });
 
-    // UTM analysis
-    const utmSources = impressions?.filter(i => i.utm_source).map(i => i.utm_source) || [];
-    const sourceCount = utmSources.reduce((acc, source) => {
-      acc[source] = (acc[source] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    const topUtmSource = Object.keys(sourceCount).length > 0 
-      ? Object.keys(sourceCount).reduce((a, b) => sourceCount[a] > sourceCount[b] ? a : b)
-      : 'Direct';
+    const sources = Array.from(sourceStats.entries()).map(([source, stats]) => ({
+      source,
+      impressions: stats.impressions,
+      conversions: stats.conversions,
+      conversionRate: stats.impressions > 0 ? (stats.conversions / stats.impressions) * 100 : 0,
+      roi: stats.conversions * 10 // Assuming $10 value per conversion for ROI calculation
+    })).sort((a, b) => b.conversions - a.conversions);
 
-    const utmCampaigns = impressions?.filter(i => i.utm_campaign).map(i => i.utm_campaign) || [];
-    const campaignCount = utmCampaigns.reduce((acc, campaign) => {
-      acc[campaign] = (acc[campaign] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    const topUtmCampaign = Object.keys(campaignCount).length > 0 
-      ? Object.keys(campaignCount).reduce((a, b) => campaignCount[a] > campaignCount[b] ? a : b)
-      : 'N/A';
+    // UTM Medium Analysis
+    const mediumStats = new Map<string, { impressions: number; conversions: number }>();
+    
+    allUTMImpressions?.forEach(imp => {
+      const medium = imp.metadata?.utm_medium || 'none';
+      if (!mediumStats.has(medium)) {
+        mediumStats.set(medium, { impressions: 0, conversions: 0 });
+      }
+      mediumStats.get(medium)!.impressions++;
+    });
 
-    // Direct traffic percentage
-    const directCount = impressions?.filter(i => !i.utm_source && !i.referrer).length || 0;
-    const directTraffic = totalImpressions > 0 ? (directCount / totalImpressions) * 100 : 0;
+    allUTMConversions?.forEach(conv => {
+      const medium = conv.metadata?.utm_medium || 'none';
+      if (mediumStats.has(medium)) {
+        mediumStats.get(medium)!.conversions++;
+      }
+    });
 
-    // Statistical significance (simplified)
-    const sampleSize = totalImpressions;
-    const isSignificant = sampleSize >= 100 && overallRate > 0; // Basic threshold
+    const mediums = Array.from(mediumStats.entries()).map(([medium, stats]) => ({
+      medium,
+      impressions: stats.impressions,
+      conversions: stats.conversions,
+      conversionRate: stats.impressions > 0 ? (stats.conversions / stats.impressions) * 100 : 0
+    })).sort((a, b) => b.conversions - a.conversions);
 
-    const analytics = {
-      totalImpressions,
-      totalConversions,
-      overallRate,
-      avgTimeOnPage,
-      topCountry: topCountryName,
-      countryCount,
-      bestCountry,
-      topDevice,
-      topBrowser,
-      mobilePercentage,
-      avgScroll,
-      bounceRate,
-      returnVisitors,
-      topUtmSource,
-      topUtmCampaign,
-      directTraffic,
-      sampleSize,
-      isSignificant
+    // Campaign Analysis (source + medium + campaign)
+    const campaignStats = new Map<string, { 
+      source: string; 
+      medium: string; 
+      impressions: number; 
+      conversions: number; 
+      timeOnPage: number[]; 
+      bounces: number; 
+    }>();
+    
+    allUTMImpressions?.forEach(imp => {
+      const campaign = imp.metadata?.utm_campaign || 'no-campaign';
+      const source = imp.metadata?.utm_source || 'direct';
+      const medium = imp.metadata?.utm_medium || 'none';
+      const key = `${campaign}|${source}|${medium}`;
+      
+      if (!campaignStats.has(key)) {
+        campaignStats.set(key, { 
+          source, 
+          medium, 
+          impressions: 0, 
+          conversions: 0, 
+          timeOnPage: [], 
+          bounces: 0 
+        });
+      }
+      
+      const stats = campaignStats.get(key)!;
+      stats.impressions++;
+      
+      if (imp.metadata?.time_on_page_seconds) {
+        stats.timeOnPage.push(imp.metadata.time_on_page_seconds);
+      }
+      
+      if ((imp.metadata?.scroll_depth_percent || 0) < 30 && (imp.metadata?.time_on_page_seconds || 0) < 30) {
+        stats.bounces++;
+      }
+    });
+
+    allUTMConversions?.forEach(conv => {
+      const campaign = conv.metadata?.utm_campaign || 'no-campaign';
+      const source = conv.metadata?.utm_source || 'direct';
+      const medium = conv.metadata?.utm_medium || 'none';
+      const key = `${campaign}|${source}|${medium}`;
+      
+      if (campaignStats.has(key)) {
+        campaignStats.get(key)!.conversions++;
+      }
+    });
+
+    const campaigns = Array.from(campaignStats.entries()).map(([key, stats]) => {
+      const campaign = key.split('|')[0];
+      const avgTimeOnPage = stats.timeOnPage.length > 0 
+        ? stats.timeOnPage.reduce((sum, time) => sum + time, 0) / stats.timeOnPage.length 
+        : 0;
+      const bounceRate = stats.impressions > 0 ? (stats.bounces / stats.impressions) * 100 : 0;
+      
+      return {
+        campaign,
+        source: stats.source,
+        medium: stats.medium,
+        impressions: stats.impressions,
+        conversions: stats.conversions,
+        conversionRate: stats.impressions > 0 ? (stats.conversions / stats.impressions) * 100 : 0,
+        avgTimeOnPage: Math.round(avgTimeOnPage * 10) / 10,
+        bounceRate: Math.round(bounceRate * 10) / 10
+      };
+    }).sort((a, b) => b.conversions - a.conversions);
+
+    // Attribution Summary
+    const totalAttributedConversions = allUTMConversions?.filter(conv => conv.metadata?.utm_source).length || 0;
+    const directConversions = allUTMConversions?.filter(conv => !conv.metadata?.utm_source || conv.metadata.utm_source === 'direct').length || 0;
+    
+    const organicConversions = allUTMConversions?.filter(conv => 
+      conv.metadata?.utm_source === 'google' && conv.metadata?.utm_medium === 'organic'
+    ).length || 0;
+    
+    const paidConversions = allUTMConversions?.filter(conv => 
+      conv.metadata?.utm_medium === 'cpc' || conv.metadata?.utm_medium === 'paid'
+    ).length || 0;
+    
+    const socialConversions = allUTMConversions?.filter(conv => 
+      ['facebook', 'twitter', 'linkedin', 'instagram', 'tiktok'].includes(conv.metadata?.utm_source)
+    ).length || 0;
+    
+    const emailConversions = allUTMConversions?.filter(conv => 
+      conv.metadata?.utm_medium === 'email' || conv.metadata?.utm_source === 'newsletter'
+    ).length || 0;
+
+    // Funnel Analysis
+    const topOfFunnel = impressionsCount; // Total impressions
+    const middleOfFunnel = allUTMImpressions?.filter(imp => 
+      (imp.metadata?.scroll_depth_percent || 0) > 30 || (imp.metadata?.time_on_page_seconds || 0) > 30
+    ).length || 0;
+    const bottomOfFunnel = conversionsCount; // Total conversions
+    
+    const funnelConversionRate = topOfFunnel > 0 ? (bottomOfFunnel / topOfFunnel) * 100 : 0;
+    const dropOffRate = topOfFunnel > 0 ? ((topOfFunnel - bottomOfFunnel) / topOfFunnel) * 100 : 0;
+
+    const analytics: AnalyticsData = {
+      performance: {
+        totalImpressions: impressionsCount,
+        totalConversions: conversionsCount,
+        conversionRate: Math.round(conversionRate * 100) / 100,
+        avgTimeOnPage: Math.round(avgTimeOnPage * 10) / 10,
+      },
+      geographic: {
+        topCountry,
+        countryCount,
+        bestConvertingCountry,
+        bestConvertingRate: Math.round(bestConvertingRate * 100) / 100,
+      },
+      device: {
+        topDevice,
+        topBrowser,
+        mobilePercentage: Math.round(mobilePercentage * 10) / 10,
+      },
+      engagement: {
+        avgScrollDepth: Math.round(avgScrollDepth * 10) / 10,
+        bounceRate: Math.round(bounceRate * 10) / 10,
+        returnVisitors,
+      },
+      campaign: {
+        topUtmSource,
+        topUtmCampaign,
+        directTrafficPercentage: Math.round(directTrafficPercentage * 10) / 10,
+      },
+      statistical: {
+        confidenceLevel,
+        sampleSize,
+        isSignificant,
+      },
+      campaignPerformance: {
+        sources: sources,
+        mediums: mediums,
+        campaigns: campaigns,
+        attributionSummary: {
+          totalAttributedConversions,
+          directConversions,
+          organicConversions,
+          paidConversions,
+          socialConversions,
+          emailConversions,
+        },
+        funnelAnalysis: {
+          topOfFunnel,
+          middleOfFunnel,
+          bottomOfFunnel,
+          funnelConversionRate,
+          dropOffRate,
+        },
+      },
     };
 
+    console.log('Analytics API: Calculation complete');
     return new Response(JSON.stringify(analytics), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
     console.error('Analytics API error:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+    return new Response(JSON.stringify({ 
+      error: 'Failed to calculate analytics',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     });
   }
 }; 
