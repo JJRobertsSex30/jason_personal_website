@@ -174,6 +174,164 @@ const { experiments, abTestError } = Astro.props;
                   <p class="text-sm text-slate-500 dark:text-slate-400 italic">No variants defined for this experiment yet.</p>
                 )}
             </div>
+
+            {/* Enhanced Analytics Dashboard */}
+            <div class="mt-6 pt-6 border-t border-dashed border-slate-300 dark:border-slate-600">
+              <h5 class="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-4 text-center">📊 Analytics Dashboard</h5>
+              
+              {/* Analytics Grid */}
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                
+                {/* Performance Overview Card */}
+                <div class="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
+                  <h6 class="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-2 flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z"></path>
+                      <path d="M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z"></path>
+                    </svg>
+                    Performance Overview
+                  </h6>
+                  <div class="space-y-1 text-xs">
+                    <div class="flex justify-between">
+                      <span class="text-slate-600 dark:text-slate-400">Total Impressions:</span>
+                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="total-impressions">Loading...</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-slate-600 dark:text-slate-400">Total Conversions:</span>
+                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="total-conversions">Loading...</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-slate-600 dark:text-slate-400">Overall Rate:</span>
+                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="overall-rate">Loading...</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-slate-600 dark:text-slate-400">Avg. Time on Page:</span>
+                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="avg-time-on-page">Loading...</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Geographic Insights Card */}
+                <div class="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 p-4 rounded-lg border border-green-200 dark:border-green-700">
+                  <h6 class="text-sm font-semibold text-green-800 dark:text-green-300 mb-2 flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"></path>
+                    </svg>
+                    Geographic Insights
+                  </h6>
+                  <div class="space-y-1 text-xs">
+                    <div class="flex justify-between">
+                      <span class="text-slate-600 dark:text-slate-400">Top Country:</span>
+                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="top-country">Loading...</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-slate-600 dark:text-slate-400">Countries:</span>
+                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="country-count">Loading...</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-slate-600 dark:text-slate-400">Best Converting:</span>
+                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="best-country">Loading...</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Device & Browser Card */}
+                <div class="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 p-4 rounded-lg border border-purple-200 dark:border-purple-700">
+                  <h6 class="text-sm font-semibold text-purple-800 dark:text-purple-300 mb-2 flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2h-2.22l.123.489.804.804A1 1 0 0113 18H7a1 1 0 01-.707-1.707l.804-.804L7.22 15H5a2 2 0 01-2-2V5zm5.771 7H5V5h10v7H8.771z" clip-rule="evenodd"></path>
+                    </svg>
+                    Device & Browser
+                  </h6>
+                  <div class="space-y-1 text-xs">
+                    <div class="flex justify-between">
+                      <span class="text-slate-600 dark:text-slate-400">Top Device:</span>
+                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="top-device">Loading...</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-slate-600 dark:text-slate-400">Top Browser:</span>
+                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="top-browser">Loading...</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-slate-600 dark:text-slate-400">Mobile %:</span>
+                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="mobile-percentage">Loading...</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Engagement Metrics Card */}
+                <div class="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 p-4 rounded-lg border border-orange-200 dark:border-orange-700">
+                  <h6 class="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-2 flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Engagement
+                  </h6>
+                  <div class="space-y-1 text-xs">
+                    <div class="flex justify-between">
+                      <span class="text-slate-600 dark:text-slate-400">Avg. Scroll:</span>
+                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="avg-scroll">Loading...</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-slate-600 dark:text-slate-400">Bounce Rate:</span>
+                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="bounce-rate">Loading...</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-slate-600 dark:text-slate-400">Return Visitors:</span>
+                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="return-visitors">Loading...</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Campaign Tracking Card */}
+                <div class="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/20 dark:to-indigo-800/20 p-4 rounded-lg border border-indigo-200 dark:border-indigo-700">
+                  <h6 class="text-sm font-semibold text-indigo-800 dark:text-indigo-300 mb-2 flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z" clip-rule="evenodd"></path>
+                    </svg>
+                    Campaign Tracking
+                  </h6>
+                  <div class="space-y-1 text-xs">
+                    <div class="flex justify-between">
+                      <span class="text-slate-600 dark:text-slate-400">Top Source:</span>
+                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="top-utm-source">Loading...</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-slate-600 dark:text-slate-400">Top Campaign:</span>
+                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="top-utm-campaign">Loading...</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-slate-600 dark:text-slate-400">Direct Traffic:</span>
+                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="direct-traffic">Loading...</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Statistical Significance Card */}
+                <div class="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 p-4 rounded-lg border border-red-200 dark:border-red-700">
+                  <h6 class="text-sm font-semibold text-red-800 dark:text-red-300 mb-2 flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm1 2a1 1 0 000 2h6a1 1 0 100-2H7zm6 7a1 1 0 011 1v3a1 1 0 11-2 0v-3a1 1 0 011-1zm-3 3a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zm-4-1a1 1 0 011 1v3a1 1 0 11-2 0v-3a1 1 0 011-1z" clip-rule="evenodd"></path>
+                    </svg>
+                    Statistical Significance
+                  </h6>
+                  <div class="space-y-1 text-xs">
+                    <div class="flex justify-between">
+                      <span class="text-slate-600 dark:text-slate-400">Confidence:</span>
+                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="confidence-level">95%</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-slate-600 dark:text-slate-400">Sample Size:</span>
+                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="sample-size">Loading...</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-slate-600 dark:text-slate-400">Status:</span>
+                      <span class="font-medium" data-experiment-id={exp.id} data-metric="significance-status">Loading...</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
             
             {/* Pie Chart Section */}
             {exp.variants && exp.variants.filter(v => typeof v.conversion_rate === 'number').length > 0 ? (
@@ -346,6 +504,88 @@ const { experiments, abTestError } = Astro.props;
   )}
 </section>
 
+<!-- Modern Confirmation Modal -->
+<div id="delete-confirmation-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+  <!-- Background overlay -->
+  <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+
+    <!-- This element is to trick the browser into centering the modal contents. -->
+    <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+    <!-- Modal panel -->
+    <div class="relative inline-block align-bottom bg-white dark:bg-slate-800 rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+      <div class="sm:flex sm:items-start">
+        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 sm:mx-0 sm:h-10 sm:w-10">
+          <!-- Heroicon name: outline/exclamation-triangle -->
+          <svg class="h-6 w-6 text-red-600 dark:text-red-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+        </div>
+        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+          <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white" id="modal-title">
+            Delete Experiment
+          </h3>
+          <div class="mt-2">
+            <p class="text-sm text-gray-500 dark:text-gray-300" id="modal-description">
+              Are you sure you want to delete this experiment? This action will permanently remove the experiment and all its associated variants, impressions, and conversion data. This action cannot be undone.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+        <button type="button" id="confirm-delete-btn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-slate-800 sm:ml-3 sm:w-auto sm:text-sm transition duration-150 ease-in-out">
+          Delete Experiment
+        </button>
+        <button type="button" id="cancel-delete-btn" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-slate-700 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-slate-800 sm:mt-0 sm:w-auto sm:text-sm transition duration-150 ease-in-out">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modern Confirmation Modal for Variants -->
+<div id="delete-variant-confirmation-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="variant-modal-title" role="dialog" aria-modal="true">
+  <!-- Background overlay -->
+  <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+
+    <!-- This element is to trick the browser into centering the modal contents. -->
+    <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+    <!-- Modal panel -->
+    <div class="relative inline-block align-bottom bg-white dark:bg-slate-800 rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+      <div class="sm:flex sm:items-start">
+        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 sm:mx-0 sm:h-10 sm:w-10">
+          <!-- Heroicon name: outline/exclamation-triangle -->
+          <svg class="h-6 w-6 text-red-600 dark:text-red-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+        </div>
+        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+          <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white" id="variant-modal-title">
+            Delete Variant
+          </h3>
+          <div class="mt-2">
+            <p class="text-sm text-gray-500 dark:text-gray-300" id="variant-modal-description">
+              Are you sure you want to delete this variant? This action cannot be undone, especially if the variant has impressions.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+        <button type="button" id="confirm-delete-variant-btn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-slate-800 sm:ml-3 sm:w-auto sm:text-sm transition duration-150 ease-in-out">
+          Delete Variant
+        </button>
+        <button type="button" id="cancel-delete-variant-btn" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-slate-700 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-slate-800 sm:mt-0 sm:w-auto sm:text-sm transition duration-150 ease-in-out">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
   // Define an interface for the variant data used in the chart (if needed by chart.js in this component context)
   // This might be better defined in a global types file or passed if Chart.js types are used directly
@@ -356,7 +596,132 @@ const { experiments, abTestError } = Astro.props;
     conversions: number | null | undefined;
   }
 
+  // Function to load analytics data for all experiments
+  async function loadAnalyticsData() {
+    const experimentElements = document.querySelectorAll('[data-experiment-id]');
+    const experimentIds = new Set<string>();
+    
+    // Collect all unique experiment IDs
+    experimentElements.forEach(el => {
+      const expId = (el as HTMLElement).dataset.experimentId;
+      if (expId) experimentIds.add(expId);
+    });
+
+    // Fetch analytics data for each experiment
+    for (const experimentId of experimentIds) {
+      try {
+        const response = await fetch(`/api/analytics?experimentId=${experimentId}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) {
+          console.error(`Failed to fetch analytics for experiment ${experimentId}:`, response.statusText);
+          setErrorState(experimentId);
+          continue;
+        }
+
+        const analytics = await response.json();
+        updateAnalyticsDisplay(experimentId, analytics);
+
+      } catch (error) {
+        console.error(`Error fetching analytics for experiment ${experimentId}:`, error);
+        setErrorState(experimentId);
+      }
+    }
+  }
+
+  // Function to update the analytics display with fetched data
+  function updateAnalyticsDisplay(experimentId: string, analytics: any) {
+    const elements = document.querySelectorAll(`[data-experiment-id="${experimentId}"]`);
+    
+    elements.forEach(el => {
+      const element = el as HTMLElement;
+      const metric = element.dataset.metric;
+      
+      if (!metric) return;
+
+      let value = 'N/A';
+      let className = 'text-slate-800 dark:text-slate-200';
+
+      switch (metric) {
+        case 'total-impressions':
+          value = analytics.totalImpressions?.toLocaleString() || '0';
+          break;
+        case 'total-conversions':
+          value = analytics.totalConversions?.toLocaleString() || '0';
+          break;
+        case 'overall-rate':
+          value = analytics.overallRate ? `${analytics.overallRate.toFixed(1)}%` : '0%';
+          className = analytics.overallRate > 5 ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-slate-200';
+          break;
+        case 'avg-time-on-page':
+          value = analytics.avgTimeOnPage ? `${Math.round(analytics.avgTimeOnPage)}s` : 'N/A';
+          break;
+        case 'top-country':
+          value = analytics.topCountry || 'N/A';
+          break;
+        case 'country-count':
+          value = analytics.countryCount?.toString() || '0';
+          break;
+        case 'best-country':
+          value = analytics.bestCountry || 'N/A';
+          break;
+        case 'top-device':
+          value = analytics.topDevice || 'N/A';
+          break;
+        case 'top-browser':
+          value = analytics.topBrowser || 'N/A';
+          break;
+        case 'mobile-percentage':
+          value = analytics.mobilePercentage ? `${analytics.mobilePercentage.toFixed(1)}%` : 'N/A';
+          break;
+        case 'avg-scroll':
+          value = analytics.avgScroll ? `${analytics.avgScroll.toFixed(1)}%` : 'N/A';
+          break;
+        case 'bounce-rate':
+          value = analytics.bounceRate ? `${analytics.bounceRate.toFixed(1)}%` : 'N/A';
+          className = analytics.bounceRate > 70 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400';
+          break;
+        case 'return-visitors':
+          value = analytics.returnVisitors?.toLocaleString() || '0';
+          break;
+        case 'top-utm-source':
+          value = analytics.topUtmSource || 'Direct';
+          break;
+        case 'top-utm-campaign':
+          value = analytics.topUtmCampaign || 'N/A';
+          break;
+        case 'direct-traffic':
+          value = analytics.directTraffic ? `${analytics.directTraffic.toFixed(1)}%` : 'N/A';
+          break;
+        case 'sample-size':
+          value = analytics.sampleSize?.toLocaleString() || '0';
+          break;
+        case 'significance-status':
+          value = analytics.isSignificant ? 'Significant' : 'Not Significant';
+          className = analytics.isSignificant ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400';
+          break;
+      }
+
+      element.textContent = value;
+      element.className = element.className.replace(/text-\w+-\d+/g, '') + ` ${className}`;
+    });
+  }
+
+  // Function to set error state for failed analytics loads
+  function setErrorState(experimentId: string) {
+    const elements = document.querySelectorAll(`[data-experiment-id="${experimentId}"][data-metric]`);
+    elements.forEach(el => {
+      el.textContent = 'Error';
+      el.className = el.className.replace(/text-\w+-\d+/g, '') + ' text-red-500 dark:text-red-400';
+    });
+  }
+
   function initializeABTestManagerScripts() {
+    // Load analytics data for all experiments
+    loadAnalyticsData();
+
     // Manage Variants toggle
     document.querySelectorAll('.manage-variants-btn').forEach(btnEl => {
       const btn = btnEl as HTMLButtonElement;
@@ -472,14 +837,65 @@ const { experiments, abTestError } = Astro.props;
         if (editFormSection) editFormSection.classList.add('hidden');
       });
     });
-    
+
     // Event listener for Delete Variant form submissions
     document.querySelectorAll('.delete-variant-form').forEach(formEl => {
       const form = formEl as HTMLFormElement;
       form.addEventListener('submit', (event) => {
+        event.preventDefault(); // Always prevent default, we'll handle via modal
+        
         const variantName = form.dataset.variantName || 'this variant';
-        if (!confirm(`Are you sure you want to delete "${variantName}"? This action cannot be undone, especially if the variant has no impressions.`)) {
-          event.preventDefault(); 
+        const modal = document.getElementById('delete-variant-confirmation-modal');
+        const modalDescription = document.getElementById('variant-modal-description');
+        const confirmBtn = document.getElementById('confirm-delete-variant-btn');
+        const cancelBtn = document.getElementById('cancel-delete-variant-btn');
+        
+        if (modal && modalDescription && confirmBtn && cancelBtn) {
+          // Update modal text with specific variant name
+          modalDescription.textContent = `Are you sure you want to delete "${variantName}"? This action cannot be undone, especially if the variant has impressions.`;
+          
+          // Show modal
+          modal.classList.remove('hidden');
+          
+          // Handle confirm
+          const handleConfirm = () => {
+            form.submit(); // Actually submit the form
+            cleanup();
+          };
+          
+          // Handle cancel
+          const handleCancel = () => {
+            cleanup();
+          };
+          
+          // Cleanup function
+          const cleanup = () => {
+            modal.classList.add('hidden');
+            confirmBtn.removeEventListener('click', handleConfirm);
+            cancelBtn.removeEventListener('click', handleCancel);
+            modal.removeEventListener('click', handleBackdropClick);
+            document.removeEventListener('keydown', handleEscape);
+          };
+          
+          // Handle backdrop click
+          const handleBackdropClick = (e: MouseEvent) => {
+            if (e.target === modal) {
+              handleCancel();
+            }
+          };
+          
+          // Handle escape key
+          const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+              handleCancel();
+            }
+          };
+          
+          // Add event listeners
+          confirmBtn.addEventListener('click', handleConfirm);
+          cancelBtn.addEventListener('click', handleCancel);
+          modal.addEventListener('click', handleBackdropClick);
+          document.addEventListener('keydown', handleEscape);
         }
       });
     });
@@ -488,9 +904,60 @@ const { experiments, abTestError } = Astro.props;
     document.querySelectorAll('.delete-experiment-form').forEach(formEl => {
       const form = formEl as HTMLFormElement;
       form.addEventListener('submit', (event) => {
+        event.preventDefault(); // Always prevent default, we'll handle via modal
+        
         const experimentName = form.dataset.experimentName || 'this experiment';
-        if (!confirm(`Are you sure you want to delete the experiment "${experimentName}" and all its associated variants and data? This action cannot be undone.`)) {
-          event.preventDefault(); 
+        const modal = document.getElementById('delete-confirmation-modal');
+        const modalDescription = document.getElementById('modal-description');
+        const confirmBtn = document.getElementById('confirm-delete-btn');
+        const cancelBtn = document.getElementById('cancel-delete-btn');
+        
+        if (modal && modalDescription && confirmBtn && cancelBtn) {
+          // Update modal text with specific experiment name
+          modalDescription.textContent = `Are you sure you want to delete "${experimentName}"? This action will permanently remove the experiment and all its associated variants, impressions, and conversion data. This action cannot be undone.`;
+          
+          // Show modal
+          modal.classList.remove('hidden');
+          
+          // Handle confirm
+          const handleConfirm = () => {
+            form.submit(); // Actually submit the form
+            cleanup();
+          };
+          
+          // Handle cancel
+          const handleCancel = () => {
+            cleanup();
+          };
+          
+          // Cleanup function
+          const cleanup = () => {
+            modal.classList.add('hidden');
+            confirmBtn.removeEventListener('click', handleConfirm);
+            cancelBtn.removeEventListener('click', handleCancel);
+            modal.removeEventListener('click', handleBackdropClick);
+            document.removeEventListener('keydown', handleEscape);
+          };
+          
+          // Handle backdrop click
+          const handleBackdropClick = (e: MouseEvent) => {
+            if (e.target === modal) {
+              handleCancel();
+            }
+          };
+          
+          // Handle escape key
+          const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+              handleCancel();
+            }
+          };
+          
+          // Add event listeners
+          confirmBtn.addEventListener('click', handleConfirm);
+          cancelBtn.addEventListener('click', handleCancel);
+          modal.addEventListener('click', handleBackdropClick);
+          document.addEventListener('keydown', handleEscape);
         }
       });
     });

@@ -1,72 +1,78 @@
 ---
 import Layout from '~/layouts/PageLayout.astro';
 import HeroCustomAB from '~/components/widgets/HeroCustomAB.astro';
+import Content from '~/components/widgets/Content.astro';
+import { Icon } from 'astro-icon/components';
 
-// Your Core Widgets & Custom Components
-import Content from '~/components/widgets/Content.astro'; // For About JJ & Book sections
-import { Icon } from 'astro-icon/components'; // For buttons with icons
-
-// Import AB testing logic - getVariant for SSR, ABVariant for type.
-// Crucially, also import abTester here to ensure its client-side window setup runs.
-import { getVariant, type ABVariant, trackImpression } from '~/lib/abTester';
-// Re-enable side-effect import to ensure abTester.ts is in the client bundle
+// Import AB testing logic. 
+// getVariant is used SSR. The side-effect import ensures abTester.ts client-side code runs.
+import { getVariant, type ABVariant } from '~/lib/abTester';
 import '~/lib/abTester'; 
 
-// Import the image with type assertion
-// @ts-ignore - We know this is an image import
+// @ts-ignore - Image import
 import imgHeroMain from '~/assets/images/jj2.png';
 
-// --- METADATA (can be same as index.astro or simplified) ---
 const metadata = {
   title: 'A/B Test Page | JJ Roberts',
   description: "Testing A/B variations.",
 };
 
-const EXPERIMENT_NAME = 'Hero Headline AB Test 1'; // Define as a constant
-const chosenHeroContent: ABVariant = await getVariant(EXPERIMENT_NAME);
+// --- Hero Section A/B Test ---
+const HERO_EXPERIMENT_NAME = 'Hero Headline AB Test 1'; 
+const chosenHeroContent: ABVariant = await getVariant(HERO_EXPERIMENT_NAME);
+console.log(`[Index Page SSR] Assigned Hero variant for experiment "${HERO_EXPERIMENT_NAME}":`, JSON.stringify(chosenHeroContent, null, 2));
+console.log(`[Index Page SSR] HERO_EXPERIMENT_NAME to be passed to HeroCustomAB: "${HERO_EXPERIMENT_NAME}"`);
+console.log(`[Index Page SSR] chosenHeroContent.id to be passed as abTestVariantKey: "${chosenHeroContent.id}"`);
 
-const LOVELAB_EXPERIMENT_NAME = 'Lovelab Quiz 1 or 2 pages'; // Define as a constant
-const chosenLovelabContent: ABVariant = await getVariant(LOVELAB_EXPERIMENT_NAME);
 
+// --- Quiz A/B Test (determines which quiz path to link to) ---
 const QUIZ_EXPERIMENT_NAME = 'Lovelab Quiz 1 or 2 pages';
-let quizVariant;
+let quizVariant: ABVariant;
 
 try {
   quizVariant = await getVariant(QUIZ_EXPERIMENT_NAME);
-  console.log('Assigned quiz variant:', quizVariant);
+  console.log(`[Index Page SSR] Assigned Quiz variant for experiment "${QUIZ_EXPERIMENT_NAME}" (for path selection):`, JSON.stringify(quizVariant, null, 2));
   
-  // Track the impression
-  await trackImpression(QUIZ_EXPERIMENT_NAME, quizVariant.id);
+  // Server-side impression logging for quiz variant exposure on this page is commented out.
+  // Client-side logging via window.logClientImpression is preferred for consistency.
+  // If you need to log an impression for quizVariant exposure on *this page load*, 
+  // add a client-side script similar to the hero impression logger below,
+  // passing the quizVariant data.
+  // Example: await trackImpression(QUIZ_EXPERIMENT_NAME, quizVariant.id); // Old call
+  
 } catch (error) {
-  console.error('Error getting quiz variant:', error);
-  // Fallback to default quiz
+  console.error(`[Index Page SSR] Error getting quiz variant for "${QUIZ_EXPERIMENT_NAME}":`, error.message);
   quizVariant = {
-    id: 'default_variant',
-    name: 'Default Quiz',
-    experiment_id: 'default_experiment',
+    id: 'fallback_quiz_variant_id_err', 
+    name: 'Fallback Quiz Path DueToError',      
+    experiment_id: 'fallback_quiz_experiment_id_err', 
+    headline: '', 
+    subheadline: '', 
     raw_config_json: {
-      quiz_path: '/quiz',
-      quiz_name: 'Default Quiz'
+      quiz_path: '/quiz', 
+      quiz_name: 'Default Quiz (Error Fallback)'
     }
   };
+  console.log('[Index Page SSR] Using fallback quiz variant due to error:', quizVariant);
 }
 
-// Store the quiz variant in a script for client-side access
+// Prepare quizVariantInfo for client-side script (to be stored in localStorage)
 const quizVariantInfo = {
-  experiment: QUIZ_EXPERIMENT_NAME,
-  variantId: quizVariant.id,
-  variantName: quizVariant.name,
-  quizPath: quizVariant.raw_config_json?.quiz_path || '/quiz',
-  quizName: quizVariant.raw_config_json?.quiz_name || 'Quiz'
+  experiment: QUIZ_EXPERIMENT_NAME,        
+  experimentId: quizVariant.experiment_id, 
+  variantId: quizVariant.id,               
+  variantName: quizVariant.name,           
+  quizPath: quizVariant.raw_config_json?.quiz_path as string || '/quiz',
+  quizName: quizVariant.raw_config_json?.quiz_name as string || (quizVariant.name || 'Quiz')
 };
+console.log('[Index Page SSR] quizVariantInfo prepared for client localStorage:', JSON.stringify(quizVariantInfo, null, 2));
 
-// Image configuration for the hero section
+
 const heroImageForWidget = { 
   src: imgHeroMain,
   alt: 'JJ Roberts - Relationship Expert'
 } as const;
 
-// === FINAL CALL TO ACTION (Quiz) DATA ===
 const finalCtaTagline = "Your Next Step to a Better Love Life";
 const finalCtaTitle = "Unlock Your Relationship Blueprint";
 const finalCtaImage = { src: imgHeroMain, alt: 'Abstract graphic representing a blueprint or pathway' };
@@ -76,152 +82,137 @@ const finalCtaDescription = `
   Plus, you'll get exclusive free chapters from "Sex 3.0: A Sexual Revolution Manual" to guide you further!
 `;
 
-// Get the quiz path from the variant config or default to '/quiz'
-const quizPath = quizVariant.raw_config_json?.quiz_path || '/quiz';
-
-// Simple quiz URL without any parameters
-const quizUrl = quizPath;
-
-console.log('Quiz URL:', quizUrl);
+const quizUrl = quizVariantInfo.quizPath; 
+console.log('[Index Page SSR] Final Quiz URL for button:', quizUrl);
 
 const finalCtaButton = {
     text: 'Enter The Love Lab',
     href: quizUrl,
     icon: 'tabler:flask'
 };
-
-console.log('Using quiz path:', quizPath);
 ---
 
 <Layout metadata={metadata}>
   <main>
-    {/* --- HERO WIDGET (A/B Tested) --- */}
-    {/* 
-      IMPORTANT: You'll need to ensure your HeroCustomAB component can accept 
-      `headline` and `subheadline` as props and uses them.
-      It also needs to call `trackConversion` from abTester.ts on successful form submission.
-      You might want to create a copy of HeroCustomAB (e.g., HeroCustomABTest.astro) 
-      and modify that copy for this test, then use it here.
-    */}
     <HeroCustomAB 
       headline={chosenHeroContent.headline}
       subheadline={chosenHeroContent.subheadline}
       image={heroImageForWidget}
-      abTestVariantKey={chosenHeroContent.experiment_id}
-      experimentName={EXPERIMENT_NAME}
+      abTestVariantKey={chosenHeroContent.id} 
+      experimentName={HERO_EXPERIMENT_NAME}
     />
 
-    {/* You can add a notice for testing if needed */}
     {Astro.cookies.has('astro_developer_toolbar') && (
       <div class="fixed bottom-0 right-0 bg-yellow-300 text-black p-2 m-4 rounded shadow-lg text-xs z-50">
-        <p><strong>A/B Test Active</strong></p>
-        <p>Experiment: {EXPERIMENT_NAME}</p>
+        <p><strong>A/B Test Active (Hero)</strong></p>
+        <p>Experiment Name: {HERO_EXPERIMENT_NAME}</p>
         <p>Variant ID: {chosenHeroContent.id}</p>
         <p>Variant Name: {chosenHeroContent.name}</p>
         <p>Headline: {chosenHeroContent.headline}</p>
+        <hr class="my-1 border-black" />
+        <p><strong>Quiz Path Test Active</strong></p>
+        <p>Experiment Name: {QUIZ_EXPERIMENT_NAME}</p>
+        <p>Experiment ID (UUID): {quizVariant.experiment_id}</p>
+        <p>Variant ID: {quizVariant.id}</p>
+        <p>Variant Name: {quizVariant.name}</p>
+        <p>Selected Path: {quizUrl}</p>
       </div>
     )}
 
-   {/* --- FINAL CALL TO ACTION (Quiz) using Content Widget --- */}
+    {/* --- ISOLATION TEST DIV (Uncomment this and comment out HeroCustomAB and Content below if CTA is still missing) --- */}
+    {/*
+    <div style="margin: 40px; padding: 40px; border: 5px dashed red; background-color: lightyellow; font-size: 28px; text-align: center;">
+      IS THIS TEST DIV VISIBLE? (CTA SECTION TEST)
+    </div>
+    */}
+
    <Content
-   id="final-cta-quiz-section"
-   isReversed={false}
-   tagline={finalCtaTagline}
-   title={finalCtaTitle}
-   image={finalCtaImage}
-   classes={{
-     container: 'py-16 md:py-24 bg-brand-orange/5 dark:bg-brand-orange/5',
-     panel: 'gap-8 md:gap-12 lg:gap-16 items-center',
-     content: 'prose prose-lg dark:prose-invert max-w-none text-center md:text-left',
-     image: 'max-w-md lg:max-lg mx-auto md:mx-0 rounded-lg shadow-xl order-first md:order-last',
-   }}
- >
-   <Fragment slot="content">
-     <div class="space-y-4" set:html={finalCtaDescription} />
+     id="final-cta-quiz-section"
+     isReversed={false}
+     tagline={finalCtaTagline}
+     title={finalCtaTitle}
+     image={finalCtaImage}
+     classes={{
+       container: 'py-16 md:py-24 bg-brand-orange/5 dark:bg-brand-orange/5', // Example class
+       panel: 'gap-8 md:gap-12 lg:gap-16 items-center',
+       content: 'prose prose-lg dark:prose-invert max-w-none text-center md:text-left',
+       image: 'max-w-md lg:max-lg mx-auto md:mx-0 rounded-lg shadow-xl order-first md:order-last',
+     }}
+   >
+     <Fragment slot="content">
+       <div class="space-y-4" set:html={finalCtaDescription} />
+       <div class="mt-8 flex justify-center md:justify-start">
+         <a
+           href={finalCtaButton.href}
+           class="inline-flex items-center justify-center gap-2 px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-orange-700 dark:focus-visible:ring-offset-slate-900"
+           target={finalCtaButton.href.startsWith('http') ? '_blank' : '_self'}
+           rel={finalCtaButton.href.startsWith('http') ? 'noopener noreferrer' : ''}
+         >
+           {finalCtaButton.icon && <Icon name={finalCtaButton.icon} class="w-5 h-5 md:w-6 md:h-6" />}
+           <span>{finalCtaButton.text}</span>
+         </a>
+       </div>
+     </Fragment>
+   </Content>
+  </main>
 
-     <div class="mt-8 flex justify-center md:justify-start">
-       <a
-         href={finalCtaButton.href}
-         class="inline-flex items-center justify-center gap-2
-                px-8 py-3 bg-orange-500 hover:bg-orange-600
-                text-white text-lg font-semibold rounded-full
-                shadow-md transition duration-300 ease-in-out
-                transform hover:scale-105 whitespace-nowrap
-                focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-orange-700 dark:focus-visible:ring-offset-slate-900"
-         target={finalCtaButton.href.startsWith('http') ? '_blank' : '_self'}
-         rel={finalCtaButton.href.startsWith('http') ? 'noopener noreferrer' : ''}
-       >
-         {finalCtaButton.icon && <Icon name={finalCtaButton.icon} class="w-5 h-5 md:w-6 md:h-6" />}
-         <span>{finalCtaButton.text}</span>
-       </a>
-     </div>
-   </Fragment>
- </Content>
-
-</main>
-
-  {/* Store variant data in sessionStorage immediately when page loads */}
-  <script is:inline define:vars={{ quizVariantInfo }}>
+  <script is:inline define:vars={{ quizVariantInfoToStore: quizVariantInfo }}>
     try {
-      // Store quiz variant info in sessionStorage
-      sessionStorage.setItem('quizVariant', JSON.stringify(quizVariantInfo));
-      console.log('✓ Stored quiz variant in sessionStorage:', quizVariantInfo);
-      
-      // Also store in localStorage as backup
-      localStorage.setItem('quizVariant', JSON.stringify(quizVariantInfo));
-      console.log('✓ Stored quiz variant in localStorage as backup:', quizVariantInfo);
-      
+      sessionStorage.setItem('quizVariant', JSON.stringify(quizVariantInfoToStore));
+      localStorage.setItem('quizVariant', JSON.stringify(quizVariantInfoToStore));
+      console.log('[Index Page Client Script] Stored quizVariantInfo in localStorage:', quizVariantInfoToStore);
     } catch (e) {
-      console.error('✗ Error storing quiz variant:', e);
+      console.error('[Index Page Client Script] Error storing quizVariantInfo:', e);
     }
   </script>
 
-  {/* This script's sole purpose is to ensure abTester.ts is loaded and executed on the client */}
   <script>
-    import '~/lib/abTester';
-    console.log('[Astro Page Client Script] ~/lib/abTester imported to trigger its execution.');
+    import '~/lib/abTester'; 
+    // console.log('[Index Page Client Script] ~/lib/abTester imported (for window functions).');
   </script>
 </Layout>
 
-<script define:vars={{ clientChosenVariant: chosenHeroContent, clientExperimentName: EXPERIMENT_NAME }}>
-  console.log('[index_ab_test.astro define:vars script] Loaded. clientChosenVariant:', clientChosenVariant);
-
-  const variantToLog = clientChosenVariant;
-  const experimentNameForLog = clientExperimentName;
-
-  function attemptImpressionLog() {
-    if (variantToLog && experimentNameForLog && variantToLog.id !== 'fallback_no_variants') {
-      console.log('[index_ab_test.astro define:vars script] Attempting to log impression via window object for:', variantToLog, experimentNameForLog);
+<script define:vars={{ 
+  heroVariantForImpression: chosenHeroContent, 
+  heroExperimentNameForImpression: HERO_EXPERIMENT_NAME 
+}}>
+  function attemptHeroImpressionLog() {
+    if (heroVariantForImpression && heroVariantForImpression.id && heroVariantForImpression.id !== 'fallback_no_variants' && heroVariantForImpression.experiment_id && heroVariantForImpression.experiment_id !== 'unknown_experiment_id') {
       if (window.logClientImpression) {
-        console.log('[index_ab_test.astro define:vars script] window.logClientImpression IS defined. Calling it.');
-        window.logClientImpression(variantToLog, experimentNameForLog);
+        // console.log('[Index Page Hero Impression] Attempting log for Hero variant:', heroVariantForImpression, 'Exp Name Context:', heroExperimentNameForImpression);
+        window.logClientImpression(heroVariantForImpression, heroExperimentNameForImpression)
+          .catch(err => console.error('[Index Page Hero Impression] Error calling logClientImpression:', err.message));
+        return true; 
       } else {
-        console.warn('[index_ab_test.astro define:vars script] window.logClientImpression is NOT YET DEFINED. Will retry or give up.');
-        return false; // Indicates it's not ready
+        // console.warn('[Index Page Hero Impression] window.logClientImpression not yet defined. Will retry.');
+        return false; 
       }
     } else {
-      if (variantToLog && variantToLog.id === 'fallback_no_variants') {
-        console.log('[index_ab_test.astro define:vars script] Impression logging skipped for fallback variant.');
-      } else {
-        console.error('[index_ab_test.astro define:vars script] Missing variant or experiment name for impression logging.');
-      }
+      // console.log('[Index Page Hero Impression] Impression logging skipped for Hero: Invalid variant data or fallback.', heroVariantForImpression);
+      return true; 
     }
-    return true; // Indicates logging was attempted or not needed
   }
 
-  // Try immediately, then poll if not ready
-  if (!attemptImpressionLog()) {
-    let attempts = 0;
-    const maxAttempts = 10; // e.g., try for 5 seconds (10 * 500ms)
-    const intervalId = setInterval(() => {
-      attempts++;
-      console.log(`[index_ab_test.astro define:vars script] Retrying to find window.logClientImpression (Attempt: ${attempts})`);
-      if (attemptImpressionLog() || attempts >= maxAttempts) {
-        clearInterval(intervalId);
-        if (attempts >= maxAttempts && !window.logClientImpression) {
-            console.error('[index_ab_test.astro define:vars script] Gave up waiting for window.logClientImpression.');
+  function scheduleImpressionLog() {
+    if (!attemptHeroImpressionLog()) {
+      let attempts = 0;
+      const maxAttempts = 15; // Increased attempts slightly
+      const intervalId = setInterval(() => {
+        attempts++;
+        // console.log(`[Index Page Hero Impression] Retrying logClientImpression (Attempt: ${attempts})`);
+        if (attemptHeroImpressionLog() || attempts >= maxAttempts) {
+          clearInterval(intervalId);
+          if (attempts >= maxAttempts && !window.logClientImpression) {
+            console.error('[Index Page Hero Impression] Gave up waiting for window.logClientImpression.');
+          }
         }
-      }
-    }, 500); // Check every 500ms
+      }, 300); // Slightly longer interval
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', scheduleImpressionLog);
+  } else {
+    scheduleImpressionLog(); // DOM already loaded
   }
 </script>

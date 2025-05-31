@@ -16,40 +16,36 @@ const convertKitFormId = import.meta.env.PUBLIC_CONVERTKIT_FORM_ID;
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('CRITICAL: Missing Supabase URL or Service Role Key. Function will not work.');
-  // For a production environment, you might want to ensure the function cannot even be invoked
-  // or returns a clear "service unavailable" if critical configs are missing.
   throw new Error('Missing Supabase configuration');
 }
 
 if (!convertKitApiKey || !convertKitFormId) {
   console.warn('Warning: Missing ConvertKit API Key or Form ID. ConvertKit integration will be skipped.');
-  // Depending on requirements, this might also be a critical error.
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
     autoRefreshToken: false,
     persistSession: false
-    // Note: For Edge Functions using the service_role_key, persistSession and autoRefreshToken
-    // are generally not relevant as each invocation is stateless and uses the service key directly.
   }
 });
 
 export const POST = async ({ request }) => {
-  console.log(`[${new Date().toISOString()}] Quiz submission received. Processing...`);
+  const requestTimestamp = new Date().toISOString();
+  console.log(`[API Quiz Submit ${requestTimestamp}] Received request.`);
   try {
     const formData = await request.formData();
     const email = formData.get('email')?.toString().toLowerCase().trim();
     const firstName = (formData.get('firstName') || formData.get('first_name'))?.toString().trim() || '';
     const scoreString = formData.get('score')?.toString();
     const resultType = formData.get('resultType')?.toString();
-    // The 'referralCode' here is the code a user might have entered to indicate who referred them.
-    // It's distinct from the user's own referral_code that they get after signing up.
-    const referralCodeUsedBySubmitter = formData.get('referralCode')?.toString() || formData.get('referrer_id')?.toString() || null;
-    
+    const referralCodeUsedBySubmitter = formData.get('referrer_id')?.toString() || formData.get('referralCode')?.toString() || null;
     const variantInfoString = formData.get('variantInfo')?.toString();
-    let parsedVariantData: VariantData | null = null; 
+    const sessionIdFromClient = formData.get('session_identifier')?.toString() || null; // <<< READ SESSION ID
     
+    console.log(`[API Quiz Submit ${requestTimestamp}] Form Data: email=${email}, firstName=${firstName}, score=${scoreString}, resultType=${resultType}, referralUsed=${referralCodeUsedBySubmitter}, variantInfoPresent=${!!variantInfoString}, sessionId=${sessionIdFromClient}`);
+
+    let parsedVariantData: VariantData | null = null; 
     if (variantInfoString) {
       try {
         const parsed = JSON.parse(variantInfoString);
@@ -61,31 +57,24 @@ export const POST = async ({ request }) => {
             quizPath: parsed.quizPath,
             quizName: parsed.quizName
           };
-          console.log(`[${new Date().toISOString()}] Successfully parsed variant data from client:`, parsedVariantData);
+          console.log(`[API Quiz Submit ${requestTimestamp}] Parsed variant data from client:`, parsedVariantData);
         } else {
-          console.warn(`[${new Date().toISOString()}] Variant info from client is missing required fields (experiment, variantId, or variantName):`, parsed);
+          console.warn(`[API Quiz Submit ${requestTimestamp}] Variant info from client missing required fields:`, parsed);
         }
       } catch (e) {
-        console.error(`[${new Date().toISOString()}] Error parsing variant info JSON from client: ${e.message}. Received string: "${variantInfoString}"`);
+        console.error(`[API Quiz Submit ${requestTimestamp}] Error parsing variant info JSON: ${e.message}. Received: "${variantInfoString}"`);
       }
     } else {
-        console.log(`[${new Date().toISOString()}] No variantInfo string found in form data.`);
+        console.log(`[API Quiz Submit ${requestTimestamp}] No variantInfo string in form data.`);
     }
 
     if (!email || !email.includes('@')) {
-      console.warn(`[${new Date().toISOString()}] Validation failed: Email is invalid or missing. Received:`, { email });
-      return new Response(
-        JSON.stringify({ success: false, message: 'Valid email is required' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
+      console.warn(`[API Quiz Submit ${requestTimestamp}] Validation fail: Email invalid/missing. Email: ${email}`);
+      return new Response(JSON.stringify({ success: false, message: 'Valid email is required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
-
     if (!resultType) {
-      console.warn(`[${new Date().toISOString()}] Validation failed: Quiz resultType is missing.`);
-      return new Response(
-        JSON.stringify({ success: false, message: 'Quiz result is required' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
+      console.warn(`[API Quiz Submit ${requestTimestamp}] Validation fail: resultType missing.`);
+      return new Response(JSON.stringify({ success: false, message: 'Quiz result is required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
 
     let score = 0;
@@ -94,66 +83,60 @@ export const POST = async ({ request }) => {
         if (!isNaN(parsedScore)) {
             score = parsedScore;
         } else {
-            console.warn(`[${new Date().toISOString()}] Warning: Score "${scoreString}" could not be parsed to an integer. Defaulting to 0.`);
+            console.warn(`[API Quiz Submit ${requestTimestamp}] Score "${scoreString}" not parsable. Defaulting to 0.`);
         }
     } else {
-        console.log(`[${new Date().toISOString()}] No score string provided. Defaulting score to 0.`);
+        console.log(`[API Quiz Submit ${requestTimestamp}] No score string. Defaulting score to 0.`);
     }
 
-
-    // Main try-catch for database operations and ConvertKit
+    // Main try-catch for DB ops and ConvertKit
     try {
-      console.log(`[${new Date().toISOString()}] Looking up user profile for email: ${email}`);
+      console.log(`[API Quiz Submit ${requestTimestamp}] Looking up user: ${email}`);
       const { data: existingUser, error: userLookupError } = await supabase
         .from('user_profiles')
-        .select('id, email, insight_gems, referral_code') // User's own referral code
+        .select('id, email, insight_gems, referral_code')
         .eq('email', email)
         .maybeSingle();
 
       if (userLookupError) {
-        console.error(`[${new Date().toISOString()}] Database error looking up user profile for ${email}: ${userLookupError.message}`);
+        console.error(`[API Quiz Submit ${requestTimestamp}] DB error looking up user ${email}: ${userLookupError.message}`);
         throw userLookupError; 
       }
 
       let userId: string;
-      let userOwnReferralCode: string; // The user's own code they can share
+      let userOwnReferralCode: string; 
       let currentInsightGems: number = 0;
+      let isNewUser = false;
 
       if (existingUser) {
         userId = existingUser.id;
         userOwnReferralCode = existingUser.referral_code || ''; 
         currentInsightGems = existingUser.insight_gems || 0;
-        console.log(`[${new Date().toISOString()}] Existing user found: ID ${userId}, Email: ${email}, Gems: ${currentInsightGems}, Own Referral Code: ${userOwnReferralCode}`);
+        console.log(`[API Quiz Submit ${requestTimestamp}] Existing user: ID ${userId}, Gems ${currentInsightGems}, Own Referral ${userOwnReferralCode}`);
       } else {
+        isNewUser = true;
         const newUserId = crypto.randomUUID();
         const newUserOwnReferralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
-        currentInsightGems = 0; // Will be updated by RPC or set to default if RPC doesn't handle new user gems
+        currentInsightGems = 0; 
         
-        console.log(`[${new Date().toISOString()}] Creating new user profile for email: ${email}, Assigning ID: ${newUserId}, Referral Code: ${newUserOwnReferralCode}`);
+        console.log(`[API Quiz Submit ${requestTimestamp}] Creating new user: ${email}, ID ${newUserId}, Own Referral ${newUserOwnReferralCode}`);
         const { error: insertError } = await supabase
           .from('user_profiles')
-          .insert({
-            id: newUserId,
-            email,
-            first_name: firstName,
-            referral_code: newUserOwnReferralCode,
-            insight_gems: 0 // Initial gems, might be updated by RPC
-          });
+          .insert({ id: newUserId, email, first_name: firstName, referral_code: newUserOwnReferralCode, insight_gems: 0 });
 
         if (insertError) {
-          console.error(`[${new Date().toISOString()}] Database error creating new user profile for ${email}: ${insertError.message}`);
+          console.error(`[API Quiz Submit ${requestTimestamp}] DB error creating user ${email}: ${insertError.message}`);
           throw insertError;
         }
         userId = newUserId;
         userOwnReferralCode = newUserOwnReferralCode;
-        console.log(`[${new Date().toISOString()}] New user profile created successfully. ID: ${userId}`);
+        console.log(`[API Quiz Submit ${requestTimestamp}] New user created: ID ${userId}`);
       }
 
       // --- A/B CONVERSION TRACKING ---
       let actualExperimentUUID: string | null = null; 
-
       if (parsedVariantData && parsedVariantData.experiment) {
-        console.log(`[${new Date().toISOString()}] Looking up experiment ID for experiment name: "${parsedVariantData.experiment}"`);
+        console.log(`[API Quiz Submit ${requestTimestamp}] Looking up experiment ID for name: "${parsedVariantData.experiment}"`);
         const { data: experimentRecord, error: expError } = await supabase
           .from('experiments')
           .select('id') 
@@ -161,103 +144,121 @@ export const POST = async ({ request }) => {
           .maybeSingle(); 
 
         if (expError) {
-          console.error(`[${new Date().toISOString()}] Database error fetching experiment ID for name "${parsedVariantData.experiment}": ${expError.message}`);
+          console.error(`[API Quiz Submit ${requestTimestamp}] DB error fetching experiment ID for "${parsedVariantData.experiment}": ${expError.message}`);
         } else if (experimentRecord && experimentRecord.id) {
           actualExperimentUUID = experimentRecord.id;
-          console.log(`[${new Date().toISOString()}] Found experiment ID: ${actualExperimentUUID} for name "${parsedVariantData.experiment}"`);
+          console.log(`[API Quiz Submit ${requestTimestamp}] Found experiment ID: ${actualExperimentUUID} for name "${parsedVariantData.experiment}"`);
         } else {
-          console.warn(`[${new Date().toISOString()}] No experiment found in 'experiments' table with name: "${parsedVariantData.experiment}". Conversion will not be tracked for this specific experiment name.`);
+          console.warn(`[API Quiz Submit ${requestTimestamp}] No experiment in 'experiments' table for name: "${parsedVariantData.experiment}".`);
         }
       } else {
-        console.log(`[${new Date().toISOString()}] No parsed client variant data or experiment name available to look up experiment ID.`);
+        console.log(`[API Quiz Submit ${requestTimestamp}] No client variant data/experiment name to look up experiment ID.`);
       }
 
       if (actualExperimentUUID && parsedVariantData && parsedVariantData.variantId) {
-        console.log(`[${new Date().toISOString()}] Attempting to track conversion for experiment_id: ${actualExperimentUUID}, variant_id: ${parsedVariantData.variantId}`);
-        const { error: conversionError } = await supabase
+        console.log(`[API Quiz Submit ${requestTimestamp}] Checking for existing conversions: expUUID=${actualExperimentUUID}, email=${email}`);
+        
+        // Check for existing conversion by this email for this experiment (regardless of variant)
+        const { data: existingConversion, error: conversionCheckError } = await supabase
           .from('conversions')
-          .insert({
-            experiment_id: actualExperimentUUID, 
-            variant_id: parsedVariantData.variantId, 
-            user_identifier: email, 
-            conversion_type: 'quiz_completion',
-            details: {
-              quiz_score: score,
-              quiz_result: resultType,
-              referral_code_used: referralCodeUsedBySubmitter, // The code user submitted, if any
-              variant_name: parsedVariantData.variantName || 'unknown',
-              original_experiment_name: parsedVariantData.experiment 
-            }
-            // created_at has a DB default
-          });
+          .select('id, variant_id')
+          .eq('experiment_id', actualExperimentUUID)
+          .eq('user_identifier', email)
+          .eq('conversion_type', 'quiz_completion')
+          .maybeSingle();
 
-        if (conversionError) {
-          console.error(`[${new Date().toISOString()}] Database error tracking conversion in "conversions" table: ${conversionError.message}. Details: ${conversionError.details}`);
+        if (conversionCheckError && conversionCheckError.code !== 'PGRST116') {
+          console.error(`[API Quiz Submit ${requestTimestamp}] DB error checking existing conversions: ${conversionCheckError.message}`);
+        } else if (existingConversion) {
+          console.log(`[API Quiz Submit ${requestTimestamp}] Conversion already exists for email ${email} in experiment ${actualExperimentUUID}. Skipping duplicate conversion.`);
         } else {
-          console.log(`[${new Date().toISOString()}] Successfully tracked conversion for A/B test in "conversions" table.`);
+          console.log(`[API Quiz Submit ${requestTimestamp}] Tracking new conversion: expUUID=${actualExperimentUUID}, varID=${parsedVariantData.variantId}, email=${email}, session=${sessionIdFromClient}`);
+          const { error: conversionError } = await supabase
+            .from('conversions')
+            .insert({
+              experiment_id: actualExperimentUUID, 
+              variant_id: parsedVariantData.variantId, 
+              user_identifier: email, 
+              conversion_type: 'quiz_completion',
+              session_identifier: sessionIdFromClient,
+              details: {
+                quiz_score: score,
+                quiz_result: resultType,
+                referral_code_used: referralCodeUsedBySubmitter,
+                variant_name: parsedVariantData.variantName || 'unknown',
+                original_experiment_name: parsedVariantData.experiment 
+              }
+            });
+          if (conversionError) {
+            console.error(`[API Quiz Submit ${requestTimestamp}] DB error tracking conversion: ${conversionError.message}. Details: ${conversionError.details}`);
+          } else {
+            console.log(`[API Quiz Submit ${requestTimestamp}] Conversion tracked successfully.`);
+          }
         }
       } else {
         let reason = "Reason not determined.";
-        if (!actualExperimentUUID && parsedVariantData && parsedVariantData.experiment) reason = `Experiment ID (UUID) could not be determined for experiment name "${parsedVariantData.experiment}".`;
-        else if (!parsedVariantData || !parsedVariantData.variantId) reason = "Parsed variant data from client or its variantId was missing.";
-        else if (!actualExperimentUUID) reason = "Actual experiment UUID was not determined (e.g., experiment name not found).";
-        console.log(`[${new Date().toISOString()}] Skipping conversion tracking in "conversions" table. ${reason}`);
-        if(parsedVariantData) console.log(`[${new Date().toISOString()}] Client variant data at time of conversion decision:`, parsedVariantData);
+        if (!actualExperimentUUID && parsedVariantData && parsedVariantData.experiment) reason = `Exp. ID (UUID) not found for name "${parsedVariantData.experiment}".`;
+        else if (!parsedVariantData || !parsedVariantData.variantId) reason = "Client variant data or variantId missing.";
+        else if (!actualExperimentUUID) reason = "Exp. UUID not determined (e.g., name not found).";
+        console.log(`[API Quiz Submit ${requestTimestamp}] Skipping conversion tracking. ${reason}`);
+        if(parsedVariantData) console.log(`[API Quiz Submit ${requestTimestamp}] Client variant data at conversion decision:`, parsedVariantData);
       }
       // --- END OF A/B CONVERSION TRACKING ---
 
-      console.log(`[${new Date().toISOString()}] Calling RPC handle_quiz_submission for user ID: ${userId}, Email: ${email}, Score: ${score}, Result: ${resultType}, Referral Code Used: ${referralCodeUsedBySubmitter}`);
-      const { data: rpcData, error: rpcError } = await supabase // Capture rpcData if your function returns something
+      console.log(`[API Quiz Submit ${requestTimestamp}] Calling RPC handle_quiz_submission for user ${userId}, email ${email}, score ${score}, result ${resultType}, referralUsed ${referralCodeUsedBySubmitter}`);
+      const { data: rpcData, error: rpcError } = await supabase
         .rpc('handle_quiz_submission', {
           p_user_id: userId,
-          p_email: email, // Redundant if p_user_id is primary, but can be useful
+          p_email: email, 
           p_quiz_score: score,
           p_quiz_result: resultType,
           p_referral_code: referralCodeUsedBySubmitter 
         });
 
       if (rpcError) {
-        console.error(`[${new Date().toISOString()}] Database error calling RPC handle_quiz_submission: ${rpcError.message}`);
+        console.error(`[API Quiz Submit ${requestTimestamp}] DB error calling RPC handle_quiz_submission for user ${userId}: ${rpcError.message}`);
         throw rpcError;
       }
-      console.log(`[${new Date().toISOString()}] RPC handle_quiz_submission called successfully. RPC Data (if any):`, rpcData);
+      console.log(`[API Quiz Submit ${requestTimestamp}] RPC handle_quiz_submission OK for user ${userId}. RPC Data:`, rpcData);
 
-      // Gems might be awarded by RPC, so re-fetch or use RPC result if it returns new gem count
-      // For simplicity, let's assume RPC updates gems and we re-fetch.
-      console.log(`[${new Date().toISOString()}] Fetching final user data for ID: ${userId} after RPC.`);
+      // Re-fetch user data to get updated gems and confirm referral code after RPC
+      console.log(`[API Quiz Submit ${requestTimestamp}] Fetching final user data for user ${userId} after RPC.`);
       const { data: finalUserData, error: fetchFinalUserError } = await supabase
         .from('user_profiles')
         .select('insight_gems, referral_code')
         .eq('id', userId)
         .single();
-
-      let gemsAwardedThisSession = 100; // Default if not specified by RPC
+      
+      let gemsEarnedThisSession = 0; // Default, will be calculated
 
       if (fetchFinalUserError || !finalUserData) {
-        console.error(`[${new Date().toISOString()}] Database error fetching final user data after RPC for user ID ${userId}: ${fetchFinalUserError?.message || 'User data not found'}. Using previously known values for response.`);
-        // If fetching fails, use currentInsightGems and userOwnReferralCode from before RPC for response
-        // gemsAwardedThisSession might not be accurate here if RPC was supposed to give it.
+        console.error(`[API Quiz Submit ${requestTimestamp}] DB error fetching final user data for user ${userId}: ${fetchFinalUserError?.message || 'User data not found'}. Using pre-RPC values for response.`);
+        // For response, userOwnReferralCode and currentInsightGems from before RPC will be used.
+        // gemsEarnedThisSession will be based on the default logic or remain 0 if !isNewUser.
+        if (isNewUser) gemsEarnedThisSession = 100; // Assuming new users get 100 gems by default from RPC
       } else {
-        // Calculate gems awarded if RPC updated the total
-        if (finalUserData.insight_gems > currentInsightGems) {
-            gemsAwardedThisSession = finalUserData.insight_gems - currentInsightGems;
-        } else if (existingUser && finalUserData.insight_gems > existingUser.insight_gems) {
-            // If user existed, compare to their original gems before this session's RPC
-            gemsAwardedThisSession = finalUserData.insight_gems - existingUser.insight_gems;
-        } else if (!existingUser && finalUserData.insight_gems > 0) {
-            // New user, gems are what they have now
-            gemsAwardedThisSession = finalUserData.insight_gems;
-        }
-        // else, gemsAwardedThisSession remains the default (e.g. 100) or gems didn't change as expected.
+        const gemsBeforeRPC = currentInsightGems; // Gems value before RPC call (0 for new user)
+        currentInsightGems = finalUserData.insight_gems; // Gems after RPC
+        userOwnReferralCode = finalUserData.referral_code; // User's own code, possibly set/confirmed by RPC
 
-        currentInsightGems = finalUserData.insight_gems;
-        userOwnReferralCode = finalUserData.referral_code; 
-        console.log(`[${new Date().toISOString()}] Fetched final user data successfully after RPC. Gems: ${currentInsightGems}, Own Referral Code: ${userOwnReferralCode}`);
+        if (isNewUser) {
+            gemsEarnedThisSession = currentInsightGems; // For new user, all current gems are "earned"
+        } else {
+            gemsEarnedThisSession = currentInsightGems - gemsBeforeRPC; // For existing user
+        }
+        if (gemsEarnedThisSession < 0) gemsEarnedThisSession = 0; // Should not happen, but safeguard
+
+        console.log(`[API Quiz Submit ${requestTimestamp}] Final user data for user ${userId}: Gems ${currentInsightGems}, Own Referral ${userOwnReferralCode}, Gems Earned This Session ${gemsEarnedThisSession}`);
       }
+      
+      // Default gems if calculation isn't specific enough / RPC doesn't return explicit amount
+      // Your original code had a fixed 'gemsEarned: 100'. If that's intended, override calculation:
+      // gemsEarnedThisSession = 100; 
+
 
       // Add user to ConvertKit
       if (convertKitApiKey && convertKitFormId) {
-        console.log(`[${new Date().toISOString()}] Attempting to add/update user in ConvertKit: ${email}`);
+        console.log(`[API Quiz Submit ${requestTimestamp}] Adding/updating in ConvertKit: ${email}`);
         try {
           const resultTypeToTagId: Record<string, number> = {
             'Leaning Towards Sex 3.0': 7939502,
@@ -278,10 +279,10 @@ export const POST = async ({ request }) => {
               first_name: firstName,
               fields: {
                 'love_lab_quiz_score': scoreString || '0', 
-                'referral_id': userOwnReferralCode || '', // User's own referral code
+                'referral_id': userOwnReferralCode || '', 
                 'insight_gems': currentInsightGems.toString(), 
                 'quiz_result_type': resultType || 'unknown',
-                'quiz_taken_at': new Date().toISOString()
+                'quiz_taken_at': new Date().toISOString() // Use requestTimestamp for consistency if preferred
               },
               tags: tags
             }),
@@ -289,24 +290,24 @@ export const POST = async ({ request }) => {
 
           if (!ckResponse.ok) {
             const errorBody = await ckResponse.text(); 
-            console.error(`[${new Date().toISOString()}] ConvertKit API error. Status: ${ckResponse.status} ${ckResponse.statusText}. Response: ${errorBody}`);
+            console.error(`[API Quiz Submit ${requestTimestamp}] ConvertKit API error for ${email}. Status: ${ckResponse.status} ${ckResponse.statusText}. Response: ${errorBody}`);
           } else {
             const successBody = await ckResponse.json();
-            console.log(`[${new Date().toISOString()}] Successfully added/updated user in ConvertKit: ${email}. Response:`, successBody);
+            console.log(`[API Quiz Submit ${requestTimestamp}] ConvertKit OK for ${email}. Response:`, successBody);
           }
         } catch (ckError) {
-          console.error(`[${new Date().toISOString()}] Error during ConvertKit API call for ${email}: ${ckError.message}`);
+          console.error(`[API Quiz Submit ${requestTimestamp}] Error during ConvertKit API call for ${email}: ${ckError.message}`);
         }
       } else {
-        console.warn(`[${new Date().toISOString()}] ConvertKit API key or form ID not configured. Skipping ConvertKit step for ${email}.`);
+        console.warn(`[API Quiz Submit ${requestTimestamp}] ConvertKit not configured. Skipping for ${email}.`);
       }
 
-      console.log(`[${new Date().toISOString()}] Quiz submission for ${email} processed successfully. Sending response.`);
+      console.log(`[API Quiz Submit ${requestTimestamp}] Submission for ${email} processed. Sending success response.`);
       return new Response(
         JSON.stringify({ 
           success: true,
           userId,
-          gemsEarned: gemsAwardedThisSession, 
+          gemsEarned: gemsEarnedThisSession, 
           totalGems: currentInsightGems, 
           referralCode: userOwnReferralCode, 
           message: 'Quiz submitted successfully' 
@@ -315,24 +316,11 @@ export const POST = async ({ request }) => {
       );
 
     } catch (dbOrLogicError) { 
-      console.error(`[${new Date().toISOString()}] Error during database operations or main quiz submission logic for email ${email || 'unknown'}: ${dbOrLogicError.message}`, dbOrLogicError.stack);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: dbOrLogicError instanceof Error ? dbOrLogicError.message : 'An error occurred while processing your submission' 
-        }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      );
+      console.error(`[API Quiz Submit ${requestTimestamp}] Error in main logic for ${email || 'N/A'}: ${dbOrLogicError.message}`, dbOrLogicError.stack);
+      return new Response( JSON.stringify({ success: false, message: 'Server error processing submission' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
-
   } catch (initialError) { 
-    console.error(`[${new Date().toISOString()}] Initial error processing quiz submission request (e.g., formData parsing): ${initialError.message}`, initialError.stack);
-    return new Response(
-      JSON.stringify({ 
-        success: false, 
-        message: 'An error occurred processing your request' 
-      }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+    console.error(`[API Quiz Submit ${requestTimestamp}] Initial request processing error: ${initialError.message}`, initialError.stack);
+    return new Response( JSON.stringify({ success: false, message: 'Error processing request' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 };

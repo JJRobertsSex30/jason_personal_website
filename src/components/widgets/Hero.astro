@@ -199,9 +199,10 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
           });
           
           const result = await response.json();
+          console.log('Subscribe response:', { status: response.status, ok: response.ok, result });
           
-          if (response.ok) {
-            messageElement.textContent = 'Thank you for subscribing! Please check your email to confirm.';
+          if (response.ok && response.status === 200) {
+            messageElement.textContent = result.message || 'Thank you for subscribing! Please check your email to confirm.';
             messageElement.style.color = 'green';
             form.reset();
             
@@ -214,11 +215,13 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
               });
             }
           } else {
-            throw new Error(result.message || 'Subscription failed');
+            console.error('Subscribe error response:', { status: response.status, result });
+            messageElement.textContent = result.message || 'Subscription failed. Please try again.';
+            messageElement.style.color = 'red';
           }
         } catch (error) {
           console.error('Subscription error:', error);
-          messageElement.textContent = error.message || 'Failed to subscribe. Please try again.';
+          messageElement.textContent = 'Failed to subscribe. Please try again.';
           messageElement.style.color = 'red';
         } finally {
           submitButton.disabled = false;

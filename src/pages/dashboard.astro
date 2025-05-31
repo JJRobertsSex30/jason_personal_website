@@ -297,18 +297,19 @@ if (Astro.request.method === 'GET') {
       }
       console.error('Fetch user profiles error:', e);
     }
-  }
-  // Fetch experiments regardless of session, but actions on them require login
-  try {
-    const openExperimentId = new URL(Astro.request.url).searchParams.get('openExperiment');
-    experiments = await fetchExperimentsWithStats(openExperimentId);
-  } catch (e: unknown) {
-    if (e instanceof Error) {
-      abTestError = e.message;
-    } else {
-      abTestError = 'Failed to fetch experiments due to an unexpected error.';
+
+    // Fetch experiments only when authenticated
+    try {
+      const openExperimentId = new URL(Astro.request.url).searchParams.get('openExperiment');
+      experiments = await fetchExperimentsWithStats(openExperimentId);
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        abTestError = e.message;
+      } else {
+        abTestError = 'Failed to fetch experiments due to an unexpected error.';
+      }
+      console.error('Fetch experiments error:', e);
     }
-    console.error('Fetch experiments error:', e);
   }
 }
 
@@ -335,34 +336,6 @@ if (Astro.request.method === 'GET') {
       )}
     </div>
 
-    <div class="mb-8">
-      <div class="sm:hidden">
-        <label for="tabs" class="sr-only">Select a tab</label>
-        <select id="tabs" name="tabs" class="block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-white">
-          <option selected>A/B Testing</option>
-          <option>User Profiles</option>
-        </select>
-      </div>
-      <div class="hidden sm:block">
-        <div class="border-b border-slate-200 dark:border-slate-700">
-          <nav class="-mb-px flex space-x-4" aria-label="Tabs">
-            <a href="#ab-testing-panel" id="ab-testing-tab" 
-               class="tab-button active-tab group whitespace-nowrap py-3 px-3 border-b-2 font-medium text-sm flex items-center"
-               aria-current="page">
-              <svg class="-ml-0.5 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.5 5a2.5 2.5 0 00-4.995.088A2.5 2.5 0 002.5 7.5v5A2.5 2.5 0 005 15h10a2.5 2.5 0 002.5-2.5v-5A2.5 2.5 0 0015 5H7.5zM5 7.5a.5.5 0 01.5-.5h1.086A.5.5 0 017 7.5v5a.5.5 0 01-.5.5H5.5a.5.5 0 01-.5-.5v-5zm9.5 0a.5.5 0 00-.5-.5H13A.5.5 0 0012.5 7.5v5a.5.5 0 00.5.5h1.086A.5.5 0 00.414-.75L13.5 9.5l1.414-2.75A.5.5 0 0014.5 7.5z" clip-rule="evenodd" /></svg>
-              <span>A/B Testing</span>
-            </a>
-            <a href="#user-profiles-panel" id="user-profiles-tab"
-               class="tab-button group whitespace-nowrap py-3 px-3 border-b-2 font-medium text-sm flex items-center"
-               aria-current="false">
-              <svg class="-ml-0.5 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" /></svg>
-              <span>User Profiles</span>
-            </a>
-          </nav>
-        </div>
-      </div>
-    </div>
-
     {/* Global Error Display - for errors not specific to a tab component, or general page errors */}
     {pageError && (
       <div class="mb-6 p-4 bg-red-100 dark:bg-red-800/30 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-300 rounded-lg shadow-sm" role="alert">
@@ -376,15 +349,91 @@ if (Astro.request.method === 'GET') {
         <p>{generalMessage}</p>
       </div>
     )}
-    
-    {/* Tab Panels */}
-    <div id="ab-testing-panel" role="tabpanel" class="tab-panel pt-6">
-      <ABTestManager experiments={experiments} abTestError={abTestError} />
-    </div>
 
-    <div id="user-profiles-panel" role="tabpanel" class="tab-panel pt-6 hidden">
-      <UserProfileManager userProfiles={userProfiles} userProfilesError={pageError} isUserLoggedIn={!!session} />
-    </div>
+    {/* Show tabs only when authenticated */}
+    {session && (
+      <div class="mb-8">
+        <div class="sm:hidden">
+          <label for="tabs" class="sr-only">Select a tab</label>
+          <select id="tabs" name="tabs" class="block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+            <option selected>A/B Testing</option>
+            <option>User Profiles</option>
+          </select>
+        </div>
+        <div class="hidden sm:block">
+          <div class="border-b border-slate-200 dark:border-slate-700">
+            <nav class="-mb-px flex space-x-4" aria-label="Tabs">
+              <a href="#ab-testing-panel" id="ab-testing-tab" 
+                 class="tab-button active-tab group whitespace-nowrap py-3 px-3 border-b-2 font-medium text-sm flex items-center"
+                 aria-current="page">
+                <svg class="-ml-0.5 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.5 5a2.5 2.5 0 00-4.995.088A2.5 2.5 0 002.5 7.5v5A2.5 2.5 0 005 15h10a2.5 2.5 0 002.5-2.5v-5A2.5 2.5 0 0015 5H7.5zM5 7.5a.5.5 0 01.5-.5h1.086A.5.5 0 017 7.5v5a.5.5 0 01-.5.5H5.5a.5.5 0 01-.5-.5v-5zm9.5 0a.5.5 0 00-.5-.5H13A.5.5 0 0012.5 7.5v5a.5.5 0 00.5.5h1.086A.5.5 0 00.414-.75L13.5 9.5l1.414-2.75A.5.5 0 0014.5 7.5z" clip-rule="evenodd" /></svg>
+                <span>A/B Testing</span>
+              </a>
+              <a href="#user-profiles-panel" id="user-profiles-tab"
+                 class="tab-button group whitespace-nowrap py-3 px-3 border-b-2 font-medium text-sm flex items-center"
+                 aria-current="false">
+                <svg class="-ml-0.5 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" /></svg>
+                <span>User Profiles</span>
+              </a>
+            </nav>
+          </div>
+        </div>
+      </div>
+    )}
+    
+    {/* Content: Login form for unauthenticated, dashboard for authenticated */}
+    {!session ? (
+      /* Show login form when not authenticated */
+      <div class="max-w-md mx-auto mt-12 bg-white dark:bg-slate-800 shadow-xl rounded-lg p-8">
+        <h3 class="text-2xl font-semibold text-center text-slate-700 dark:text-slate-200 mb-6">Admin Login Required</h3>
+        <p class="text-center text-slate-600 dark:text-slate-400 mb-6">
+          Please log in to access the admin dashboard and manage A/B tests.
+        </p>
+        <form method="POST" action={Astro.url.pathname} class="space-y-6">
+          <input type="hidden" name="_action" value="login" />
+          <div>
+            <label for="email" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Email Address</label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              required
+              class="mt-1 block w-full shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md py-2.5 px-3 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400 dark:placeholder-slate-500"
+            />
+          </div>
+          <div>
+            <label for="password" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+              class="mt-1 block w-full shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md py-2.5 px-3 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400 dark:placeholder-slate-500"
+            />
+          </div>
+          <button
+            type="submit"
+            class="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-900 focus:ring-blue-500 transition duration-150 ease-in-out"
+          >
+            Sign In
+          </button>
+        </form>
+      </div>
+    ) : (
+      /* Show admin dashboard when authenticated */
+      <>
+        {/* Tab Panels */}
+        <div id="ab-testing-panel" role="tabpanel" class="tab-panel pt-6">
+          <ABTestManager experiments={experiments} abTestError={abTestError} />
+        </div>
+
+        <div id="user-profiles-panel" role="tabpanel" class="tab-panel pt-6 hidden">
+          <UserProfileManager userProfiles={userProfiles} userProfilesError={pageError} isUserLoggedIn={!!session} />
+        </div>
+      </>
+    )}
     
   </div> {/* End of container div with mx-auto etc. */}
 
@@ -411,8 +460,12 @@ if (Astro.request.method === 'GET') {
   function initializeTabs() {
     const tabs = document.querySelectorAll('.tab-button');
     const panels = document.querySelectorAll('.tab-panel');
-    // const abTestingTab = document.getElementById('ab-testing-tab'); // Removed as unused
-    // const userProfilesTab = document.getElementById('user-profiles-tab'); // Removed as unused
+    
+    // Only initialize tabs if they exist (i.e., user is authenticated)
+    if (tabs.length === 0 || panels.length === 0) {
+      console.log("Dashboard: No tabs found, skipping tab initialization (user likely not authenticated)");
+      return;
+    }
 
     const setActiveTab = (targetId: string) => {
       tabs.forEach(tab => {
@@ -488,6 +541,13 @@ if (Astro.request.method === 'GET') {
 
   // Handle popstate for browser back/forward for tabs
   window.addEventListener('popstate', () => {
+    // Only handle tab navigation if tabs exist (user is authenticated)
+    const tabs = document.querySelectorAll('.tab-button');
+    if (tabs.length === 0) {
+      console.log("Dashboard: No tabs found on popstate, skipping tab navigation");
+      return;
+    }
+    
     let hash = window.location.hash;
     if (!hash || (hash !== '#ab-testing-panel' && hash !== '#user-profiles-panel')) {
       hash = '#ab-testing-panel'; // Default to A/B tab
