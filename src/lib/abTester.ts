@@ -20,6 +20,33 @@ interface ImpressionPayload {
   session_identifier?: string | null;
   page_url?: string | null;
   user_agent?: string | null;
+  // Geographic & Location
+  country_code?: string | null;
+  region?: string | null;
+  city?: string | null;
+  language_code?: string | null;
+  time_zone?: string | null;
+  // Device & Technical
+  device_type?: 'desktop' | 'mobile' | 'tablet' | null;
+  screen_resolution?: string | null;
+  viewport_size?: string | null;
+  connection_type?: 'slow-2g' | '2g' | '3g' | '4g' | 'wifi' | 'ethernet' | null;
+  // Performance
+  page_load_time?: number | null;
+  // Marketing & UTM
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  // Engagement
+  time_on_page?: number | null;
+  scroll_depth_percent?: number | null;
+  bounce?: boolean | null;
+  is_first_exposure?: boolean | null;
+  // A/B Testing Context
+  user_was_eligible?: boolean | null;
+  user_eligibility_status?: Record<string, unknown> | null;
+  user_context?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
   // created_at is typically handled by DB default (e.g., DEFAULT NOW())
 }
 
@@ -128,6 +155,167 @@ function getClientSessionIdentifier(): string | null {
   return sessionId;
 }
 
+// Analytics data collection helpers
+function getDeviceType(): 'desktop' | 'mobile' | 'tablet' | null {
+  if (typeof window === 'undefined') return null;
+  
+  const userAgent = navigator.userAgent.toLowerCase();
+  const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+  const isTablet = /ipad|android(?!.*mobile)|tablet/i.test(userAgent);
+  
+  if (isTablet) return 'tablet';
+  if (isMobile) return 'mobile';
+  return 'desktop';
+}
+
+function getScreenResolution(): string | null {
+  if (typeof window === 'undefined' || !window.screen) return null;
+  return `${window.screen.width}x${window.screen.height}`;
+}
+
+function getViewportSize(): string | null {
+  if (typeof window === 'undefined') return null;
+  return `${window.innerWidth}x${window.innerHeight}`;
+}
+
+function getConnectionType(): 'slow-2g' | '2g' | '3g' | '4g' | 'wifi' | 'ethernet' | null {
+  if (typeof navigator === 'undefined' || !('connection' in navigator)) return null;
+  
+  const connection = (navigator as Navigator & { connection?: { effectiveType?: string; type?: string } }).connection || 
+                    (navigator as Navigator & { mozConnection?: { effectiveType?: string; type?: string } }).mozConnection || 
+                    (navigator as Navigator & { webkitConnection?: { effectiveType?: string; type?: string } }).webkitConnection;
+  if (!connection) return null;
+  
+  const effectiveType = connection.effectiveType;
+  if (['slow-2g', '2g', '3g', '4g'].includes(effectiveType || '')) {
+    return effectiveType as 'slow-2g' | '2g' | '3g' | '4g';
+  }
+  
+  // Fallback based on connection type
+  if (connection.type === 'wifi') return 'wifi';
+  if (connection.type === 'ethernet') return 'ethernet';
+  
+  return null;
+}
+
+function getLanguageCode(): string | null {
+  if (typeof navigator === 'undefined') return null;
+  return navigator.language || (navigator as Navigator & { userLanguage?: string }).userLanguage || null;
+}
+
+function getTimeZone(): string | null {
+  if (typeof Intl === 'undefined') return null;
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return null;
+  }
+}
+
+function getPageLoadTime(): number | null {
+  if (typeof performance === 'undefined' || !performance.timing) return null;
+  
+  const timing = performance.timing;
+  if (timing.loadEventEnd && timing.navigationStart) {
+    return timing.loadEventEnd - timing.navigationStart;
+  }
+  
+  // Fallback to performance.now() if available
+  if (performance.now) {
+    return Math.round(performance.now());
+  }
+  
+  return null;
+}
+
+function getUTMParameters(): { utm_source?: string; utm_medium?: string; utm_campaign?: string } {
+  if (typeof window === 'undefined') return {};
+  
+  const urlParams = new URLSearchParams(window.location.search);
+  return {
+    utm_source: urlParams.get('utm_source') || undefined,
+    utm_medium: urlParams.get('utm_medium') || undefined,
+    utm_campaign: urlParams.get('utm_campaign') || undefined,
+  };
+}
+
+function checkIsFirstExposure(experimentId: string): boolean {
+  if (typeof localStorage === 'undefined') return true;
+  
+  const exposureKey = `ab_first_exposure_${experimentId}`;
+  const hasBeenExposed = localStorage.getItem(exposureKey);
+  
+  if (!hasBeenExposed) {
+    localStorage.setItem(exposureKey, 'true');
+    return true;
+  }
+  
+  return false;
+}
+
+function getScrollDepthPercent(): number {
+  if (typeof window === 'undefined') return 0;
+  
+  const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+  const documentHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+  
+  if (documentHeight <= 0) return 100;
+  
+  return Math.round((scrollTop / documentHeight) * 100);
+}
+
+// Enhanced metadata collection
+function getBrowserMetadata(): Record<string, unknown> {
+  if (typeof window === 'undefined') return {};
+  
+  return {
+    browser_features: {
+      local_storage: typeof localStorage !== 'undefined',
+      session_storage: typeof sessionStorage !== 'undefined', 
+      performance_api: typeof performance !== 'undefined',
+      connection_api: 'connection' in navigator,
+      intl_api: typeof Intl !== 'undefined',
+      geolocation_api: 'geolocation' in navigator,
+      touch_support: 'ontouchstart' in window
+    },
+    page_info: {
+      title: document.title,
+      referrer: document.referrer || null,
+      url_hash: window.location.hash || null,
+      url_pathname: window.location.pathname,
+      url_search: window.location.search || null
+    },
+    document_info: {
+      ready_state: document.readyState,
+      visibility_state: document.visibilityState || null
+    }
+  };
+}
+
+// Global variables for engagement tracking
+let pageLoadStartTime: number | null = null;
+let hasUserInteracted = false;
+
+// Initialize engagement tracking
+if (typeof window !== 'undefined') {
+  pageLoadStartTime = Date.now();
+  
+  // Track user interactions to detect bounce
+  const interactionEvents = ['click', 'keydown', 'scroll', 'mousemove', 'touchstart'];
+  const markInteraction = () => {
+    if (!hasUserInteracted) {
+      hasUserInteracted = true;
+      interactionEvents.forEach(event => {
+        document.removeEventListener(event, markInteraction);
+      });
+    }
+  };
+  
+  interactionEvents.forEach(event => {
+    document.addEventListener(event, markInteraction, { passive: true, once: true });
+  });
+}
+
 export async function getVariant(experimentName: string): Promise<ABVariant> {
   console.log(`[abTester] getVariant called for experiment name: "${experimentName}"`);
   const activeVariants = await fetchExperimentVariants(experimentName);
@@ -191,7 +379,7 @@ export async function logClientImpression(variant: ABVariant | null, experimentN
   const userIdentifier = getClientUserIdentifier();
   const sessionIdentifier = getClientSessionIdentifier();
   
-  // Check user eligibility for A/B testing (NEW)
+  // Check user eligibility for A/B testing
   const eligibility = await checkUserEligibilityForABTesting(userIdentifier, variant.experiment_id);
   
   if (!eligibility.isEligible) {
@@ -219,13 +407,99 @@ export async function logClientImpression(variant: ABVariant | null, experimentN
 
   console.log(`[abTester] Logging CLIENT IMPRESSION: Experiment ID: '${variant.experiment_id}', Variant ID: '${variant.id}', Name: '${variant.name}', User: '${userIdentifier}', Session: '${sessionIdentifier || 'N/A'}'`);
   
+  // Collect comprehensive analytics data
+  const utmParams = getUTMParameters();
+  const timeOnPage = pageLoadStartTime ? Math.round((Date.now() - pageLoadStartTime) / 1000) : null;
+  const isFirstExposure = checkIsFirstExposure(variant.experiment_id);
+  
+  // Fetch geolocation data
+  let geoData = {
+    country_code: null as string | null,
+    region: null as string | null,
+    city: null as string | null
+  };
+
+  try {
+    console.log('[abTester] Fetching geolocation data...');
+    const geoResponse = await fetch('/api/geolocation', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (geoResponse.ok) {
+      const geoResult = await geoResponse.json();
+      if (geoResult.success && geoResult.data) {
+        geoData = {
+          country_code: geoResult.data.country_code || null,
+          region: geoResult.data.region || null,
+          city: geoResult.data.city || null
+        };
+        console.log('[abTester] Geolocation data retrieved:', geoData);
+      } else {
+        console.log('[abTester] Geolocation API returned no data');
+      }
+    } else {
+      console.warn('[abTester] Geolocation API request failed:', geoResponse.status);
+    }
+  } catch (error) {
+    console.warn('[abTester] Failed to fetch geolocation data:', error);
+    // Continue with null values - non-blocking error
+  }
+  
   const impressionData: ImpressionPayload = {
+    // Core A/B testing data
     variant_id: variant.id,
     user_identifier: userIdentifier,
     experiment_id: variant.experiment_id, 
     session_identifier: sessionIdentifier,
     page_url: window.location.href,
     user_agent: navigator.userAgent,
+    
+    // Geographic & Location (now populated via IP geolocation)
+    country_code: geoData.country_code,
+    region: geoData.region,  
+    city: geoData.city,
+    language_code: getLanguageCode(),
+    time_zone: getTimeZone(),
+    
+    // Device & Technical
+    device_type: getDeviceType(),
+    screen_resolution: getScreenResolution(),
+    viewport_size: getViewportSize(),
+    connection_type: getConnectionType(),
+    
+    // Performance
+    page_load_time: getPageLoadTime(),
+    
+    // Marketing & UTM
+    utm_source: utmParams.utm_source || null,
+    utm_medium: utmParams.utm_medium || null,
+    utm_campaign: utmParams.utm_campaign || null,
+    
+    // Engagement
+    time_on_page: timeOnPage,
+    scroll_depth_percent: getScrollDepthPercent(),
+    bounce: !hasUserInteracted,
+    is_first_exposure: isFirstExposure,
+    
+    // A/B Testing Context
+    user_was_eligible: eligibility.isEligible,
+    user_eligibility_status: {
+      reason: eligibility.reason,
+      details: eligibility.details || {}
+    },
+    user_context: {
+      experiment_name: experimentNameFromContext,
+      variant_name: variant.name,
+      user_identifier_type: 'ab_user_identifier'
+    },
+    metadata: {
+      ...getBrowserMetadata(),
+      geolocation_source: geoData.country_code ? 'ipgeolocation.io' : 'unavailable',
+      collection_timestamp: new Date().toISOString(),
+    }
   };
 
   const { error: impressionError } = await supabase
@@ -240,7 +514,7 @@ export async function logClientImpression(variant: ABVariant | null, experimentN
     }
   } else {
     sessionStorage.setItem(shortTermKey, 'true');
-    console.log('[abTester] Client impression logged successfully to Supabase.');
+    console.log('[abTester] Client impression logged successfully to Supabase with comprehensive analytics data.');
   }
 }
 
