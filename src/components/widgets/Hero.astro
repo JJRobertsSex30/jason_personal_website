@@ -1,12 +1,11 @@
 ---
 // src/components/widgets/Hero.astro
 import { Image } from 'astro:assets';
-import type { ImageMetadata } from 'astro';
 import heroBgImage from '~/assets/images/jj.jpg';
 
 export interface Props {
   image?: {
-    src: ImageMetadata;
+    src: any;
     alt: string;
   };
 }
@@ -50,6 +49,7 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
       >
         <input type="hidden" name="ab_test_variant" id="ab-test-variant" />
         <input type="hidden" name="signup_source" value="hero" />
+        <input type="hidden" name="ab_user_identifier" id="ab-user-identifier-input" value="" />
         
         <label for="hero-email-bg" class="sr-only">Email address</label>
         <input
@@ -72,23 +72,46 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
   </div>
 </section>
 
+<script>
+  import '~/lib/abTester';
+</script>
+
 <script is:inline>
   document.addEventListener('DOMContentLoaded', function() {
     console.log('Hero component mounted, initializing...');
     
+    let contentUpdated = false;
+    let impressionLogged = false;
+    
+    // Get ab_user_identifier for consistent tracking
+    function getClientUserIdentifier() {
+      let userId = localStorage.getItem('ab_user_identifier');
+      if (!userId) {
+        userId = crypto.randomUUID();
+        localStorage.setItem('ab_user_identifier', userId);
+        console.log('[Hero] New ab_user_identifier generated:', userId);
+      }
+      return userId;
+    }
+    
+    // Populate ab_user_identifier in form
+    const abUserIdentifierInput = document.getElementById('ab-user-identifier-input');
+    if (abUserIdentifierInput) {
+      const userIdentifier = getClientUserIdentifier();
+      abUserIdentifierInput.value = userIdentifier;
+      console.log('[Hero] Set ab_user_identifier in form:', userIdentifier);
+    }
+
     const defaultContent = {
       'control': {
-        headline: "Unlock Your Potential with AI",
-        subheadline: "Join our newsletter to get the latest AI insights and tips delivered straight to your inbox."
+        headline: "Transform Your Love Life - Break Free From Painful Patterns",
+        subheadline: "Discover the powerful insights that help you create deeply fulfilling relationships built on freedom, honesty, and mutual reward. Get your free chapters now."
       },
       'variation-b': {
-        headline: "New Way to Transform Your Love Life",
-        subheadline: "Experience relationships like never before with our proven approach. Sign up now to get started on your journey to better connections."
+        headline: "Unlock The Next Level To Your Relationship", 
+        subheadline: "Identify the hidden patterns causing conflict and discover the clear blueprint for relationships built on clarity, freedom, and genuine mutual reward. Get your free chapters now."
       }
     };
-
-    // Flag to ensure content is updated only once
-    let contentUpdated = false;
 
     // Set default content immediately
     const heroHeadlineEl = document.getElementById('hero-headline');
@@ -96,17 +119,43 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
     if (heroHeadlineEl) heroHeadlineEl.textContent = defaultContent.control.headline;
     if (heroSubheadlineEl) heroSubheadlineEl.textContent = defaultContent.control.subheadline;
 
+    // Function to log impression to database
+    async function logImpressionToDatabase(variant, experimentName = 'hero-section-headline-test') {
+      if (impressionLogged) return;
+      
+      console.log('[Hero] Attempting to log impression to database for variant:', variant);
+      
+      if (typeof window.logClientImpression === 'function') {
+        try {
+          const variantForDb = {
+            id: variant,
+            name: variant,
+            experiment_id: 'posthog-hero-experiment',
+            headline: '',
+            subheadline: ''
+          };
+          
+          await window.logClientImpression(variantForDb, experimentName);
+          impressionLogged = true;
+          console.log('[Hero] Impression logged to database successfully');
+        } catch (error) {
+          console.error('[Hero] Error logging impression to database:', error);
+        }
+      } else {
+        setTimeout(() => logImpressionToDatabase(variant, experimentName), 1000);
+      }
+    }
+
     async function updateContentFromPostHog() {
-      if (contentUpdated) return; // Prevent multiple updates
+      if (contentUpdated) return;
       contentUpdated = true; 
 
       console.group('Updating content from PostHog');
       
       try {
-        // Ensure posthog is available and getFeatureFlag is a function
         if (!window.posthog || typeof window.posthog.getFeatureFlag !== 'function') {
           console.warn('PostHog or getFeatureFlag not available when trying to update content. Default content remains.');
-          // Default content is already set. Form is visible. Loading is hidden.
+          logImpressionToDatabase('control');
           console.groupEnd();
           return;
         }
@@ -141,33 +190,35 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
           variantInput.value = variant;
         }
         
+        const finalVariant = variant || 'control';
+        logImpressionToDatabase(finalVariant);
+        
       } catch (error) {
         console.error('Error updating content from PostHog:', error);
-        // Form is already visible, loading already hidden. Default content remains.
+        logImpressionToDatabase('control');
       }
       
       console.groupEnd();
     }
 
-    // Attempt to update content if PostHog is already loaded and ready
     if (window.posthog && window.posthog.__loaded && typeof window.posthog.getFeatureFlag === 'function') {
       console.log('PostHog already loaded and ready, updating content immediately.');
       updateContentFromPostHog();
     } else {
       console.log('PostHog not immediately ready. Default content is shown. Waiting for posthog:ready event for potential A/B test update.');
-      // Default content is already set immediately after DOMContentLoaded.
-      // The listener below will handle the update if PostHog becomes ready.
+      setTimeout(() => {
+        if (!contentUpdated) {
+          logImpressionToDatabase('control');
+        }
+      }, 5000);
     }
 
-    // Listen for the posthog:ready event to update content
     window.addEventListener('posthog:ready', function onPostHogReady() {
       console.log('posthog:ready event received in Hero.astro');
       updateContentFromPostHog(); 
-      // Remove listener if you only want it to fire once, though contentUpdated flag handles multiple calls.
-      // window.removeEventListener('posthog:ready', onPostHogReady);
     });
 
-    // Form submission handler (remains the same)
+    // Form submission handler
     const form = document.getElementById('hero-page-form');
     if (form) {
       form.addEventListener('submit', async function(event) {
@@ -214,6 +265,28 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
                 source: 'hero'
               });
             }
+            
+            // Track conversion in database
+            if (typeof window.trackConversion === 'function') {
+              try {
+                const variantInput = document.getElementById('ab-test-variant');
+                const variant = variantInput ? variantInput.value : 'control';
+                const conversionResult = await window.trackConversion(
+                  variant,
+                  email,
+                  'hero_form_submission',
+                  {
+                    source: 'hero-posthog',
+                    experiment_context: 'hero-section-headline-test',
+                    posthog_variant: variant
+                  }
+                );
+                console.log('[Hero] Database conversion tracking result:', conversionResult);
+              } catch (conversionError) {
+                console.error('[Hero] Error tracking conversion in database:', conversionError);
+              }
+            }
+            
           } else {
             console.error('Subscribe error response:', { status: response.status, result });
             messageElement.textContent = result.message || 'Subscription failed. Please try again.';

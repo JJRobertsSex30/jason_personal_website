@@ -187,15 +187,29 @@ function getConnectionType(): 'slow-2g' | '2g' | '3g' | '4g' | 'wifi' | 'etherne
   if (!connection) return null;
   
   const effectiveType = connection.effectiveType;
-  if (['slow-2g', '2g', '3g', '4g'].includes(effectiveType || '')) {
-    return effectiveType as 'slow-2g' | '2g' | '3g' | '4g';
+  
+  // Map effectiveType to our enum values, with fallbacks
+  switch (effectiveType) {
+    case 'slow-2g':
+      return 'slow-2g';
+    case '2g':
+      return '2g';
+    case '3g':
+      return '3g';
+    case '4g':
+      return '4g';
+    default:
+      // Fallback to connection type if effectiveType is not recognized
+      switch (connection.type) {
+        case 'wifi':
+          return 'wifi';
+        case 'ethernet':
+          return 'ethernet';
+        default:
+          // If we have effectiveType but it's not in our enum, default to 4g for better user experience
+          return effectiveType ? '4g' : null;
+      }
   }
-  
-  // Fallback based on connection type
-  if (connection.type === 'wifi') return 'wifi';
-  if (connection.type === 'ethernet') return 'ethernet';
-  
-  return null;
 }
 
 function getLanguageCode(): string | null {
@@ -232,10 +246,17 @@ function getUTMParameters(): { utm_source?: string; utm_medium?: string; utm_cam
   if (typeof window === 'undefined') return {};
   
   const urlParams = new URLSearchParams(window.location.search);
+  
+  // Helper function to get non-empty parameter or undefined
+  const getParam = (key: string): string | undefined => {
+    const value = urlParams.get(key);
+    return value && value.trim() !== '' ? value.trim() : undefined;
+  };
+  
   return {
-    utm_source: urlParams.get('utm_source') || undefined,
-    utm_medium: urlParams.get('utm_medium') || undefined,
-    utm_campaign: urlParams.get('utm_campaign') || undefined,
+    utm_source: getParam('utm_source'),
+    utm_medium: getParam('utm_medium'),
+    utm_campaign: getParam('utm_campaign'),
   };
 }
 
