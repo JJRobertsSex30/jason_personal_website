@@ -167,8 +167,31 @@ const finalCtaButton = {
   </script>
 
   <script>
-    import '~/lib/abTester'; 
-    // console.log('[Index Page Client Script] ~/lib/abTester imported (for window functions).');
+    // Enhanced import with error handling
+    (async () => {
+      try {
+        console.log('[Index Page Client Script] Starting abTester module import...');
+        await import('~/lib/abTester');
+        console.log('[Index Page Client Script] abTester module imported successfully');
+        
+        // Verify window functions are available
+        const checks = {
+          logClientImpression: typeof window.logClientImpression === 'function',
+          trackConversion: typeof window.trackConversion === 'function',
+          getClientSessionIdentifier: typeof window.getClientSessionIdentifier === 'function'
+        };
+        console.log('[Index Page Client Script] Window function availability:', checks);
+        
+        if (checks.logClientImpression) {
+          console.log('[Index Page Client Script] abTester successfully loaded and window functions assigned');
+        } else {
+          console.error('[Index Page Client Script] abTester loaded but window functions not assigned');
+        }
+      } catch (error) {
+        console.error('[Index Page Client Script] Failed to import abTester module:', error);
+        console.error('[Index Page Client Script] This will prevent impression logging from working');
+      }
+    })();
   </script>
 </Layout>
 
@@ -176,37 +199,96 @@ const finalCtaButton = {
   heroVariantForImpression: chosenHeroContent, 
   heroExperimentNameForImpression: HERO_EXPERIMENT_NAME 
 }}>
+  // Enhanced error handling and resilience for impression logging
+  function checkAbTesterAvailability() {
+    const checks = {
+      windowLogClientImpression: typeof window.logClientImpression === 'function',
+      windowTrackConversion: typeof window.trackConversion === 'function',
+      windowGetClientSessionIdentifier: typeof window.getClientSessionIdentifier === 'function'
+    };
+    console.log('[Index Page Hero Impression] abTester availability check:', checks);
+    return checks.windowLogClientImpression;
+  }
+
   function attemptHeroImpressionLog() {
     if (heroVariantForImpression && heroVariantForImpression.id && heroVariantForImpression.id !== 'fallback_no_variants' && heroVariantForImpression.experiment_id && heroVariantForImpression.experiment_id !== 'unknown_experiment_id') {
-      if (window.logClientImpression) {
-        // console.log('[Index Page Hero Impression] Attempting log for Hero variant:', heroVariantForImpression, 'Exp Name Context:', heroExperimentNameForImpression);
+      
+      if (checkAbTesterAvailability()) {
+        console.log('[Index Page Hero Impression] Attempting log for Hero variant:', heroVariantForImpression.id, 'Exp:', heroExperimentNameForImpression);
         window.logClientImpression(heroVariantForImpression, heroExperimentNameForImpression)
+          .then(() => {
+            console.log('[Index Page Hero Impression] Successfully logged impression');
+          })
           .catch(err => console.error('[Index Page Hero Impression] Error calling logClientImpression:', err.message));
         return true; 
       } else {
-        // console.warn('[Index Page Hero Impression] window.logClientImpression not yet defined. Will retry.');
+        console.warn('[Index Page Hero Impression] window.logClientImpression not yet defined. Will retry.');
         return false; 
       }
     } else {
-      // console.log('[Index Page Hero Impression] Impression logging skipped for Hero: Invalid variant data or fallback.', heroVariantForImpression);
+      console.log('[Index Page Hero Impression] Impression logging skipped for Hero: Invalid variant data or fallback.', heroVariantForImpression);
       return true; 
     }
   }
 
   function scheduleImpressionLog() {
+    // Check if script loading failed completely
+    const scriptElements = document.querySelectorAll('script[src*="_astro/index_ab_test"]');
+    if (scriptElements.length > 0) {
+      const scriptElement = scriptElements[0];
+      if (scriptElement.onerror) {
+        console.error('[Index Page Hero Impression] Main Astro script failed to load, attempting fallback impression tracking');
+      }
+    }
+
     if (!attemptHeroImpressionLog()) {
       let attempts = 0;
-      const maxAttempts = 15; // Increased attempts slightly
+      const maxAttempts = 20; // Increased attempts
       const intervalId = setInterval(() => {
         attempts++;
-        // console.log(`[Index Page Hero Impression] Retrying logClientImpression (Attempt: ${attempts})`);
+        console.log(`[Index Page Hero Impression] Retrying logClientImpression (Attempt: ${attempts}/${maxAttempts})`);
         if (attemptHeroImpressionLog() || attempts >= maxAttempts) {
           clearInterval(intervalId);
           if (attempts >= maxAttempts && !window.logClientImpression) {
             console.error('[Index Page Hero Impression] Gave up waiting for window.logClientImpression.');
+            console.error('[Index Page Hero Impression] This may indicate a script loading failure. Check network tab for failed script loads.');
+            
+            // Attempt manual impression logging via direct API call as fallback
+            attemptFallbackImpressionLog();
           }
         }
-      }, 300); // Slightly longer interval
+      }, 500); // Longer interval for better reliability
+    }
+  }
+
+  // Fallback impression logging when main abTester.ts fails to load
+  async function attemptFallbackImpressionLog() {
+    try {
+      console.log('[Index Page Hero Impression] Attempting fallback impression logging via direct API');
+      
+      // Basic impression data
+      const fallbackImpressionData = {
+        variant_id: heroVariantForImpression.id,
+        experiment_id: heroVariantForImpression.experiment_id,
+        user_identifier: localStorage.getItem('ab_user_identifier') || 'fallback_user_' + Date.now(),
+        session_identifier: sessionStorage.getItem('ab_session_identifier') || 'fallback_session_' + Date.now(),
+        page_url: window.location.href,
+        user_agent: navigator.userAgent,
+        metadata: {
+          fallback_logging: true,
+          script_load_failure: true,
+          timestamp: new Date().toISOString()
+        }
+      };
+
+      // Note: This would need to be implemented as an API endpoint
+      console.log('[Index Page Hero Impression] Would log fallback impression:', fallbackImpressionData);
+      
+      // For now, just log to console. In a real implementation, you'd call:
+      // await fetch('/api/fallback-impression', { method: 'POST', body: JSON.stringify(fallbackImpressionData) });
+      
+    } catch (error) {
+      console.error('[Index Page Hero Impression] Fallback impression logging also failed:', error);
     }
   }
 
