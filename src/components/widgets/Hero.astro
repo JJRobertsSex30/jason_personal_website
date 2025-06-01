@@ -5,12 +5,18 @@ import heroBgImage from '~/assets/images/jj.jpg';
 
 export interface Props {
   image?: {
-    src: any;
+    src: import('astro:assets').ImageMetadata;
     alt: string;
   };
+  headline?: string;
+  subheadline?: string;
 }
 
-const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
+const { 
+  image = { src: heroBgImage, alt: 'Default alt text' },
+  headline = "Transform Your Love Life - Break Free From Painful Patterns",
+  subheadline = "Discover the powerful insights that help you create deeply fulfilling relationships built on freedom, honesty, and mutual reward. Get your free chapters now."
+} = Astro.props;
 ---
 
 <section class="relative overflow-hidden py-24 md:py-32">
@@ -32,22 +38,18 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
   {/* Content Container */}
   <div class="container mx-auto px-4 relative z-10 text-center">
     <div class="max-w-3xl mx-auto">
-      <h1 id="hero-headline" class="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight drop-shadow-md min-h-[4rem]">
-        <!-- Content will be populated by PostHog -->
+      <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight drop-shadow-md">
+        {headline}
       </h1>
-      <p id="hero-subheadline" class="text-lg text-gray-200 mb-8 drop-shadow-sm min-h-[2rem]">
-        <!-- Content will be populated by PostHog -->
+      <p class="text-lg text-gray-200 mb-8 drop-shadow-sm">
+        {subheadline}
       </p>
-      
-      <div id="content-loading" class="text-gray-300 mb-4" style="display: none;">
-        Loading...
-      </div>
       
       <form 
         id="hero-page-form" 
         class="flex flex-col sm:flex-row gap-4 justify-center max-w-xl mx-auto"
       >
-        <input type="hidden" name="ab_test_variant" id="ab-test-variant" />
+        <input type="hidden" name="ab_test_variant" value="control" />
         <input type="hidden" name="signup_source" value="hero" />
         <input type="hidden" name="ab_user_identifier" id="ab-user-identifier-input" value="" />
         
@@ -76,9 +78,6 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
   document.addEventListener('DOMContentLoaded', function() {
     console.log('Hero component mounted, initializing...');
     
-    let contentUpdated = false;
-    let impressionLogged = false;
-    
     // Get ab_user_identifier for consistent tracking
     function getClientUserIdentifier() {
       let userId = localStorage.getItem('ab_user_identifier');
@@ -97,122 +96,6 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
       abUserIdentifierInput.value = userIdentifier;
       console.log('[Hero] Set ab_user_identifier in form:', userIdentifier);
     }
-
-    const defaultContent = {
-      'control': {
-        headline: "Transform Your Love Life - Break Free From Painful Patterns",
-        subheadline: "Discover the powerful insights that help you create deeply fulfilling relationships built on freedom, honesty, and mutual reward. Get your free chapters now."
-      },
-      'variation-b': {
-        headline: "Unlock The Next Level To Your Relationship", 
-        subheadline: "Identify the hidden patterns causing conflict and discover the clear blueprint for relationships built on clarity, freedom, and genuine mutual reward. Get your free chapters now."
-      }
-    };
-
-    // Set default content immediately
-    const heroHeadlineEl = document.getElementById('hero-headline');
-    const heroSubheadlineEl = document.getElementById('hero-subheadline');
-    if (heroHeadlineEl) heroHeadlineEl.textContent = defaultContent.control.headline;
-    if (heroSubheadlineEl) heroSubheadlineEl.textContent = defaultContent.control.subheadline;
-
-    // Function to log impression to database
-    async function logImpressionToDatabase(variant, experimentName = 'hero-section-headline-test') {
-      if (impressionLogged) return;
-      
-      console.log('[Hero] Attempting to log impression to database for variant:', variant);
-      
-      if (typeof window.logClientImpression === 'function') {
-        try {
-          const variantForDb = {
-            id: variant,
-            name: variant,
-            experiment_id: 'posthog-hero-experiment',
-            headline: '',
-            subheadline: ''
-          };
-          
-          await window.logClientImpression(variantForDb, experimentName);
-          impressionLogged = true;
-          console.log('[Hero] Impression logged to database successfully');
-        } catch (error) {
-          console.error('[Hero] Error logging impression to database:', error);
-        }
-      } else {
-        setTimeout(() => logImpressionToDatabase(variant, experimentName), 1000);
-      }
-    }
-
-    async function updateContentFromPostHog() {
-      if (contentUpdated) return;
-      contentUpdated = true; 
-
-      console.group('Updating content from PostHog');
-      
-      try {
-        if (!window.posthog || typeof window.posthog.getFeatureFlag !== 'function') {
-          console.warn('PostHog or getFeatureFlag not available when trying to update content. Default content remains.');
-          logImpressionToDatabase('control');
-          console.groupEnd();
-          return;
-        }
-
-        const variant = window.posthog.getFeatureFlag('hero-section-headline-test');
-        const payload = window.posthog.getFeatureFlagPayload 
-          ? await window.posthog.getFeatureFlagPayload('hero-section-headline-test')
-          : null;
-        
-        console.log('PostHog variant:', variant);
-        console.log('PostHog payload:', payload);
-        
-        const content = payload || defaultContent[variant] || defaultContent.control;
-        console.log('Content to apply:', content);
-        
-        const headline = document.getElementById('hero-headline');
-        const subheadline = document.getElementById('hero-subheadline');
-        const variantInput = document.getElementById('ab-test-variant');
-        
-        if (headline && content.headline) {
-          console.log('Updating headline to:', content.headline);
-          headline.textContent = content.headline;
-        }
-        
-        if (subheadline && content.subheadline) {
-          console.log('Updating subheadline to:', content.subheadline);
-          subheadline.textContent = content.subheadline;
-        }
-        
-        if (variantInput && variant) {
-          console.log('Updating variant input to:', variant);
-          variantInput.value = variant;
-        }
-        
-        const finalVariant = variant || 'control';
-        logImpressionToDatabase(finalVariant);
-        
-      } catch (error) {
-        console.error('Error updating content from PostHog:', error);
-        logImpressionToDatabase('control');
-      }
-      
-      console.groupEnd();
-    }
-
-    if (window.posthog && window.posthog.__loaded && typeof window.posthog.getFeatureFlag === 'function') {
-      console.log('PostHog already loaded and ready, updating content immediately.');
-      updateContentFromPostHog();
-    } else {
-      console.log('PostHog not immediately ready. Default content is shown. Waiting for posthog:ready event for potential A/B test update.');
-      setTimeout(() => {
-        if (!contentUpdated) {
-          logImpressionToDatabase('control');
-        }
-      }, 5000);
-    }
-
-    window.addEventListener('posthog:ready', function onPostHogReady() {
-      console.log('posthog:ready event received in Hero.astro');
-      updateContentFromPostHog(); 
-    });
 
     // Form submission handler
     const form = document.getElementById('hero-page-form');
@@ -253,28 +136,16 @@ const { image = { src: heroBgImage, alt: 'Default alt text' } } = Astro.props;
             messageElement.style.color = 'green';
             form.reset();
             
-            if (window.posthog && typeof window.posthog.getFeatureFlag === 'function') {
-              const variant = window.posthog.getFeatureFlag('hero-section-headline-test') || 'control';
-              window.posthog.capture('newsletter_subscribed', {
-                email: email,
-                variant: variant,
-                source: 'hero'
-              });
-            }
-            
             // Track conversion in database
             if (typeof window.trackConversion === 'function') {
               try {
-                const variantInput = document.getElementById('ab-test-variant');
-                const variant = variantInput ? variantInput.value : 'control';
                 const conversionResult = await window.trackConversion(
-                  variant,
+                  'control',
                   email,
                   'hero_form_submission',
                   {
-                    source: 'hero-posthog',
-                    experiment_context: 'hero-section-headline-test',
-                    posthog_variant: variant
+                    source: 'hero-static',
+                    experiment_context: 'hero-section-static'
                   }
                 );
                 console.log('[Hero] Database conversion tracking result:', conversionResult);
