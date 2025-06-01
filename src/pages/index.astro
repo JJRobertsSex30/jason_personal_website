@@ -43,12 +43,8 @@ const metadata = {
 
 // === HERO DATA (Default/Fallback values for A/B test) ===
 // These are the default values that will be displayed initially
-// before PostHog loads and updates them.
+// before content loads and updates them.
 
-const heroActions = [
-  { variant: 'primary', text: 'Get Free Chapters Now', href: '#hero-form-section', icon: 'tabler:book-download' },
-  { text: 'See the Benefits', href: '#benefits' },
-];
 const heroImageForWidget = { src: imgHeroMain, alt: 'JJ Roberts - Relationship Expert' };
 
 // === BENEFITS (FEATURES WIDGET) DATA ===
@@ -117,9 +113,7 @@ const finalCtaButton = {
   <main>
     {/* --- HERO WIDGET --- */}
     <Hero 
-      actions={heroActions}
       image={heroImageForWidget}
-      abTestVariantKey="control"
     />
 
     {/* --- FEATURES WIDGET (Your Benefits Section) --- */}
@@ -257,7 +251,6 @@ const finalCtaButton = {
   </main>
 
   <script is:inline>
-    // Remove any duplicate PostHog initialization or form handling code here
-    // as it's now handled in the Hero component
+    // Static content - no dynamic scripts needed
   </script>
 </Layout>

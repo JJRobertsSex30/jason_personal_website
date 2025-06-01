@@ -179,36 +179,100 @@ function getViewportSize(): string | null {
 }
 
 function getConnectionType(): 'slow-2g' | '2g' | '3g' | '4g' | 'wifi' | 'ethernet' | null {
-  if (typeof navigator === 'undefined' || !('connection' in navigator)) return null;
+  if (typeof navigator === 'undefined') {
+    console.log('[abTester] getConnectionType: navigator undefined (SSR context)');
+    return null;
+  }
   
-  const connection = (navigator as Navigator & { connection?: { effectiveType?: string; type?: string } }).connection || 
-                    (navigator as Navigator & { mozConnection?: { effectiveType?: string; type?: string } }).mozConnection || 
-                    (navigator as Navigator & { webkitConnection?: { effectiveType?: string; type?: string } }).webkitConnection;
-  if (!connection) return null;
+  // Check for connection API availability
+  const hasConnectionAPI = 'connection' in navigator;
+  const hasMozConnection = 'mozConnection' in navigator;
+  const hasWebkitConnection = 'webkitConnection' in navigator;
+  
+  console.log('[abTester] Connection API availability:', {
+    connection: hasConnectionAPI,
+    mozConnection: hasMozConnection,
+    webkitConnection: hasWebkitConnection
+  });
+  
+  if (!hasConnectionAPI && !hasMozConnection && !hasWebkitConnection) {
+    console.log('[abTester] getConnectionType: No connection API available, attempting fallback detection');
+    
+    // Fallback: Use user agent and heuristics
+    const userAgent = navigator.userAgent.toLowerCase();
+    
+    if (userAgent.includes('mobile') || userAgent.includes('android') || userAgent.includes('iphone')) {
+      console.log('[abTester] getConnectionType: Mobile device detected, defaulting to 4g');
+      return '4g'; // Most mobile devices are on 4G or better
+    } else {
+      console.log('[abTester] getConnectionType: Desktop device detected, defaulting to wifi');
+      return 'wifi'; // Most desktop devices use WiFi or ethernet
+    }
+  }
+  
+  const connection = (navigator as Navigator & { connection?: { effectiveType?: string; type?: string; downlink?: number } }).connection || 
+                    (navigator as Navigator & { mozConnection?: { effectiveType?: string; type?: string; downlink?: number } }).mozConnection || 
+                    (navigator as Navigator & { webkitConnection?: { effectiveType?: string; type?: string; downlink?: number } }).webkitConnection;
+  
+  if (!connection) {
+    console.log('[abTester] getConnectionType: Connection object not available');
+    return null;
+  }
+  
+  console.log('[abTester] Connection object details:', {
+    effectiveType: connection.effectiveType,
+    type: connection.type,
+    downlink: connection.downlink
+  });
   
   const effectiveType = connection.effectiveType;
   
   // Map effectiveType to our enum values, with fallbacks
   switch (effectiveType) {
     case 'slow-2g':
+      console.log('[abTester] getConnectionType: detected slow-2g');
       return 'slow-2g';
     case '2g':
+      console.log('[abTester] getConnectionType: detected 2g');
       return '2g';
     case '3g':
+      console.log('[abTester] getConnectionType: detected 3g');
       return '3g';
     case '4g':
+      console.log('[abTester] getConnectionType: detected 4g');
       return '4g';
-    default:
+    default: {
       // Fallback to connection type if effectiveType is not recognized
-      switch (connection.type) {
+      const type = connection.type;
+      console.log('[abTester] getConnectionType: effectiveType not recognized, checking type:', type);
+      
+      switch (type) {
         case 'wifi':
+          console.log('[abTester] getConnectionType: detected wifi');
           return 'wifi';
         case 'ethernet':
+          console.log('[abTester] getConnectionType: detected ethernet');
           return 'ethernet';
-        default:
-          // If we have effectiveType but it's not in our enum, default to 4g for better user experience
-          return effectiveType ? '4g' : null;
+        case 'cellular':
+          console.log('[abTester] getConnectionType: cellular detected, defaulting to 4g');
+          return '4g';
+        default: {
+          // Use downlink speed as fallback if available
+          if (connection.downlink !== undefined) {
+            const downlink = connection.downlink;
+            console.log('[abTester] getConnectionType: using downlink speed for detection:', downlink, 'Mbps');
+            
+            if (downlink >= 10) return '4g';
+            if (downlink >= 1.5) return '3g';
+            if (downlink >= 0.15) return '2g';
+            return 'slow-2g';
+          }
+          
+          console.log('[abTester] getConnectionType: falling back to 4g (unknown type)');
+          return '4g'; // Safe fallback
+        }
       }
+    }
   }
 }
 
