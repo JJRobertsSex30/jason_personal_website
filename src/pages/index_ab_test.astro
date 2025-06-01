@@ -277,15 +277,27 @@ const finalCtaButton = {
         metadata: {
           fallback_logging: true,
           script_load_failure: true,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          experiment_name: heroExperimentNameForImpression
         }
       };
 
-      // Note: This would need to be implemented as an API endpoint
-      console.log('[Index Page Hero Impression] Would log fallback impression:', fallbackImpressionData);
+      console.log('[Index Page Hero Impression] Sending fallback impression data:', fallbackImpressionData);
       
-      // For now, just log to console. In a real implementation, you'd call:
-      // await fetch('/api/fallback-impression', { method: 'POST', body: JSON.stringify(fallbackImpressionData) });
+      // Call the fallback API endpoint
+      const response = await fetch('/api/fallback-impression', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fallbackImpressionData) 
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        console.log('[Index Page Hero Impression] Fallback impression logged successfully:', result.impression_id);
+      } else {
+        console.error('[Index Page Hero Impression] Fallback impression API error:', result.message);
+      }
       
     } catch (error) {
       console.error('[Index Page Hero Impression] Fallback impression logging also failed:', error);
