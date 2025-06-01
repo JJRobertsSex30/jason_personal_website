@@ -49,6 +49,7 @@ console.log(`[HeroCustomAB SSR] Destructured values: headline="${headline ? head
           <input type="hidden" name="ab_test_variant_id" value={abTestVariantKey} />
           <input type="hidden" name="ab_test_experiment_name" value={experimentName} />
           <input type="hidden" name="signup_source" value="hero-custom-ab" />
+          <input type="hidden" name="ab_user_identifier" id="ab-user-identifier-input" value="" />
           
           <label for="hero-email-bg-custom-ab" class="sr-only">Email address</label>
           <input
@@ -98,6 +99,24 @@ console.log(`[HeroCustomAB SSR] Destructured values: headline="${headline ? head
     
     const form = document.getElementById('hero-custom-ab-form');
     const messageElement = document.getElementById('hero-custom-ab-form-message');
+    const abUserIdentifierInput = document.getElementById('ab-user-identifier-input');
+    
+    // Populate ab_user_identifier from localStorage for consistent eligibility checking
+    function getClientUserIdentifier() {
+      let userId = localStorage.getItem('ab_user_identifier');
+      if (!userId) {
+        userId = crypto.randomUUID();
+        localStorage.setItem('ab_user_identifier', userId);
+        console.log('[HeroCustomAB] New ab_user_identifier generated:', userId);
+      }
+      return userId;
+    }
+    
+    if (abUserIdentifierInput) {
+      const userIdentifier = getClientUserIdentifier();
+      abUserIdentifierInput.value = userIdentifier;
+      console.log('[HeroCustomAB] Set ab_user_identifier in form:', userIdentifier);
+    }
     
     if (!form || !messageElement) {
         console.error('[HeroCustomAB Client] Form or message element not found.');

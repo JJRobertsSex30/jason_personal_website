@@ -3,7 +3,6 @@ import Layout from '~/layouts/PageLayout.astro';
 import { supabase } from '~/lib/supabaseClient';
 import type { Session } from '@supabase/supabase-js';
 import ABTestManager from '~/components/widgets/ABTestManager.astro';
-import UserProfileManager from '~/components/widgets/UserProfileManager.astro';
 
 // Define a basic UserProfile type.
 export interface UserProfile {
@@ -53,7 +52,7 @@ const metadata = {
   description: 'Manage A/B Tests and view user profiles.', // Updated description
 };
 
-let userProfiles: UserProfile[] | null = null;
+let _userProfiles: UserProfile[] | null = null;
 let pageError: string | null = null; // Renamed global error to avoid conflict with component prop name
 let session: Session | null = null;
 let experiments: Experiment[] | null = null;
@@ -288,7 +287,8 @@ if (Astro.request.method === 'GET') {
         .from('user_profiles')
         .select('id, email, created_at, updated_at'); // Removed last_sign_in_at
       if (profileError) throw profileError;
-      userProfiles = data;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      _userProfiles = data;
     } catch (e: unknown) {
       if (e instanceof Error) {
         pageError = e.message;
@@ -378,8 +378,8 @@ if (Astro.request.method === 'GET') {
                 <span>Campaign Performance</span>
               </a>
               <a href="#ab-testing-panel" id="ab-testing-tab" 
-                 class="tab-button active-tab group whitespace-nowrap py-3 px-3 border-b-2 font-medium text-sm flex items-center"
-                 aria-current="page">
+                 class="tab-button group whitespace-nowrap py-3 px-3 border-b-2 font-medium text-sm flex items-center"
+                 aria-current="false">
                 <svg class="-ml-0.5 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.5 5a2.5 2.5 0 00-4.995.088A2.5 2.5 0 002.5 7.5v5A2.5 2.5 0 005 15h10a2.5 2.5 0 002.5-2.5v-5A2.5 2.5 0 0015 5H7.5zM5 7.5a.5.5 0 01.5-.5h1.086A.5.5 0 017 7.5v5a.5.5 0 01-.5.5H5.5a.5.5 0 01-.5-.5v-5zm9.5 0a.5.5 0 00-.5-.5H13A.5.5 0 0012.5 7.5v5a.5.5 0 00.5.5h1.086A.5.5 0 00.414-.75L13.5 9.5l1.414-2.75A.5.5 0 0014.5 7.5z" clip-rule="evenodd" /></svg>
                 <span>A/B Testing</span>
               </a>
@@ -455,7 +455,7 @@ if (Astro.request.method === 'GET') {
             <p id="analytics-error-message"></p>
           </div>
 
-          <div id="analytics-content" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div id="analytics-content" class="hidden space-y-6">
             <!-- Performance Overview Card -->
             <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg">
               <div class="flex items-center justify-between mb-4">
@@ -760,7 +760,7 @@ if (Astro.request.method === 'GET') {
           </div>
         </div>
 
-        <div id="ab-testing-panel" role="tabpanel" class="tab-panel pt-6">
+        <div id="ab-testing-panel" role="tabpanel" class="tab-panel pt-6 hidden">
           <ABTestManager experiments={experiments} abTestError={abTestError} />
         </div>
 
@@ -1030,6 +1030,8 @@ if (Astro.request.method === 'GET') {
 
 <script>
   // Client-side script for tab navigation
+  let currentActiveTab: string | null = null; // Store the currently active tab to prevent double initialization
+  
   function initializeTabs() {
     const tabs = document.querySelectorAll('.tab-button');
     const panels = document.querySelectorAll('.tab-panel');
@@ -1040,32 +1042,63 @@ if (Astro.request.method === 'GET') {
       return;
     }
 
+    // Determine initial tab with improved logic
+    let initialTabId = window.location.hash;
+    const params = new URLSearchParams(window.location.search);
+    
+    console.log(`Tab initialization called. Current hash: "${initialTabId}", Current active: "${currentActiveTab}"`);
+    
+    // Priority 1: If we already have an active tab and hash is empty, preserve it
+    if (currentActiveTab && (!initialTabId || initialTabId === '')) {
+        console.log(`Preserving current active tab: ${currentActiveTab}`);
+        initialTabId = currentActiveTab;
+    }
+    // Priority 2: If we have openExperiment param, force A/B testing tab
+    else if (params.has('openExperiment')) {
+        console.log("Found openExperiment param, forcing A/B testing tab");
+        initialTabId = '#ab-testing-panel';
+    }
+    // Priority 3: Use URL hash if it's a valid tab
+    else if (initialTabId && (initialTabId === '#analytics-panel' || initialTabId === '#campaign-performance-panel' || initialTabId === '#ab-testing-panel' || initialTabId === '#user-journey-panel')) {
+        console.log(`Using URL hash tab: ${initialTabId}`);
+        // Keep the initialTabId as is
+    }
+    // Priority 4: Default to Analytics if no valid hash or param
+    else {
+        console.log("No valid tab found, defaulting to Analytics");
+        initialTabId = '#analytics-panel';
+    }
+    
+    // Only proceed if the tab has actually changed
+    if (currentActiveTab === initialTabId) {
+        console.log(`Tab ${initialTabId} already active, skipping re-initialization`);
+        // return; // COMMENTED OUT - was preventing tab display
+    }
+
     const setActiveTab = (targetId: string) => {
+      console.log(`Setting active tab to: ${targetId}`);
+      currentActiveTab = targetId; // Store the current active tab
+      
       tabs.forEach(tab => {
         const tabElement = tab as HTMLAnchorElement;
         if (tabElement.hash === targetId) {
-          tabElement.classList.add('active-tab');
-          tabElement.setAttribute('aria-selected', 'true');
+          tabElement.classList.add('active-tab', 'border-blue-500', 'text-blue-600');
+          tabElement.classList.remove('border-transparent', 'text-slate-500', 'hover:text-slate-700', 'hover:border-slate-300');
+          tabElement.setAttribute('aria-current', 'page');
         } else {
-          tabElement.classList.remove('active-tab');
-          tabElement.setAttribute('aria-selected', 'false');
+          tabElement.classList.remove('active-tab', 'border-blue-500', 'text-blue-600');
+          tabElement.classList.add('border-transparent', 'text-slate-500', 'hover:text-slate-700', 'hover:border-slate-300');
+          tabElement.setAttribute('aria-current', 'false');
         }
       });
-
+      
       panels.forEach(panel => {
-        const panelElement = panel as HTMLElement;
-        if (`#${panelElement.id}` === targetId) {
-          panelElement.classList.remove('hidden');
+        if (panel.id === targetId.slice(1)) {
+          panel.classList.remove('hidden');
         } else {
-          panelElement.classList.add('hidden');
+          panel.classList.add('hidden');
         }
       });
-      // Update URL hash without page jump
-      if (history.pushState) {
-        history.pushState(null, '', targetId);
-      } else {
-        location.hash = targetId;
-      }
     };
 
     tabs.forEach(tab => {
@@ -1086,22 +1119,10 @@ if (Astro.request.method === 'GET') {
       });
     });
 
-    // Set initial tab based on URL hash or default to Analytics
-    let initialTabId = window.location.hash;
-    if (!initialTabId || (initialTabId !== '#analytics-panel' && initialTabId !== '#campaign-performance-panel' && initialTabId !== '#ab-testing-panel' && initialTabId !== '#user-journey-panel')) {
-      initialTabId = '#analytics-panel';
-    }
+    // Set the active tab
     setActiveTab(initialTabId);
     
-    // If opening page with ?openExperiment query param, ensure A/B tab is active
-    const params = new URLSearchParams(window.location.search);
-    if (params.has('openExperiment')) {
-        setActiveTab('#ab-testing-panel');
-        // Scroll to the specific experiment if its ID is in the hash (e.g. from form redirect)
-        // This part is a bit tricky because the experiment div might not be immediately available if data is still loading
-        // The #experiment-id part of the URL hash will be handled by the browser naturally if the element exists.
-    }
-
+    console.log(`Tab initialization complete. Active tab: ${initialTabId}`);
   }
 
   // Analytics functionality
@@ -1362,20 +1383,33 @@ if (Astro.request.method === 'GET') {
     console.log("Dashboard astro:page-load: Initializing tabs...");
     initializeTabs();
     
-    // Load analytics if analytics tab is active
-    if (window.location.hash === '#analytics-panel' || !window.location.hash) {
+    // Load content for the currently active tab (determined by initializeTabs)
+    const currentHash = window.location.hash;
+    console.log(`Loading content for active tab: ${currentHash}`);
+    
+    if (currentHash === '#analytics-panel') {
       loadAnalytics();
-    }
-    
-    // Load campaign performance if campaign performance tab is active
-    if (window.location.hash === '#campaign-performance-panel') {
+    } else if (currentHash === '#campaign-performance-panel') {
       loadCampaignPerformance();
+    } else if (currentHash === '#user-journey-panel') {
+      loadUserJourney();
     }
+    // Note: A/B testing content is handled by ABTestManager component
     
-    // Add refresh button event listener
+    // Add refresh button event listeners
     const refreshBtn = document.getElementById('refresh-analytics');
     if (refreshBtn) {
       refreshBtn.addEventListener('click', loadAnalytics);
+    }
+
+    const refreshCampaignBtn = document.getElementById('refresh-campaign-performance');
+    if (refreshCampaignBtn) {
+      refreshCampaignBtn.addEventListener('click', loadCampaignPerformance);
+    }
+
+    const refreshUserJourneyBtn = document.getElementById('refresh-user-journey');
+    if (refreshUserJourneyBtn) {
+      refreshUserJourneyBtn.addEventListener('click', loadUserJourney);
     }
 
     // Load campaign performance when campaign performance tab is clicked
@@ -1383,6 +1417,14 @@ if (Astro.request.method === 'GET') {
     if (campaignPerformanceTab) {
       campaignPerformanceTab.addEventListener('click', () => {
         setTimeout(loadCampaignPerformance, 100); // Small delay to ensure tab switch completes
+      });
+    }
+
+    // Load user journey when user journey tab is clicked
+    const userJourneyTab = document.getElementById('user-journey-tab');
+    if (userJourneyTab) {
+      userJourneyTab.addEventListener('click', () => {
+        setTimeout(loadUserJourney, 100); // Small delay to ensure tab switch completes
       });
     }
     
@@ -1415,6 +1457,11 @@ if (Astro.request.method === 'GET') {
     // Load campaign performance if campaign performance tab becomes active
     if (hash === '#campaign-performance-panel') {
       loadCampaignPerformance();
+    }
+
+    // Load user journey if user journey tab becomes active
+    if (hash === '#user-journey-panel') {
+      loadUserJourney();
     }
   });
 
@@ -1650,49 +1697,4 @@ if (Astro.request.method === 'GET') {
     }
   }
 
-  // ... existing code ...
-
-    // Load user journey if user journey tab is active
-    if (window.location.hash === '#user-journey-panel') {
-      loadUserJourney();
-    }
-    
-    // Add refresh button event listeners
-    const refreshBtn = document.getElementById('refresh-analytics');
-    if (refreshBtn) {
-      refreshBtn.addEventListener('click', loadAnalytics);
-    }
-
-    const refreshCampaignBtn = document.getElementById('refresh-campaign-performance');
-    if (refreshCampaignBtn) {
-      refreshCampaignBtn.addEventListener('click', loadCampaignPerformance);
-    }
-
-    const refreshUserJourneyBtn = document.getElementById('refresh-user-journey');
-    if (refreshUserJourneyBtn) {
-      refreshUserJourneyBtn.addEventListener('click', loadUserJourney);
-    }
-
-    // Load campaign performance when campaign performance tab is clicked
-    const campaignPerformanceTab = document.getElementById('campaign-performance-tab');
-    if (campaignPerformanceTab) {
-      campaignPerformanceTab.addEventListener('click', () => {
-        setTimeout(loadCampaignPerformance, 100); // Small delay to ensure tab switch completes
-      });
-    }
-
-    // Load user journey when user journey tab is clicked
-    const userJourneyTab = document.getElementById('user-journey-tab');
-    if (userJourneyTab) {
-      userJourneyTab.addEventListener('click', () => {
-        setTimeout(loadUserJourney, 100); // Small delay to ensure tab switch completes
-      });
-    }
-
-  // ... existing code ...
-
-    // Load user journey if user journey tab becomes active
-    if (hash === '#user-journey-panel') {
-      loadUserJourney();
-    }
 </script> 

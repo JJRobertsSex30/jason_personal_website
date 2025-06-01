@@ -1,0 +1,224 @@
+# 🚀 Jason's Personal Website - Cursor AI Rules
+# Automated Task Management & Development Workflow
+
+## 📋 Task Management Automation
+
+### Auto-Update TASK-MANAGEMENT.md
+When completing work:
+
+1. **ALWAYS update task status** in TASK-MANAGEMENT.md:
+   - ✅ Complete (fully done & tested)
+   - 🚧 In Progress (actively working)
+   - 🔄 Pending (waiting for dependencies)
+   - ❌ Blocked (issues preventing progress)
+   - ⭐ Not Started (not yet begun)
+
+2. **Update timestamps** in file header when making changes
+
+3. **Move completed tasks** from "Current Sprint" to appropriate status
+
+4. **Auto-calculate progress** for parent tasks when subtasks complete
+
+### Task Status Triggers
+- **When fixing linter errors** → Update relevant task to ✅
+- **When adding new features** → Update corresponding task ID
+- **When encountering blockers** → Change status to ❌ and note reason
+- **When starting work** → Change from ⭐ to 🚧
+
+## 🎯 Project Planning Workflow
+
+### Phase 1: System Overview Creation
+When user requests "create system overview" or "draw up system overview":
+1. **Create/Update SYSTEM-OVERVIEW.md** with comprehensive architecture
+2. **Include:** Tech stack, user flows, database design, API structure, UI components
+3. **Define:** Core features, integrations, performance requirements
+4. **Map:** User journeys from entry to conversion
+
+### Phase 2: Big Task Generation  
+When user requests "generate big tasks" or "create task breakdown":
+1. **Analyze SYSTEM-OVERVIEW.md** to identify major components
+2. **Generate 7-12 big tasks** covering all system areas
+3. **Suggest logical order** based on dependencies and priorities
+4. **Create TASK-PROPOSALS.md** with proposed task list and rationale
+5. **Wait for user editing** before proceeding
+
+### Phase 3: Task Decomposition
+When user confirms "break down tasks" or "create detailed tasks":
+1. **For each big task** → Break into 3-8 smaller tasks
+2. **For complex tasks** → Create sub-tasks (max 3 levels deep)
+3. **Add dependencies** between tasks and subtasks
+4. **Estimate complexity** (Small/Medium/Large)
+5. **Update TASK-MANAGEMENT.md** with complete hierarchy
+
+### Phase 4: Sprint Planning
+When user requests "plan sprint" or "organize tasks":
+1. **Suggest sprint groupings** based on dependencies
+2. **Identify critical path** for MVP delivery
+3. **Update Current Sprint Focus** in TASK-MANAGEMENT.md
+4. **Flag any blocking dependencies** that need resolution
+
+### Workflow Commands
+- "create system overview" → Triggers Phase 1
+- "generate big tasks" → Triggers Phase 2  
+- "break down tasks" → Triggers Phase 3
+- "plan sprint" → Triggers Phase 4
+- "update task hierarchy" → Refresh task structure
+
+## 🎯 Development Standards
+
+### Code Quality
+- Follow existing TypeScript/Astro patterns
+- Maintain Tailwind CSS utility-first approach
+- Add proper error handling for all database operations
+- Include loading states for async operations
+- Ensure mobile-responsive design (mobile-first)
+- **Never use JSX-style comments** (`{/* */}`) in Astro files - use HTML comments (`<!-- -->`) in templates or JavaScript comments (`//` or `/* */`) in script sections
+
+### Database Operations
+- **ALWAYS use database-operations.ts for SQL operations** - Never directly write SQL queries elsewhere
+- Use `executeQuery()` for migrations and complex SQL
+- Use `insertRecord()`, `updateRecord()`, etc. for standard CRUD operations
+- Use `recordExists()` and `countRecords()` for data validation
+- Include proper error handling for all database operations
+- Document all custom SQL in database-operations.ts functions
+
+### Environment Variables
+- **Environment variables are located in `.env.local` file** (NOT .env)
+- When running scripts that need environment variables, use: `dotenv -f .env.local run COMMAND`
+- Never assume .env - always use .env.local for this project
+
+### Task Status Updates
+- **NEVER mark tasks as "FIXED" or "Complete" until user confirms it's working**
+- When making changes, update status to 🚧 "In Progress" not ✅ "Complete"
+- Only mark ✅ "Complete" after user explicitly confirms the fix works
+- Include what was attempted in task notes, not what was "achieved"
+- Wait for user validation before updating task management files
+
+### A/B Testing & Analytics
+- **ALWAYS** implement A/B testing for new features after confirming with the user that it is wanted
+- Include analytics tracking for user interactions
+- Add conversion tracking for business-critical paths
+- Update database schema documentation when changing DB
+
+### Database Operations
+- Use Supabase best practices (RLS, proper indexes)
+- Document schema changes in `database-schema.md`
+- Add proper cascade deletion constraints
+- Include data validation and sanitization
+
+### File Organization
+- Keep components in `/src/components/`
+- API routes in `/src/pages/api/`
+- Utils in `/src/utils/`
+- Maintain consistent naming (kebab-case for files)
+
+## 🔄 Workflow Automation
+
+### On New Features
+1. Check if task exists in TASK-MANAGEMENT.md
+2. If not, add new task with proper ID and dependencies
+3. Update status to 🚧 when starting
+4. Include relevant acceptance criteria
+
+### On Bug Fixes
+1. Identify related task ID in TASK-MANAGEMENT.md
+2. If no task exists, create one under appropriate category
+3. Document the fix in commit messages
+4. Update task to ✅ when resolved
+
+### On Testing
+1. Verify mobile responsiveness
+2. Test A/B variants if applicable
+3. Confirm analytics tracking works
+4. Update Quality Gates checklist
+
+## 📊 Documentation Updates
+
+### Always Update
+- `TASK-MANAGEMENT.md` - task status changes
+- `database-schema.md` - any DB changes
+- `USER-STORIES.md` - new user flows or personas
+- Component documentation - for reusable components
+
+### Git Commit Format
+```
+type(scope): brief description
+
+- Update TASK-MANAGEMENT.md: [Task ID] [New Status]
+- [Detailed changes made]
+- [Any blockers or next steps]
+```
+
+Examples:
+- `feat(dashboard): add user progress tracking - Update TASK-MANAGEMENT.md: 2.2.2 ✅`
+- `fix(quiz): resolve linter errors - Update TASK-MANAGEMENT.md: 1.6 ✅`
+- `docs(db): update schema documentation - Update database-schema.md`
+
+## 🎮 Project Context
+
+### Business Goals
+- Lead generation platform for relationship expertise
+- "Sex 2.0 → 3.0" transformation journey
+- Gamified experience with Insight Gems
+- Email automation via Kit (ConvertKit)
+- AI chatbot for personalized advice
+
+### Success Metrics to Track
+- Email conversion rate >15%
+- MAU growth >20%
+- Session duration >3min
+- MRR growth >25%
+
+### Current Sprint Focus
+- Foundation cleanup (dashboard linter errors)
+- Mobile-first responsive design
+- A/B testing optimization
+
+## ⚡ Performance Requirements
+
+### Always Ensure
+- Page load <2s desktop, <3s mobile
+- API responses <500ms 95th percentile
+- Mobile-optimized interactions
+- Lighthouse score >90
+
+### Security Standards
+- Supabase RLS policies for all tables
+- Input validation and sanitization
+- Secure authentication flows
+- PCI compliance for payments (via Stripe)
+
+## 🔍 When Making Changes
+
+### Before Coding
+1. Check TASK-MANAGEMENT.md for relevant task
+2. Review USER-STORIES.md for user impact
+3. Verify mobile-first approach needed
+4. Plan A/B testing if user-facing
+
+### During Development
+1. Update task status to 🚧
+2. Follow existing code patterns
+3. Add proper error handling
+4. Include loading states
+
+### After Completion
+1. Test mobile responsiveness
+2. Verify analytics tracking
+3. Update TASK-MANAGEMENT.md to ✅
+4. Document any new patterns/components
+5. Update sprint focus if needed
+
+## 🚨 Critical Reminders
+
+- **Mobile-first**: Always design for mobile, then desktop
+- **A/B Testing**: User-facing changes need variant testing
+- **Analytics**: Track user interactions for optimization
+- **Documentation**: Keep task management and DB docs current
+- **Performance**: Monitor Core Web Vitals and loading times
+- **Security**: Follow Supabase RLS and input validation patterns
+- **Database**: Use database-operations.ts for all SQL operations
+
+---
+
+*This rules file ensures consistent development practices and automatic task management updates for Jason's relationship advice platform.* 

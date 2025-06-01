@@ -1,5 +1,5 @@
 # 🗄️ Database Schema Documentation
-*Last Updated: December 19, 2024*
+*Last Updated: June 1, 2025*
 
 ## 🏗️ **Database Overview**
 This document contains the complete schema documentation for Jason's Personal Website Supabase database, including A/B testing infrastructure, user management, and gamification features.
@@ -17,6 +17,7 @@ This document contains the complete schema documentation for Jason's Personal We
 - `conversions` - A/B test conversion tracking with attribution and performance metrics *(enhanced with user-level attribution)*
 - `user_experiment_participation` - **NEW:** User-level participation tracking to prevent double-counting
 - `conversion_attribution` - **NEW:** Advanced conversion attribution and analytics
+- `user_engagement_tracking` - **NEW:** Engagement tracking for A/B testing ineligible users
 
 ### **👥 User Management Tables**
 - `user_profiles` - User account information and gem balances
@@ -79,14 +80,15 @@ A/B test impression tracking with comprehensive analytics and user-level convers
 | `id` | uuid | NO | `uuid_generate_v4()` | Primary key |
 | `variant_id` | uuid | NO | - | FK to variants |
 | `experiment_id` | uuid | NO | - | FK to experiments |
-| `user_identifier` | text | NO | - | User session identifier |
-| `session_identifier` | text | YES | - | Browser session ID |
+| `user_identifier` | uuid | NO | - | **CORRECTED:** User identifier (UUID, not text) |
+| `session_identifier` | uuid | YES | - | Browser session ID |
 | `impression_at` | timestamptz | NO | `now()` | When impression occurred |
 | `page_url` | text | YES | - | Page URL where impression occurred |
 | `user_agent` | text | YES | - | User's browser info |
 | **NEW: User-Level Tracking** |
 | `metadata` | jsonb | YES | `'{}'::jsonb` | **NEW:** Additional impression metadata |
 | `is_first_exposure` | boolean | YES | `true` | **NEW:** Whether this is user's first exposure to experiment |
+| `user_was_eligible` | boolean | YES | `true` | **NEW:** Whether user was eligible at impression time |
 | `user_eligibility_status` | jsonb | YES | `'{}'::jsonb` | **NEW:** User eligibility criteria at impression time |
 | `user_context` | jsonb | YES | `'{}'::jsonb` | **NEW:** User context and state information |
 | **Geographic Data** |
@@ -118,7 +120,7 @@ A/B test conversion tracking with advanced attribution analytics and double-coun
 | `variant_id` | uuid | NO | - | FK to variants |
 | `experiment_id` | uuid | NO | - | FK to experiments |
 | `user_identifier` | text | YES | - | User session identifier |
-| `session_identifier` | text | YES | - | Browser session ID |
+| `session_identifier` | uuid | YES | - | Browser session ID |
 | `conversion_type` | text | NO | - | Type of conversion (e.g., 'quiz_submission') |
 | `details` | jsonb | YES | - | Additional conversion data |
 | `created_at` | timestamptz | NO | `timezone('utc', now())` | When conversion occurred |
@@ -183,6 +185,32 @@ Advanced conversion attribution tracking and analytics for proper A/B test analy
 - Unique constraint on `conversion_id` - One attribution record per conversion
 - Check constraint: `attribution_confidence >= 0 AND attribution_confidence <= 1`
 - Check constraint: `time_to_conversion_hours >= 0`
+
+### **📊 user_engagement_tracking** *(NEW)*
+User engagement tracking for A/B testing ineligible users - maintains UX insights without contaminating experiment data
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | `gen_random_uuid()` | Primary key |
+| `user_identifier` | text | NO | - | User identifier (same format as A/B testing) |
+| `engagement_type` | text | NO | - | Type of engagement ('page_view', 'quiz_start', 'quiz_complete', 'repeat_conversion') |
+| `experiment_context` | text | YES | - | Which experiment they would have participated in if eligible |
+| `variant_context` | text | YES | - | Which variant they would have seen if eligible |
+| `page_url` | text | YES | - | URL where engagement occurred |
+| `metadata` | jsonb | YES | `'{}'::jsonb` | Additional tracking data including user_status, tracking_purpose, excluded_from_ab_testing flag |
+| `created_at` | timestamptz | YES | `timezone('utc', now())` | Engagement timestamp |
+
+**Purpose:** Tracks return user behavior separately from A/B test metrics to maintain clean experiment data while preserving valuable UX insights.
+
+**Constraints:**
+- `user_identifier` NOT NULL - Required for user tracking
+- `engagement_type` NOT NULL - Required to categorize engagement
+
+**Indexes:**
+- `idx_user_engagement_user_id` - User-based queries
+- `idx_user_engagement_type` - Engagement type analysis
+- `idx_user_engagement_context` - Experiment context queries
+- `idx_user_engagement_date` - Time-based queries
+- `idx_user_engagement_metadata` - GIN index for JSONB metadata searches
 
 ### **💎 gem_transactions**
 User gem transaction history
@@ -267,6 +295,7 @@ User referral system
 - **Problem Solved:** Prevents already-converted users from skewing A/B test results
 - **Implementation:** `user_experiment_participation` table tracks each user's first exposure and conversion status
 - **Benefits:** Accurate conversion rates, proper statistical analysis, industry-standard A/B testing practices
+- **Engagement Tracking:** `user_engagement_tracking` table captures return user behavior separately from experiments
 
 ### **📊 Advanced Attribution Analytics**
 - **Conversion Attribution:** `conversion_attribution` table provides detailed attribution analysis

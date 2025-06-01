@@ -1,6 +1,7 @@
 console.log('[abTester.ts] Module loading/starting...');
 
 import { supabase } from './supabaseClient'; // Ensure this path is correct
+import { checkUserEligibilityForABTesting, trackIneligibleUserEngagement, handleReturnUserConversion } from './userEligibility';
 
 export interface ABVariant {
   id: string; 
@@ -190,6 +191,24 @@ export async function logClientImpression(variant: ABVariant | null, experimentN
   const userIdentifier = getClientUserIdentifier();
   const sessionIdentifier = getClientSessionIdentifier();
   
+  // Check user eligibility for A/B testing (NEW)
+  const eligibility = await checkUserEligibilityForABTesting(userIdentifier, variant.experiment_id);
+  
+  if (!eligibility.isEligible) {
+    console.log(`[abTester] User ${userIdentifier} not eligible for A/B testing: ${eligibility.reason}`);
+    
+    // Track engagement separately for analytics purposes
+    await trackIneligibleUserEngagement(
+      userIdentifier,
+      experimentNameFromContext || 'unknown_experiment',
+      variant.name,
+      window.location.href,
+      'page_view'
+    );
+    
+    return; // Don't log impression or assign to experiment
+  }
+  
   // Short-term deduplication (2 minutes) to prevent rapid refresh spam only
   const shortTermKey = `impression_recent_${variant.experiment_id}_${variant.id}_${Math.floor(Date.now() / 120000)}`; // 2-minute windows
   
@@ -241,6 +260,20 @@ export async function trackConversion(
     return { status: 'INVALID_INPUT', message: msg };
   }
 
+  // Check if user is eligible for A/B testing (NEW)
+  const returnUserCheck = await handleReturnUserConversion(
+    userIdentifierString,
+    variantId,
+    conversionType,
+    details?.conversion_value as number | undefined,
+    details
+  );
+  
+  if (!returnUserCheck.tracked) {
+    console.log(`[abTester] Conversion not tracked as A/B test data: ${returnUserCheck.reason}`);
+    return { status: 'SUCCESS', message: returnUserCheck.reason };
+  }
+
   // Fetch experiment_id associated with the variantId
   const { data: variantRecord, error: variantError } = await supabase
     .from('variants')
@@ -264,7 +297,7 @@ export async function trackConversion(
     .eq('user_identifier', userIdentifierString)
     .eq('conversion_type', conversionType) 
     .limit(1)
-    .maybeSingle(); 
+    .maybeSingle();
 
   if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = "Query result has no rows"
     const msg = `[abTester] Supabase error checking for existing conversion: ${checkError.message}`;

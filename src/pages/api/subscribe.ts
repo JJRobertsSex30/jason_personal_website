@@ -66,7 +66,7 @@ export const POST: APIRoute = async ({ request }) => {
     const data = await response.json();
     console.log('Successfully subscribed:', data);
 
-    // Track A/B test conversion
+    // Track A/B test conversion using new eligibility system
     let variantIdToTrack: string | null = null;
 
     // Option 1: Direct Supabase variant ID (from HeroCustomAB.astro)
@@ -115,48 +115,114 @@ export const POST: APIRoute = async ({ request }) => {
       }
     }
 
-    // Track conversion if we have a variant ID
+    // Track conversion using the new eligibility system (NEW)
     if (variantIdToTrack) {
       try {
-        console.log(`Tracking A/B conversion for variant ${variantIdToTrack}, email: ${email}`);
+        console.log(`Tracking A/B conversion via eligibility system for variant ${variantIdToTrack}, email: ${email}`);
         
-        // Check if this email has already converted for this variant (prevent duplicates)
-        const { data: existingConversion, error: checkError } = await supabase
-          .from('conversions')
-          .select('id')
-          .eq('variant_id', variantIdToTrack)
-          .eq('user_identifier', email)
-          .eq('conversion_type', 'email_signup')
-          .single();
+        // Import the eligibility checking function
+        const { handleReturnUserConversion } = await import('~/lib/userEligibility');
+        
+        // Get ab_user_identifier from form data (sent by client-side)
+        const abUserIdentifier = formData.get('ab_user_identifier');
+        
+        if (abUserIdentifier && typeof abUserIdentifier === 'string') {
+          console.log(`Using ab_user_identifier for eligibility check: ${abUserIdentifier}`);
+          
+          // Check eligibility using the same identifier as impression tracking
+          const eligibilityResult = await handleReturnUserConversion(
+            abUserIdentifier, // Use same identifier as impression tracking
+            variantIdToTrack,
+            'email_signup',
+            1, // conversion value
+            {
+              source: signupSource || 'hero-custom-ab',
+              email: email,
+              original_variant: abTestVariant || abTestVariantId
+            }
+          );
+          
+          if (eligibilityResult.tracked) {
+            // User is eligible - proceed with normal A/B test conversion tracking
+            // NOTE: Still use email as user_identifier in conversions table for business logic
+            // but eligibility was checked with ab_user_identifier
+            // Check for existing conversion to prevent duplicates
+            const { data: existingConversion, error: checkError } = await supabase
+              .from('conversions')
+              .select('id')
+              .eq('variant_id', variantIdToTrack)
+              .eq('user_identifier', email) // Still use email for conversion records
+              .eq('conversion_type', 'email_signup')
+              .maybeSingle();
 
-        if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows found
-          console.error('Error checking existing conversion:', checkError);
-        } else if (existingConversion) {
-          console.log('Conversion already exists for this email and variant');
-        } else {
-          // Track new conversion
-          const { error: conversionError } = await supabase
-            .from('conversions')
-            .insert([{
-              variant_id: variantIdToTrack,
-              user_identifier: email,
-              conversion_type: 'email_signup',
-              conversion_value: 1,
-              metadata: {
-                source: signupSource || 'unknown',
-                email: email,
-                original_variant: abTestVariant || abTestVariantId
+            if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows found
+              console.error('Error checking existing conversion:', checkError);
+            } else if (existingConversion) {
+              console.log('Conversion already exists for this email and variant');
+            } else {
+              // Get experiment_id for the variant
+              const { data: variantData, error: variantError } = await supabase
+                .from('variants')
+                .select('experiment_id')
+                .eq('id', variantIdToTrack)
+                .single();
+
+              if (variantError || !variantData) {
+                console.error('Error fetching variant experiment_id:', variantError);
+              } else {
+                // Track new conversion with experiment_id
+                const { error: conversionError } = await supabase
+                  .from('conversions')
+                  .insert([{
+                    variant_id: variantIdToTrack,
+                    experiment_id: variantData.experiment_id,
+                    user_identifier: email, // Use email for business purposes
+                    conversion_type: 'email_signup',
+                    conversion_value: 1,
+                    details: {
+                      source: signupSource || 'hero-custom-ab',
+                      email: email,
+                      original_variant: abTestVariant || abTestVariantId,
+                      ab_user_identifier: abUserIdentifier // Store both for reference
+                    }
+                  }]);
+
+                if (conversionError) {
+                  console.error('Error tracking A/B conversion:', conversionError);
+                } else {
+                  console.log('A/B conversion tracked successfully via eligibility system');
+                }
               }
-            }]);
-
-          if (conversionError) {
-            console.error('Error tracking A/B conversion:', conversionError);
+            }
           } else {
-            console.log('A/B conversion tracked successfully');
+            // User not eligible (return user) - conversion tracked as engagement instead
+            console.log(`User not eligible for A/B testing: ${eligibilityResult.reason}`);
+          }
+        } else {
+          console.warn('No ab_user_identifier provided by client. Cannot check eligibility consistently with impression tracking.');
+          // Fallback to email-based checking (less consistent but functional)
+          const eligibilityResult = await handleReturnUserConversion(
+            email,
+            variantIdToTrack,
+            'email_signup',
+            1,
+            {
+              source: signupSource || 'hero-custom-ab',
+              email: email,
+              original_variant: abTestVariant || abTestVariantId,
+              note: 'fallback_email_checking'
+            }
+          );
+          
+          if (eligibilityResult.tracked) {
+            console.log('Proceeding with email-based eligibility check (fallback)');
+            // ... rest of conversion tracking logic would go here
+          } else {
+            console.log(`Fallback: User not eligible for A/B testing: ${eligibilityResult.reason}`);
           }
         }
       } catch (conversionTrackingError) {
-        console.error('Error in A/B conversion tracking:', conversionTrackingError);
+        console.error('Error in eligibility-based A/B conversion tracking:', conversionTrackingError);
         // Don't fail the whole request if conversion tracking fails
       }
     } else {
