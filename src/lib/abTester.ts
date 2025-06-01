@@ -58,6 +58,28 @@ interface ConversionPayload {
   conversion_type: string;
   details?: Record<string, unknown> | null;
   session_identifier?: string | null;
+  // Enhanced fields to match conversions table schema
+  country_code?: string | null;
+  device_type?: 'desktop' | 'mobile' | 'tablet' | null;
+  referrer_source?: string | null;
+  time_to_convert?: number | null;
+  conversion_value?: number | null;
+  conversion_eligibility_verified?: boolean | null;
+  metadata?: Record<string, unknown> | null;
+  original_exposure_date?: string | null; // ISO string
+  // Additional comprehensive fields
+  page_url?: string | null;
+  user_agent?: string | null;
+  region?: string | null;
+  city?: string | null;
+  language_code?: string | null;
+  time_zone?: string | null;
+  screen_resolution?: string | null;
+  viewport_size?: string | null;
+  connection_type?: 'slow-2g' | '2g' | '3g' | '4g' | 'wifi' | 'ethernet' | null;
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
   // created_at is typically handled by DB default
 }
 
@@ -328,10 +350,12 @@ function checkIsFirstExposure(experimentId: string): boolean {
   if (typeof localStorage === 'undefined') return true;
   
   const exposureKey = `ab_first_exposure_${experimentId}`;
+  const timestampKey = `ab_first_exposure_time_${experimentId}`;
   const hasBeenExposed = localStorage.getItem(exposureKey);
   
   if (!hasBeenExposed) {
     localStorage.setItem(exposureKey, 'true');
+    localStorage.setItem(timestampKey, Date.now().toString());
     return true;
   }
   
@@ -672,6 +696,45 @@ export async function trackConversion(
 
   console.log(`[abTester] Logging new conversion for user '${userIdentifierString}', variant '${variantId}', experiment '${associatedExperimentId}', type '${conversionType}'.`);
 
+  // Collect comprehensive analytics data for conversion (same as impression tracking)
+  const utmParams = getUTMParameters();
+  
+  // Fetch geolocation data
+  let geoData = {
+    country_code: null as string | null,
+    region: null as string | null,
+    city: null as string | null
+  };
+
+  try {
+    console.log('[abTester] Conversion: Fetching geolocation data...');
+    const geoResponse = await fetch('/api/geolocation', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (geoResponse.ok) {
+      const geoResult = await geoResponse.json();
+      if (geoResult.success && geoResult.data) {
+        geoData = {
+          country_code: geoResult.data.country_code || null,
+          region: geoResult.data.region || null,
+          city: geoResult.data.city || null
+        };
+        console.log('[abTester] Conversion: Geolocation data retrieved:', geoData);
+      } else {
+        console.log('[abTester] Conversion: Geolocation API returned no data');
+      }
+    } else {
+      console.warn('[abTester] Conversion: Geolocation API request failed:', geoResponse.status);
+    }
+  } catch (error) {
+    console.warn('[abTester] Conversion: Failed to fetch geolocation data:', error);
+    // Continue with null values - non-blocking error
+  }
+
   const conversionData: ConversionPayload = {
     variant_id: variantId, 
     experiment_id: associatedExperimentId,
@@ -679,6 +742,30 @@ export async function trackConversion(
     conversion_type: conversionType,
     details: details,
     session_identifier: sessionIdentifier,
+    country_code: geoData.country_code,
+    device_type: getDeviceType(),
+    referrer_source: getReferrerSource(),
+    time_to_convert: calculateTimeToConvert(userIdentifierString, associatedExperimentId),
+    conversion_value: details?.conversion_value as number || 1, // Default to 1 if not specified
+    conversion_eligibility_verified: returnUserCheck.tracked,
+    metadata: {
+      ...getBrowserMetadata(),
+      geolocation_source: geoData.country_code ? 'ipgeolocation.io' : 'unavailable',
+      collection_timestamp: new Date().toISOString(),
+    },
+    original_exposure_date: new Date().toISOString(),
+    page_url: window.location.href,
+    user_agent: navigator.userAgent,
+    region: geoData.region,
+    city: geoData.city,
+    language_code: getLanguageCode(),
+    time_zone: getTimeZone(),
+    screen_resolution: getScreenResolution(),
+    viewport_size: getViewportSize(),
+    connection_type: getConnectionType(),
+    utm_source: utmParams.utm_source || null,
+    utm_medium: utmParams.utm_medium || null,
+    utm_campaign: utmParams.utm_campaign || null,
   };
 
   const { error: conversionError } = await supabase
@@ -694,6 +781,49 @@ export async function trackConversion(
     console.log(msg);
     return { status: 'SUCCESS', message: "Conversion recorded successfully." };
   }
+}
+
+function calculateTimeToConvert(userIdentifier: string, experimentId: string): number | null {
+  if (typeof localStorage === 'undefined') return null;
+  
+  const timestampKey = `ab_first_exposure_time_${experimentId}`;
+  
+  // Check if we have a stored timestamp for first exposure
+  const firstExposureTime = localStorage.getItem(timestampKey);
+  if (firstExposureTime) {
+    try {
+      const exposureTimestamp = parseInt(firstExposureTime);
+      const currentTime = Date.now();
+      return Math.round((currentTime - exposureTimestamp) / 1000); // Return seconds
+    } catch (error) {
+      console.warn('[abTester] Error parsing first exposure timestamp:', error);
+      return null;
+    }
+  }
+  
+  return null;
+}
+
+function getReferrerSource(): string | null {
+  if (typeof document === 'undefined') return null;
+  
+  // First try UTM source if available
+  const utmParams = getUTMParameters();
+  if (utmParams.utm_source) {
+    return utmParams.utm_source;
+  }
+  
+  // Fall back to document referrer
+  if (document.referrer) {
+    try {
+      const referrerUrl = new URL(document.referrer);
+      return referrerUrl.hostname;
+    } catch {
+      return document.referrer;
+    }
+  }
+  
+  return null;
 }
 
 // Declare global window interface extensions
