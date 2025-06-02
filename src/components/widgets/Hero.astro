@@ -2,6 +2,8 @@
 // src/components/widgets/Hero.astro
 import { Image } from 'astro:assets';
 import heroBgImage from '~/assets/images/jj.jpg';
+import { Picture } from 'astro:assets';
+import type { Hero as Props } from '~/types';
 
 export interface Props {
   image?: {
@@ -17,7 +19,6 @@ const {
   headline = "Transform Your Love Life - Break Free From Painful Patterns",
   subheadline = "Discover the powerful insights that help you create deeply fulfilling relationships built on freedom, honesty, and mutual reward. Get your free chapters now."
 } = Astro.props;
----
 
 <section class="relative overflow-hidden py-24 md:py-32">
   {/* Background Image */}
@@ -75,98 +76,204 @@ const {
 </section>
 
 <script is:inline>
-  document.addEventListener('DOMContentLoaded', function() {
-    console.log('Hero component mounted, initializing...');
-    
-    // Get ab_user_identifier for consistent tracking
-    function getClientUserIdentifier() {
-      let userId = localStorage.getItem('ab_user_identifier');
-      if (!userId) {
-        userId = crypto.randomUUID();
-        localStorage.setItem('ab_user_identifier', userId);
-        console.log('[Hero] New ab_user_identifier generated:', userId);
+  // Import email validation service
+  import('/src/lib/emailValidationService.js').then(({ EmailValidationService }) => {
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('Hero component mounted, initializing...');
+      
+      // Get ab_user_identifier for consistent tracking
+      function getClientUserIdentifier() {
+        let userId = localStorage.getItem('ab_user_identifier');
+        if (!userId) {
+          userId = crypto.randomUUID();
+          localStorage.setItem('ab_user_identifier', userId);
+          console.log('[Hero] New ab_user_identifier generated:', userId);
+        }
+        return userId;
       }
-      return userId;
-    }
-    
-    // Populate ab_user_identifier in form
-    const abUserIdentifierInput = document.getElementById('ab-user-identifier-input');
-    if (abUserIdentifierInput) {
-      const userIdentifier = getClientUserIdentifier();
-      abUserIdentifierInput.value = userIdentifier;
-      console.log('[Hero] Set ab_user_identifier in form:', userIdentifier);
-    }
+      
+      // Populate ab_user_identifier in form
+      const abUserIdentifierInput = document.getElementById('ab-user-identifier-input');
+      if (abUserIdentifierInput) {
+        const userIdentifier = getClientUserIdentifier();
+        abUserIdentifierInput.value = userIdentifier;
+        console.log('[Hero] Set ab_user_identifier in form:', userIdentifier);
+      }
 
-    // Form submission handler
-    const form = document.getElementById('hero-page-form');
-    if (form) {
-      form.addEventListener('submit', async function(event) {
-        event.preventDefault();
-        
-        const emailInput = form.querySelector('input[type="email"]');
-        const messageElement = document.getElementById('hero-page-form-message');
-        const submitButton = form.querySelector('button[type="submit"]');
-        
-        if (!emailInput || !messageElement || !submitButton) return;
-        
-        const email = emailInput.value.trim();
-        
-        if (!email || !email.includes('@')) {
-          messageElement.textContent = 'Please enter a valid email address.';
-          messageElement.style.color = 'red';
-          return;
-        }
-        
-        submitButton.disabled = true;
-        messageElement.textContent = 'Subscribing...';
-        messageElement.style.color = 'inherit';
-        
-        try {
-          const formData = new FormData(form);
-          const response = await fetch('/api/subscribe', {
-            method: 'POST',
-            body: formData
-          });
+      // Form submission handler
+      const form = document.getElementById('hero-page-form');
+      if (form) {
+        form.addEventListener('submit', async function(event) {
+          event.preventDefault();
           
-          const result = await response.json();
-          console.log('Subscribe response:', { status: response.status, ok: response.ok, result });
+          const emailInput = form.querySelector('input[type="email"]');
+          const messageElement = document.getElementById('hero-page-form-message');
+          const submitButton = form.querySelector('button[type="submit"]');
           
-          if (response.ok && response.status === 200) {
-            messageElement.textContent = result.message || 'Thank you for subscribing! Please check your email to confirm.';
-            messageElement.style.color = 'green';
-            form.reset();
-            
-            // Track conversion in database
-            if (typeof window.trackConversion === 'function') {
-              try {
-                const conversionResult = await window.trackConversion(
-                  'control',
-                  email,
-                  'hero_form_submission',
-                  {
-                    source: 'hero-static',
-                    experiment_context: 'hero-section-static'
-                  }
-                );
-                console.log('[Hero] Database conversion tracking result:', conversionResult);
-              } catch (conversionError) {
-                console.error('[Hero] Error tracking conversion in database:', conversionError);
-              }
-            }
-            
-          } else {
-            console.error('Subscribe error response:', { status: response.status, result });
-            messageElement.textContent = result.message || 'Subscription failed. Please try again.';
+          if (!emailInput || !messageElement || !submitButton) return;
+          
+          const email = emailInput.value.trim();
+          
+          if (!email) {
+            messageElement.textContent = 'Please enter your email address.';
             messageElement.style.color = 'red';
+            return;
           }
-        } catch (error) {
-          console.error('Subscription error:', error);
-          messageElement.textContent = 'Failed to subscribe. Please try again.';
-          messageElement.style.color = 'red';
-        } finally {
-          submitButton.disabled = false;
+          
+          // Validate email using our service
+          const validationResult = EmailValidationService.validateEmail(email);
+          
+          if (!validationResult.isValid) {
+            const errorMessage = EmailValidationService.getDisplayMessage(validationResult);
+            messageElement.textContent = errorMessage;
+            messageElement.style.color = 'red';
+            return;
+          }
+          
+          submitButton.disabled = true;
+          messageElement.textContent = 'Subscribing...';
+          messageElement.style.color = 'inherit';
+          
+          try {
+            const formData = new FormData(form);
+            const response = await fetch('/api/subscribe', {
+              method: 'POST',
+              body: formData
+            });
+            
+            const result = await response.json();
+            console.log('Subscribe response:', { status: response.status, ok: response.ok, result });
+            
+            if (response.ok && response.status === 200) {
+              messageElement.textContent = result.message || 'Thank you for subscribing! Please check your email to confirm.';
+              messageElement.style.color = 'green';
+              form.reset();
+              
+              // Track conversion in database
+              if (typeof window.trackConversion === 'function') {
+                try {
+                  const conversionResult = await window.trackConversion(
+                    'control',
+                    email,
+                    'hero_form_submission',
+                    {
+                      source: 'hero-static',
+                      experiment_context: 'hero-section-static'
+                    }
+                  );
+                  console.log('[Hero] Database conversion tracking result:', conversionResult);
+                } catch (conversionError) {
+                  console.error('[Hero] Error tracking conversion in database:', conversionError);
+                }
+              }
+              
+            } else {
+              console.error('Subscribe error response:', { status: response.status, result });
+              messageElement.textContent = result.message || 'Subscription failed. Please try again.';
+              messageElement.style.color = 'red';
+            }
+          } catch (error) {
+            console.error('Subscription error:', error);
+            messageElement.textContent = 'Failed to subscribe. Please try again.';
+            messageElement.style.color = 'red';
+          } finally {
+            submitButton.disabled = false;
+          }
+        });
+      }
+    });
+  }).catch(error => {
+    console.error('Error loading email validation service:', error);
+    // Fallback behavior without email validation
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('Hero component mounted with fallback validation...');
+      
+      function getClientUserIdentifier() {
+        let userId = localStorage.getItem('ab_user_identifier');
+        if (!userId) {
+          userId = crypto.randomUUID();
+          localStorage.setItem('ab_user_identifier', userId);
+          console.log('[Hero] New ab_user_identifier generated:', userId);
         }
-      });
-    }
+        return userId;
+      }
+      
+      const abUserIdentifierInput = document.getElementById('ab-user-identifier-input');
+      if (abUserIdentifierInput) {
+        const userIdentifier = getClientUserIdentifier();
+        abUserIdentifierInput.value = userIdentifier;
+        console.log('[Hero] Set ab_user_identifier in form:', userIdentifier);
+      }
+
+      const form = document.getElementById('hero-page-form');
+      if (form) {
+        form.addEventListener('submit', async function(event) {
+          event.preventDefault();
+          
+          const emailInput = form.querySelector('input[type="email"]');
+          const messageElement = document.getElementById('hero-page-form-message');
+          const submitButton = form.querySelector('button[type="submit"]');
+          
+          if (!emailInput || !messageElement || !submitButton) return;
+          
+          const email = emailInput.value.trim();
+          
+          if (!email || !email.includes('@')) {
+            messageElement.textContent = 'Please enter a valid email address.';
+            messageElement.style.color = 'red';
+            return;
+          }
+          
+          submitButton.disabled = true;
+          messageElement.textContent = 'Subscribing...';
+          messageElement.style.color = 'inherit';
+          
+          try {
+            const formData = new FormData(form);
+            const response = await fetch('/api/subscribe', {
+              method: 'POST',
+              body: formData
+            });
+            
+            const result = await response.json();
+            console.log('Subscribe response:', { status: response.status, ok: response.ok, result });
+            
+            if (response.ok && response.status === 200) {
+              messageElement.textContent = result.message || 'Thank you for subscribing! Please check your email to confirm.';
+              messageElement.style.color = 'green';
+              form.reset();
+              
+              if (typeof window.trackConversion === 'function') {
+                try {
+                  const conversionResult = await window.trackConversion(
+                    'control',
+                    email,
+                    'hero_form_submission',
+                    {
+                      source: 'hero-static',
+                      experiment_context: 'hero-section-static'
+                    }
+                  );
+                  console.log('[Hero] Database conversion tracking result:', conversionResult);
+                } catch (conversionError) {
+                  console.error('[Hero] Error tracking conversion in database:', conversionError);
+                }
+              }
+              
+            } else {
+              console.error('Subscribe error response:', { status: response.status, result });
+              messageElement.textContent = result.message || 'Subscription failed. Please try again.';
+              messageElement.style.color = 'red';
+            }
+          } catch (error) {
+            console.error('Subscription error:', error);
+            messageElement.textContent = 'Failed to subscribe. Please try again.';
+            messageElement.style.color = 'red';
+          } finally {
+            submitButton.disabled = false;
+          }
+        });
+      }
+    });
   });
 </script>
