@@ -4,7 +4,7 @@ import HeroCustomAB from '~/components/widgets/HeroCustomAB.astro';
 import Content from '~/components/widgets/Content.astro';
 import { Icon } from 'astro-icon/components';
 
-// Import AB testing logic. 
+// Import AB testing logic.  
 // getVariant is used SSR. The side-effect import ensures abTester.ts client-side code runs.
 import { getVariant, type ABVariant } from '~/lib/abTester';
 import '~/lib/abTester'; 

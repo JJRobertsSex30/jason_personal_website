@@ -813,6 +813,7 @@ function calculateTimeToConvert(userIdentifier: string, experimentId: string): n
   if (typeof localStorage === 'undefined') return null;
   
   const timestampKey = `ab_first_exposure_time_${experimentId}`;
+  const exposureKey = `ab_first_exposure_${experimentId}`;
   
   console.log(`[abTester] calculateTimeToConvert: Looking for timestamp key: ${timestampKey}`);
   
@@ -838,7 +839,6 @@ function calculateTimeToConvert(userIdentifier: string, experimentId: string): n
   
   // Simple fallback: if no timestamp exists, this might be immediate conversion
   // Set timestamp now and return 0 (immediate conversion)
-  const exposureKey = `ab_first_exposure_${experimentId}`;
   if (!localStorage.getItem(exposureKey)) {
     const now = Date.now();
     localStorage.setItem(exposureKey, 'true');
@@ -851,7 +851,6 @@ function calculateTimeToConvert(userIdentifier: string, experimentId: string): n
   console.log(`[abTester] calculateTimeToConvert: No timestamp found for experiment ${experimentId}. Checking for fallback options.`);
   
   // Check if this is the user's first time with this experiment
-  const exposureKey = `ab_first_exposure_${experimentId}`;
   const hasBeenExposed = localStorage.getItem(exposureKey);
   
   if (!hasBeenExposed) {
