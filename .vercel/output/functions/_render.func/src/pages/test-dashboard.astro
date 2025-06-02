@@ -1,0 +1,220 @@
+---
+// Type definitions
+type ConvertKitSubscriber = {
+  id: string;
+  state: string;
+  created_at: string;
+  subscriber: {
+    email_address: string;
+    fields?: Record<string, unknown>;
+  };
+};
+
+type TableData = {
+  tableName: string;
+  data: Record<string, unknown>[] | null;
+  error: string | null;
+};
+
+import Layout from '~/layouts/PageLayout.astro';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase client
+const supabase = createClient(
+  import.meta.env.SUPABASE_URL,
+  import.meta.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+// Function to check if a table exists and fetch its data
+async function fetchTableData(tableName: string): Promise<TableData> {
+  try {
+    const { data, error } = await supabase
+      .from(tableName)
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error) {
+      console.error(`Error fetching ${tableName}:`, error);
+      return { tableName, data: null, error: error.message };
+    }
+
+    return { tableName, data, error: null };
+  } catch (error) {
+    console.error(`Unexpected error with table ${tableName}:`, error);
+    return { 
+      tableName, 
+      data: null, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
+// List of tables to fetch (only those that exist in the database)
+const tables = [
+  'user_profiles',
+  'referrals',
+  'gem_transactions'
+];
+
+// Fetch data from all tables
+const tableData: TableData[] = await Promise.all(
+  tables.map(table => fetchTableData(table))
+);
+
+// Filter out tables that returned errors (likely don't exist)
+const validTables = tableData.filter(table => table.data !== null);
+
+// ConvertKit API key check
+const convertKitApiKey = import.meta.env.SECRET;
+const convertKitFormId = import.meta.env.PUBLIC_CONVERTKIT_FORM_ID;
+let subscribersData: { subscriptions: ConvertKitSubscriber[] } = { subscriptions: [] };
+let convertKitError: string | null = null;
+
+if (convertKitApiKey && convertKitFormId) {
+  try {
+    const response = await fetch(`https://api.convertkit.com/v3/forms/${convertKitFormId}/subscriptions?api_secret=${convertKitApiKey}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+    });
+
+    if (response.ok) {
+      subscribersData = await response.json();
+    } else {
+      const errorText = await response.text();
+      console.error('Failed to fetch ConvertKit data:', errorText);
+      convertKitError = `Failed to load subscribers: ${response.status} ${response.statusText}`;
+    }
+  } catch (error) {
+    console.error('Error fetching ConvertKit data:', error);
+    convertKitError = error instanceof Error ? error.message : 'Unknown error';
+  }
+} else {
+  convertKitError = 'ConvertKit API key or form ID is missing';
+}
+---
+
+<Layout>
+  <div class="container mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold mb-8">Database Dashboard</h1>
+
+    <!-- ConvertKit Subscribers -->
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6 mb-8">
+      <h2 class="text-2xl font-semibold mb-4">ConvertKit Subscribers</h2>
+      {convertKitError ? (
+        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded">
+          {convertKitError}
+        </div>
+      ) : subscribersData.subscriptions?.length > 0 ? (
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead class="bg-gray-50 dark:bg-slate-700">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ID</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Email</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Created At</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-gray-700">
+              {subscribersData.subscriptions.map((sub) => (
+                <tr>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{sub.id}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{sub.subscriber.email_address}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{sub.state}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                    {new Date(sub.created_at).toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p class="text-center py-4 text-gray-500 dark:text-gray-400">No subscribers found</p>
+      )}
+    </div>
+
+    <!-- Database Tables -->
+    {validTables.length > 0 ? (
+      validTables.map(({ tableName, data }) => (
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6 mb-8">
+          <h2 class="text-2xl font-semibold mb-4">
+            {tableName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+            <span class="ml-2 text-sm font-normal text-gray-500">({data?.length || 0} records)</span>
+          </h2>
+          
+          {data && data.length > 0 ? (
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-slate-700">
+                  <tr>
+                    {Object.keys(data[0]).map((key) => (
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        {key.replace(/_/g, ' ')}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  {data.map((row) => (
+                    <tr>
+{Object.values(row).map((value) => (
+  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate" title={String(value)}>
+    {value === null ? 'null' : typeof value === 'object' ? JSON.stringify(value) : String(value)}
+  </td>
+))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p class="text-center py-4 text-gray-500 dark:text-gray-400">No data available</p>
+          )}
+        </div>
+      ))
+    ) : (
+      <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-300 px-4 py-3 rounded">
+        No database tables found or accessible. Make sure you have the correct database tables set up.
+      </div>
+    )}
+  </div>
+</Layout>
+
+<style>
+  /* Add some spacing between sections */
+  .table-section {
+    margin-bottom: 2rem;
+  }
+  /* Make tables more readable */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th, td {
+    padding: 0.5rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  th {
+    background-color: #f9fafb;
+  }
+  /* Dark mode styles */
+  .dark th {
+    background-color: #1e293b;
+  }
+  .dark td {
+    border-color: #334155;
+  }
+  /* Add hover effect for better readability */
+  tr:hover {
+    background-color: #f9fafb;
+  }
+  .dark tr:hover {
+    background-color: #1e293b;
+  }
+</style>

@@ -1,0 +1,989 @@
+import { c as createAstro, a as createComponent, r as renderComponent, b as renderTemplate, d as addAttribute, m as maybeRenderHead } from '../chunks/astro/server_DgPtluSo.mjs';
+import 'kleur/colors';
+import { $ as $$PageLayout } from '../chunks/PageLayout_j_B7ywtx.mjs';
+export { renderers } from '../renderers.mjs';
+
+var __freeze = Object.freeze;
+var __defProp = Object.defineProperty;
+var __template = (cooked, raw) => __freeze(__defProp(cooked, "raw", { value: __freeze(raw || cooked.slice()) }));
+var _a;
+const $$Astro = createAstro("https://astrowind.vercel.app");
+const $$QuizLovelab = createComponent(async ($$result, $$props, $$slots) => {
+  const Astro2 = $$result.createAstro($$Astro, $$props, $$slots);
+  Astro2.self = $$QuizLovelab;
+  const metadata = {
+    title: "Sex 3.0 Relationship Map Quiz | JJ Roberts",
+    description: "Take the Sex 3.0 Relationship Map Quiz to understand where you are on your journey and unlock personalised insights."
+  };
+  const quizQuestions = [
+    {
+      text: "Jealousy in a relationship is a sign of how much you love someone.",
+      scoring: [5, 4, 3, 2, 1]
+      // Sex 2.0 Attitude (Agree=Low)
+    },
+    {
+      text: "Relationships should be built on complete honesty, even when it's difficult.",
+      scoring: [1, 2, 3, 4, 5]
+      // Sex 3.0 Attitude (Agree=High)
+    },
+    {
+      text: "I believe in the concept of 'The One' in relationships.",
+      scoring: [5, 4, 3, 2, 1]
+      // Sex 2.0 Attitude (Agree=Low)
+    },
+    {
+      text: "Trust and respect are more important than exclusivity and control in a relationship.",
+      scoring: [1, 2, 3, 4, 5]
+      // Sex 3.0 Attitude (Agree=High)
+    },
+    {
+      text: "A relationship is successful if it lasts a lifetime, regardless of the quality.",
+      scoring: [5, 4, 3, 2, 1]
+      // Sex 2.0 Attitude (Agree=Low) - Slightly rephrased
+    },
+    {
+      text: "A relationship should be free of conflict to be healthy.",
+      scoring: [1, 2, 3, 4, 5]
+    },
+    {
+      text: "You should be willing to tolerate bad behaviour if you love someone.",
+      scoring: [5, 4, 3, 2, 1]
+    },
+    {
+      text: "A relationship should complete you as a person.",
+      scoring: [5, 4, 3, 2, 1]
+      // Sex 2.0 Attitude (Agree=Low)
+    },
+    {
+      text: "I believe society promotes outdated ideas about sexual relationships.",
+      scoring: [1, 2, 3, 4, 5]
+      // Sex 3.0 Awareness (Agree=High) - Rephrased original 17's theme
+    },
+    {
+      text: "You should be willing to sacrifice your happiness for your partner's.",
+      scoring: [5, 4, 3, 2, 1]
+      // Sex 2.0 Attitude (Agree=Low)
+    },
+    {
+      text: "A relationship requires exclusivity to be fulfilling and meaningful above all else.",
+      scoring: [5, 4, 3, 2, 1]
+      // Sex 2.0 Attitude (Agree=Low) - Slightly rephrased
+    },
+    {
+      text: "My partner having personal freedom is compatible with deep intimacy in a relationship.",
+      scoring: [1, 2, 3, 4, 5]
+      // Sex 3.0 Attitude (Agree=High) - New question based on book
+    },
+    {
+      text: "A healthy relationship requires effort and hard work.",
+      scoring: [5, 4, 3, 2, 1]
+      // Sex 2.0 Attitude (Agree=Low)
+    },
+    {
+      text: "I have gut feeling that there is something wrong with the way that society tells me how relationships should be but I can't quite put my finger on it.",
+      scoring: [1, 2, 3, 4, 5]
+      // Sex 3.0 Attitude (Agree=High) - New question based on book
+    },
+    {
+      text: "You should be able to predict your partner's needs without them telling you.",
+      scoring: [5, 4, 3, 2, 1]
+    },
+    {
+      text: "It is natural for human beings to be monogamous for their entire lives.",
+      scoring: [5, 4, 3, 2, 1]
+      // Sex 2.0 Attitude (Agree=Low)
+    },
+    {
+      text: "If you truly love someone, you should prioritize their needs above your own and your own dreams.",
+      scoring: [5, 4, 3, 2, 1]
+      // Sex 2.0 Attitude (Agree=Low) - Combined/rephrased
+    },
+    {
+      text: "A relationship should fulfil all your emotional needs.",
+      scoring: [5, 4, 3, 2, 1]
+      // Sex 2.0 Attitude (Agree=Low)
+    },
+    {
+      text: "I feel pressured to follow a standard relationship timeline (dating, marriage, kids).",
+      scoring: [1, 2, 3, 4, 5]
+      // Sex 3.0 Awareness (Agree=High) - Acknowledging RD
+    },
+    {
+      text: "I like drama in a relationship. It's exciting. Lack of drama is passionless and boring.",
+      scoring: [5, 4, 3, 2, 1]
+      // Sex 2.0 Attitude (Agree=Low)
+    }
+  ];
+  const getResult = (score) => {
+    if (score <= 40) return "Mostly Sex 2.0";
+    if (score <= 60) return "Sex 2.0 with Growing Awareness";
+    if (score <= 80) return "Leaning Towards Sex 3.0";
+    return "Mostly Sex 3.0";
+  };
+  if (Astro2.request.method === "POST") {
+    const formData = await Astro2.request.formData();
+    const answers = JSON.parse(formData.get("answers")?.toString() || "[]");
+    const score = answers.reduce((sum, answer, index) => {
+      return sum + (quizQuestions[index]?.scoring[answer - 1] || 0);
+    }, 0);
+    const result = getResult(score);
+    console.log("Quiz Submission:");
+    console.log("Raw Answers:", answers);
+    console.log("Calculated Score:", score);
+    console.log("Result Category:", result);
+  }
+  const scoreRanges = [
+    {
+      maxScore: 40,
+      type: "Mostly Sex 2.0",
+      summary: "Your score indicates you are largely operating within the traditional Sex 2.0 framework. You likely hold many common societal beliefs about love, relationships, and commitment, which can often lead to unnecessary conflict, jealousy, and confusion. But awareness is the first step to change. The good news is that the blueprint for a better way exists."
+    },
+    {
+      maxScore: 60,
+      type: "Sex 2.0 with Growing Awareness",
+      summary: "Your responses show a mix of traditional Sex 2.0 beliefs and a growing awareness that something isn't quite right with the conventional map. You may feel the friction and frustration caused by outdated paradigms. This position is fertile ground for change! You are ready to explore a new framework that aligns more closely with your true nature and leads to less suffering."
+    },
+    {
+      maxScore: 80,
+      type: "Leaning Towards Sex 3.0",
+      summary: "You are strongly aligned with the core principles of Sex 3.0! You likely value honesty, freedom, and mutual reward over societal expectations and the need for control. You've probably experienced the limitations of the Sex 2.0 firsthand. You are well on your way to building truly authentic and joyful connections based on a more natural and empowering understanding of human relationships."
+    },
+    {
+      maxScore: 100,
+      // Represents 81-100
+      type: "Mostly Sex 3.0",
+      summary: "Wow! Your score indicates you already resonate strongly with the Sex 3.0 paradigm. You fundamentally understand that relationships thrive on mutual reward, honesty, trust, and respect, not on outdated notions of ownership or societal pressure. You are likely already navigating relationships with greater clarity and less suffering. You are a pioneer in building connections that are natural, free, and deeply fulfilling."
+    }
+  ];
+  return renderTemplate`${renderComponent($$result, "Layout", $$PageLayout, { "metadata": metadata }, { "default": async ($$result2) => renderTemplate(_a || (_a = __template(["  ", '<div id="quiz-questions-json" style="display: none;">', '</div>  <div id="score-ranges-json" style="display: none;">', '</div> <div class="container mx-auto px-4 py-16 md:py-24"> <div id="quiz-container" class="max-w-3xl mx-auto bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 md:p-8 lg:p-10"> <h1 class="text-3xl md:text-4xl font-bold text-center text-brand-green mb-8">Your Relationship Map Quiz</h1> <!-- Progress Bar and Counter --> <div class="mb-8"> <div class="flex justify-between items-center mb-2"> <span id="question-counter" class="text-sm font-medium text-orange-500">Answered 0 of 20 questions</span> <span id="page-indicator" class="text-sm font-medium text-gray-600 dark:text-gray-400">Page 1 of 2</span> </div> <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700"> <div id="progress-bar" class="bg-orange-500 h-2.5 rounded-full transition-all duration-300 ease-in-out" style="width: 5%"></div> </div> </div> <!-- Quiz Form --> <form id="quiz-form" class="space-y-8"> <!-- Page 1 Questions (0-9) --> <div id="page-1" class="space-y-8"> ', ' <div class="flex justify-end mt-8"> <button id="next-page-btn" type="button" class="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap">\nNext Page\n</button> </div> </div> <!-- Page 2 Questions (10-19) --> <div id="page-2" class="space-y-8 hidden"> ', ` <div class="mt-8 p-6 bg-orange-50 dark:bg-slate-800 rounded-lg border-l-4 border-orange-500"> <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-3">Personalize Your Results</h3> <p class="text-gray-700 dark:text-gray-300 mb-4">
+We'd love to personalize your experience! Please share your first name so we can tailor your insights and make them more meaningful for you.
+</p> <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-end"> <div class="flex-grow w-full"> <label for="user-first-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">First Name</label> <div class="w-full"> <input type="text" id="user-first-name" name="firstName" placeholder="Enter your first name" required class="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent"> <p id="first-name-error" class="mt-1 text-sm text-red-600 dark:text-red-400 hidden">Please enter your first name to continue</p> </div> </div> <button id="show-email-form-btn" type="button" class="w-full sm:w-auto px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap">
+Calculate My Results
+</button> </div> </div> <div class="flex justify-between mt-8"> <button id="prev-page-btn" type="button" class="px-8 py-3 bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap">
+Back
+</button> </div> </div> </form> <!-- Email Gate Section (Initially hidden) --> <div id="email-gate-area" class="hidden text-center"> <h2 class="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white mb-4">Unlock Your Results!</h2> <p id="score-preview" class="text-lg text-gray-700 dark:text-gray-300 mb-6"></p> <p class="text-lg text-gray-700 dark:text-gray-300 mb-6">Enter your email below to see your personalized Sex 3.0 Relationship Map result and unlock free chapters of the book.</p> <form id="quiz-email-form" class="flex flex-col sm:flex-row gap-4 justify-center max-w-md mx-auto"> <label for="quiz-email-input" class="sr-only">Email address</label> <input type="email" id="quiz-email-input" name="email" placeholder="your.email@example.com" required class="w-full sm:w-auto flex-grow px-4 py-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white/90 dark:bg-gray-800/90 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:outline-none placeholder-gray-500 dark:placeholder-gray-400"> <button type="submit" class="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap">
+See My Results
+</button> </form> <p id="quiz-form-message" class="text-sm text-gray-600 dark:text-gray-400 mt-4"></p> </div> <!-- Results Section (Initially hidden) --> <div id="results-area" class="hidden"> <h2 id="result-type-heading" class="text-2xl md:text-3xl font-bold text-center text-brand-green mb-4"></h2> <p id="result-summary-text" class="text-lg text-gray-800 dark:text-white text-center mb-6"></p> <p class="text-base text-gray-700 dark:text-gray-300 text-center italic">Check your email! We've sent you a confirmation link. Once confirmed, you'll receive another email to unlock your free chapters of the book, which will help you continue your journey.</p> <div class="mt-8 text-center"> <a href="/" class="inline-flex items-center justify-center gap-2 px-8 py-3 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-800 dark:text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap">
+Back to Homepage
+</a> </div> </div> </div> </div> <script>
+    // --- Global Variables for Quiz State ---
+    let currentVariant = null; // For A/B test info, populated by initializeAbTestTracking
+    let quizAnswers = {};      // To store answers { 'question-0': '1', ... }
+    let currentPage = 1;
+    window.quizTotalScore = 0; // To store calculated score before email gate
+
+    // --- A/B Test Impression Tracking & Variant Initialization ---
+    // This function reads from localStorage and potentially calls window.logClientImpression
+    function initializeAbTestTracking() {
+      try {
+        console.log('[Quiz Page] Initializing A/B test tracking...');
+        
+        const variantInfoString = localStorage.getItem('quizVariant');
+        if (variantInfoString) {
+          try {
+            currentVariant = JSON.parse(variantInfoString); // Assigns to global currentVariant
+            console.log('[Quiz Page] A/B Test - Successfully parsed variant from localStorage:', currentVariant);
+
+            if (!currentVariant.experiment || !currentVariant.variantId) {
+               console.warn('[Quiz Page] A/B Test - Variant from localStorage is missing "experiment" name or "variantId":', currentVariant);
+            }
+            // Ensure experimentId (UUID) is present for impression logging
+            if (!currentVariant.experimentId) {
+                console.warn('[Quiz Page] A/B Test - Variant from localStorage is missing "experimentId" (UUID). Impression logging might be affected if it relies on UUID directly.');
+            }
+
+          } catch (e) {
+            console.error('[Quiz Page] A/B Test - Error parsing "quizVariant" from localStorage:', e, "String was:", variantInfoString);
+            currentVariant = null; 
+          }
+        } else {
+          console.log('[Quiz Page] A/B Test - No "quizVariant" found in localStorage.');
+        }
+        
+        // Attempt to log client impression
+        if (currentVariant && currentVariant.variantId && currentVariant.experimentId && typeof window.logClientImpression === 'function') {
+            const variantForImpressionLogging = {
+                id: currentVariant.variantId,
+                name: currentVariant.variantName || 'Unknown Variant Name',
+                experiment_id: currentVariant.experimentId, // UUID of the experiment
+                headline: '', 
+                subheadline: '', 
+            };
+            // The second argument to logClientImpression is experimentNameFromContext (textual name)
+            console.log('[Quiz Page] Attempting to log impression via window.logClientImpression for variant:', variantForImpressionLogging, 'Experiment Name Context:', currentVariant.experiment);
+            window.logClientImpression(variantForImpressionLogging, currentVariant.experiment)
+              .catch(error => {
+                console.error('[Quiz Page] Error calling window.logClientImpression:', error);
+              });
+        } else if (typeof window.logClientImpression !== 'function') {
+          console.warn('[Quiz Page] window.logClientImpression function not available. Impression not logged.');
+        } else if (currentVariant) {
+          console.log('[Quiz Page] Impression not logged: currentVariant missing variantId or experimentId (UUID). currentVariant:', currentVariant);
+        } else {
+          console.log('[Quiz Page] Impression not logged: No currentVariant data.');
+        }
+      } catch (error) {
+        console.error('[Quiz Page] Error in A/B test tracking initialization:', error);
+      }
+    }
+    
+    // Initialize A/B test tracking (runs once DOM is ready or immediately if already ready)
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeAbTestTracking);
+    } else {
+      initializeAbTestTracking();
+    }
+    
+    // --- Quiz Logic Functions (definitions are fine at top level) ---
+    function updateQuizProgress() {
+      const answeredRadios = Array.from(document.querySelectorAll('input[type="radio"]:checked'));
+      const uniqueAnsweredQuestions = new Set();
+      
+      quizAnswers = {}; 
+      answeredRadios.forEach(radio => {
+        uniqueAnsweredQuestions.add(radio.name);
+        quizAnswers[radio.name] = radio.value;
+      });
+      
+      const answeredCount = uniqueAnsweredQuestions.size;
+      const totalQuestions = 20; 
+      
+      const progress = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0;
+      const progressBar = document.getElementById('progress-bar');
+      const questionCounter = document.getElementById('question-counter');
+      if (progressBar) progressBar.style.width = \`\${Math.min(progress, 100)}%\`;
+      if (questionCounter) questionCounter.textContent = \`Answered \${answeredCount} of \${totalQuestions} questions\`;
+
+      localStorage.setItem('quizAnswers', JSON.stringify(quizAnswers));
+      // console.log('[Quiz Page] Progress updated, answers saved:', quizAnswers);
+    }
+
+    function goToPage(pageNumber) {
+      const page1Div = document.getElementById('page-1');
+      const page2Div = document.getElementById('page-2');
+      const pageIndicator = document.getElementById('page-indicator');
+      const quizContainer = document.getElementById('quiz-container');
+
+      console.log(\`[Quiz Page] goToPage called for page \${pageNumber}. Current page: \${currentPage}\`);
+
+      if (pageNumber === 2) {
+        let page1AnsweredCount = 0;
+        for (let i = 0; i < 10; i++) {
+          if (quizAnswers[\`question-\${i}\`]) {
+            page1AnsweredCount++;
+          }
+        }
+        if (page1AnsweredCount < 10) {
+          alert(\`Please answer all 10 questions on this page. You've answered \${page1AnsweredCount}.\`);
+          return;
+        }
+        if(page1Div) page1Div.classList.add('hidden');
+        if(page2Div) page2Div.classList.remove('hidden');
+        if(pageIndicator) pageIndicator.textContent = 'Page 2 of 2';
+        currentPage = 2;
+      } else if (pageNumber === 1) {
+        if(page2Div) page2Div.classList.add('hidden');
+        if(page1Div) page1Div.classList.remove('hidden');
+        if(pageIndicator) pageIndicator.textContent = 'Page 1 of 2';
+        currentPage = 1;
+      }
+      if(quizContainer) quizContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      console.log(\`[Quiz Page] Navigated to page \${currentPage}\`);
+    }
+
+    function loadSavedAnswers() {
+      const savedAnswersJSON = localStorage.getItem('quizAnswers');
+      if (savedAnswersJSON) {
+        try {
+          const parsedAnswers = JSON.parse(savedAnswersJSON);
+          quizAnswers = parsedAnswers; 
+          Object.entries(parsedAnswers).forEach(([name, value]) => {
+            const radio = document.querySelector(\`input[name="\${name}"][value="\${value}"]\`);
+            if (radio) {
+              radio.checked = true;
+            }
+          });
+          console.log('[Quiz Page] Loaded saved answers from localStorage.');
+        } catch (e) {
+          console.error('[Quiz Page] Error parsing saved answers from localStorage:', e);
+          localStorage.removeItem('quizAnswers'); 
+        }
+      }
+      updateQuizProgress(); 
+    }
+    
+    function initializeQuizState() {
+      const form = document.getElementById('quiz-form');
+      if (form) form.reset(); 
+
+      const isPageRefresh = window.performance && window.performance.navigation && window.performance.navigation.type === 1;
+      if (isPageRefresh) {
+        console.log('[Quiz Page] Page refresh detected. Clearing saved quiz answers.');
+        localStorage.removeItem('quizAnswers');
+        quizAnswers = {}; 
+      } else {
+        loadSavedAnswers();
+      }
+      // Ensure page 1 is shown by default, page 2 hidden, unless logic dictates otherwise
+      const page1Div = document.getElementById('page-1');
+      const page2Div = document.getElementById('page-2');
+      const pageIndicator = document.getElementById('page-indicator');
+      if(page1Div) page1Div.classList.remove('hidden');
+      if(page2Div) page2Div.classList.add('hidden');
+      if(pageIndicator) pageIndicator.textContent = 'Page 1 of 2';
+      currentPage = 1;
+
+      updateQuizProgress();
+      console.log('[Quiz Page] Quiz state initialized.');
+    }
+    
+    function getPageResultSummary(score) {
+        // This should ideally parse from a JSON island populated by Astro frontmatter
+        // For now, using the simplified placeholder logic
+        const scoreRangesData = JSON.parse(document.getElementById('score-ranges-json')?.textContent || '[]');
+        if (scoreRangesData.length > 0) {
+            for (const range of scoreRangesData) {
+                if (score <= range.maxScore) {
+                    return range;
+                }
+            }
+            return scoreRangesData[scoreRangesData.length - 1]; // Fallback
+        }
+        // Fallback if score-ranges-json is not found or empty
+        console.warn("[Quiz Page] score-ranges-json not found or empty. Using hardcoded summary logic.");
+        if (score <= 40) return { type: 'Mostly Sex 2.0', summary: 'Your score indicates you are largely operating within the traditional Sex 2.0 framework. You likely hold many common societal beliefs about love, relationships, and commitment, which can often lead to unnecessary conflict, jealousy, and confusion. But awareness is the first step to change. The good news is that the blueprint for a better way exists.' };
+        if (score <= 60) return { type: 'Sex 2.0 with Growing Awareness', summary: 'Your responses show a mix of traditional Sex 2.0 beliefs and a growing awareness that something isn\\'t quite right with the conventional map. You may feel the friction and frustration caused by outdated paradigms. This position is fertile ground for change! You are ready to explore a new framework that aligns more closely with your true nature and leads to less suffering.' };
+        if (score <= 80) return { type: 'Leaning Towards Sex 3.0', summary: 'You are strongly aligned with the core principles of Sex 3.0! You likely value honesty, freedom, and mutual reward over societal expectations and the need for control. You\\'ve probably experienced the limitations of the Sex 2.0 map firsthand. You are well on your way to building truly authentic and joyful connections based on a more natural and empowering understanding of human relationships.' };
+        return { type: 'Mostly Sex 3.0', summary: 'Wow! Your score indicates you already resonate strongly with the Sex 3.0 paradigm. You fundamentally understand that relationships thrive on mutual reward, honesty, trust, and respect, not on outdated notions of ownership or societal pressure. You are likely already navigating relationships with greater clarity and less suffering. You are a pioneer in building connections that are natural, free, and deeply fulfilling.' };
+    }
+
+    // --- DOMContentLoaded Event Listener ---
+   // document.addEventListener('DOMContentLoaded', () => { 
+   //   console.log('[Quiz Page] DOMContentLoaded - Initializing main quiz logic and event listeners.'); 
+   document.addEventListener('astro:page-load', () => {
+      console.log('[Quiz Page] astro:page-load event fired. Initializing main quiz logic and event listeners.');   
+  
+      // *** MOVED REFERRAL TRACKING HERE ***
+      const queryParamsForReferral = new URLSearchParams(window.location.search);
+      const referrerId = queryParamsForReferral.get("ref"); // Declared inside this scope
+      if (referrerId) {
+        localStorage.setItem("referrer_id", referrerId);
+        console.log('[Quiz Page] Stored referral ID in localStorage from URL param:', referrerId);
+      } else {
+        console.log('[Quiz Page] No "ref" URL parameter found for referral ID.');
+      }
+      // *** END OF MOVED REFERRAL TRACKING ***
+
+      initializeQuizState(); 
+
+      // DOM Element Getters (ensure these IDs exist in your quiz-lovelab.astro HTML)
+      const quizForm = document.getElementById('quiz-form');
+      const emailGateArea = document.getElementById('email-gate-area');
+      const resultsArea = document.getElementById('results-area');
+      const scorePreview = document.getElementById('score-preview');
+      const quizEmailForm = document.getElementById('quiz-email-form');
+      const quizEmailInput = document.getElementById('quiz-email-input');
+      const quizFormMessage = document.getElementById('quiz-form-message');
+      const userFirstNameInput = document.getElementById('user-first-name');
+      const firstNameError = document.getElementById('first-name-error');
+      const resultTypeHeading = document.getElementById('result-type-heading');
+      const resultSummaryText = document.getElementById('result-summary-text');
+      
+      // Event listeners for radio buttons
+      document.querySelectorAll('input[type="radio"]').forEach(radio => {
+        radio.addEventListener('click', updateQuizProgress);
+      });
+
+      // Page navigation buttons
+      const prevButton = document.getElementById('prev-page-btn');
+      const nextButton = document.getElementById('next-page-btn');
+      if (nextButton) {
+        console.log('[Quiz Page] Attaching click listener to Next button (next-page-btn).');
+        nextButton.addEventListener('click', () => goToPage(2));
+      } else {
+        console.warn('[Quiz Page] Next button (id="next-page-btn") not found.');
+      }
+      if (prevButton) {
+        console.log('[Quiz Page] Attaching click listener to Prev button (prev-page-btn).');
+        prevButton.addEventListener('click', () => goToPage(1));
+      } else {
+        console.warn('[Quiz Page] Prev button (id="prev-page-btn") not found.');
+      }
+
+      // "Calculate My Results" / Show Email Gate Button
+      const showEmailFormBtn = document.getElementById('show-email-form-btn');
+      if (showEmailFormBtn) {
+        console.log('[Quiz Page] Attaching click listener to Calculate Results button (show-email-form-btn).');
+        showEmailFormBtn.addEventListener('click', () => {
+          console.log('[Quiz Page] "Calculate My Results" button clicked.');
+          const firstName = userFirstNameInput ? userFirstNameInput.value.trim() : '';
+          if (userFirstNameInput && !firstName) {
+            if(firstNameError) firstNameError.classList.remove('hidden');
+            userFirstNameInput.classList.add('border-red-500');
+            userFirstNameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            userFirstNameInput.focus();
+            return;
+          }
+          if(userFirstNameInput) userFirstNameInput.classList.remove('border-red-500');
+          if(firstNameError) firstNameError.classList.add('hidden');
+          
+          if(firstName) localStorage.setItem('userFirstName', firstName);
+
+          const totalAnswered = Object.keys(quizAnswers).length;
+          if (totalAnswered < 20) {
+            alert(\`Please answer all 20 questions. You've answered \${totalAnswered}.\`);
+            return;
+          }
+
+          const quizQuestionsData = JSON.parse(document.getElementById('quiz-questions-json')?.textContent || '[]');
+          if (quizQuestionsData.length === 0) {
+            console.error("[Quiz Page] quiz-questions-json data not found or empty. Cannot calculate score.");
+            alert("Error: Quiz data is missing. Cannot calculate score.");
+            return;
+          }
+          
+          let calculatedScore = 0;
+          for (let i = 0; i < 20; i++) {
+            const answerValue = parseInt(quizAnswers[\`question-\${i}\`]);
+            if (!isNaN(answerValue) && answerValue > 0 && quizQuestionsData[i] && quizQuestionsData[i].scoring && quizQuestionsData[i].scoring[answerValue - 1] !== undefined) {
+              calculatedScore += quizQuestionsData[i].scoring[answerValue - 1];
+            }
+          }
+          window.quizTotalScore = calculatedScore;
+          console.log('[Quiz Page] Calculated Score for email gate:', window.quizTotalScore);
+
+          let resultType = 'Unknown';
+          const summaryData = getPageResultSummary(calculatedScore); // Use helper
+          resultType = summaryData.type;
+          
+          if(quizForm) quizForm.classList.add('hidden');
+          if(emailGateArea) emailGateArea.classList.remove('hidden');
+          if(scorePreview) scorePreview.textContent = \`Your score (\${calculatedScore}/100) indicates you are \${resultType}.\`;
+          if(emailGateArea) emailGateArea.scrollIntoView({ behavior: 'smooth' });
+        });
+      } else {
+         console.warn('[Quiz Page] Calculate Results button (id="show-email-form-btn") not found.');
+      }
+
+      if (userFirstNameInput) {
+        userFirstNameInput.addEventListener('input', () => {
+          userFirstNameInput.classList.remove('border-red-500');
+          if(firstNameError) firstNameError.classList.add('hidden');
+        });
+        const savedName = localStorage.getItem('userFirstName');
+        if (savedName) userFirstNameInput.value = savedName;
+      }
+
+      if (quizEmailForm) {
+        console.log('[Quiz Page] Attaching submit listener to Email Form (quiz-email-form).');
+        quizEmailForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          console.log('[Quiz Page] Email form submission initiated.');
+          const email = quizEmailInput ? quizEmailInput.value.trim() : '';
+          if (!email || !email.includes('@')) {
+            if(quizFormMessage) {
+                quizFormMessage.textContent = 'Please enter a valid email address.';
+                quizFormMessage.className = 'text-sm mt-2 text-red-600 dark:text-red-400';
+            }
+            return;
+          }
+        
+          const submitButton = quizEmailForm.querySelector('button[type="submit"]');
+          const originalButtonText = submitButton ? submitButton.innerHTML : 'See My Results';
+          if(submitButton) { submitButton.disabled = true; submitButton.innerHTML = 'Processing...'; }
+          if(quizFormMessage) quizFormMessage.textContent = '';
+
+          try {
+            const scoreToSubmit = window.quizTotalScore;
+            const scorePreviewText = scorePreview ? scorePreview.textContent || '' : '';
+            const resultTypeMatch = scorePreviewText.match(/you are (.+)\\./);
+            const resultTypeToSubmit = resultTypeMatch ? resultTypeMatch[1] : getPageResultSummary(scoreToSubmit).type;
+            const firstNameToSubmit = userFirstNameInput ? userFirstNameInput.value.trim() : '';
+
+            const formData = new FormData();
+            formData.append('email', email);
+            formData.append('firstName', firstNameToSubmit);
+            formData.append('score', scoreToSubmit.toString());
+            formData.append('resultType', resultTypeToSubmit);
+
+            if (currentVariant && currentVariant.experiment && currentVariant.variantId) {
+              formData.append('variantInfo', JSON.stringify({
+                experiment: currentVariant.experiment, 
+                experimentId: currentVariant.experimentId, // Send UUID if available
+                variantId: currentVariant.variantId,
+                variantName: currentVariant.variantName || '',
+                quizPath: currentVariant.quizPath || '',
+                quizName: currentVariant.quizName || ''
+              }));
+            }
+            
+            const storedReferrerId = localStorage.getItem('referrer_id');
+            if (storedReferrerId) formData.append('referrer_id', storedReferrerId);
+
+            if (typeof window.getClientSessionIdentifier === 'function') {
+              const sessionId = window.getClientSessionIdentifier();
+              if (sessionId) formData.append('session_identifier', sessionId);
+            }
+
+            console.log('[Quiz Page] Final form data for /api/quiz-submit:', Object.fromEntries(formData));
+            
+            const response = await fetch('/api/quiz-submit', { method: 'POST', body: formData });
+            const responseData = await response.json();
+
+            if (response.ok && responseData.success) {
+              console.log('[Quiz Page] Server responded success to quiz submission:', responseData);
+              if(emailGateArea) emailGateArea.classList.add('hidden');
+              if(resultsArea) resultsArea.classList.remove('hidden');
+              if(resultTypeHeading) resultTypeHeading.textContent = \`Your Relationship Map Type: \${resultTypeToSubmit}\`;
+              
+              const resultSummaryData = getPageResultSummary(scoreToSubmit);
+              if (resultSummaryText && resultSummaryData) resultSummaryText.textContent = resultSummaryData.summary;
+
+              if(resultsArea) resultsArea.scrollIntoView({ behavior: 'smooth' });
+              localStorage.removeItem('quizAnswers'); 
+            } else {
+              console.error('[Quiz Page] Server responded error to quiz submission:', responseData);
+              if(quizFormMessage) {
+                quizFormMessage.textContent = responseData.message || 'Submission failed. Please try again.';
+                quizFormMessage.className = 'text-sm mt-2 text-red-600 dark:text-red-400';
+              }
+            }
+          } catch (error) {
+            console.error('[Quiz Page] Error during email form submission fetch:', error);
+            if(quizFormMessage) {
+                quizFormMessage.textContent = 'An unexpected error occurred. Please try again.';
+                quizFormMessage.className = 'text-sm mt-2 text-red-600 dark:text-red-400';
+            }
+          } finally {
+            if(submitButton) { submitButton.disabled = false; submitButton.innerHTML = originalButtonText; }
+          }
+        });
+      } else {
+        console.warn('[Quiz Page] Email form (id="quiz-email-form") not found.');
+      }
+      console.log('[Quiz Page] All DOMContentLoaded setup complete.');
+    }); // End DOMContentLoaded
+  <\/script>`], ["  ", '<div id="quiz-questions-json" style="display: none;">', '</div>  <div id="score-ranges-json" style="display: none;">', '</div> <div class="container mx-auto px-4 py-16 md:py-24"> <div id="quiz-container" class="max-w-3xl mx-auto bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 md:p-8 lg:p-10"> <h1 class="text-3xl md:text-4xl font-bold text-center text-brand-green mb-8">Your Relationship Map Quiz</h1> <!-- Progress Bar and Counter --> <div class="mb-8"> <div class="flex justify-between items-center mb-2"> <span id="question-counter" class="text-sm font-medium text-orange-500">Answered 0 of 20 questions</span> <span id="page-indicator" class="text-sm font-medium text-gray-600 dark:text-gray-400">Page 1 of 2</span> </div> <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700"> <div id="progress-bar" class="bg-orange-500 h-2.5 rounded-full transition-all duration-300 ease-in-out" style="width: 5%"></div> </div> </div> <!-- Quiz Form --> <form id="quiz-form" class="space-y-8"> <!-- Page 1 Questions (0-9) --> <div id="page-1" class="space-y-8"> ', ' <div class="flex justify-end mt-8"> <button id="next-page-btn" type="button" class="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap">\nNext Page\n</button> </div> </div> <!-- Page 2 Questions (10-19) --> <div id="page-2" class="space-y-8 hidden"> ', ` <div class="mt-8 p-6 bg-orange-50 dark:bg-slate-800 rounded-lg border-l-4 border-orange-500"> <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-3">Personalize Your Results</h3> <p class="text-gray-700 dark:text-gray-300 mb-4">
+We'd love to personalize your experience! Please share your first name so we can tailor your insights and make them more meaningful for you.
+</p> <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-end"> <div class="flex-grow w-full"> <label for="user-first-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">First Name</label> <div class="w-full"> <input type="text" id="user-first-name" name="firstName" placeholder="Enter your first name" required class="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent"> <p id="first-name-error" class="mt-1 text-sm text-red-600 dark:text-red-400 hidden">Please enter your first name to continue</p> </div> </div> <button id="show-email-form-btn" type="button" class="w-full sm:w-auto px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap">
+Calculate My Results
+</button> </div> </div> <div class="flex justify-between mt-8"> <button id="prev-page-btn" type="button" class="px-8 py-3 bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap">
+Back
+</button> </div> </div> </form> <!-- Email Gate Section (Initially hidden) --> <div id="email-gate-area" class="hidden text-center"> <h2 class="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white mb-4">Unlock Your Results!</h2> <p id="score-preview" class="text-lg text-gray-700 dark:text-gray-300 mb-6"></p> <p class="text-lg text-gray-700 dark:text-gray-300 mb-6">Enter your email below to see your personalized Sex 3.0 Relationship Map result and unlock free chapters of the book.</p> <form id="quiz-email-form" class="flex flex-col sm:flex-row gap-4 justify-center max-w-md mx-auto"> <label for="quiz-email-input" class="sr-only">Email address</label> <input type="email" id="quiz-email-input" name="email" placeholder="your.email@example.com" required class="w-full sm:w-auto flex-grow px-4 py-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white/90 dark:bg-gray-800/90 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:outline-none placeholder-gray-500 dark:placeholder-gray-400"> <button type="submit" class="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap">
+See My Results
+</button> </form> <p id="quiz-form-message" class="text-sm text-gray-600 dark:text-gray-400 mt-4"></p> </div> <!-- Results Section (Initially hidden) --> <div id="results-area" class="hidden"> <h2 id="result-type-heading" class="text-2xl md:text-3xl font-bold text-center text-brand-green mb-4"></h2> <p id="result-summary-text" class="text-lg text-gray-800 dark:text-white text-center mb-6"></p> <p class="text-base text-gray-700 dark:text-gray-300 text-center italic">Check your email! We've sent you a confirmation link. Once confirmed, you'll receive another email to unlock your free chapters of the book, which will help you continue your journey.</p> <div class="mt-8 text-center"> <a href="/" class="inline-flex items-center justify-center gap-2 px-8 py-3 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-800 dark:text-white text-lg font-semibold rounded-full shadow-md transition duration-300 ease-in-out transform hover:scale-105 whitespace-nowrap">
+Back to Homepage
+</a> </div> </div> </div> </div> <script>
+    // --- Global Variables for Quiz State ---
+    let currentVariant = null; // For A/B test info, populated by initializeAbTestTracking
+    let quizAnswers = {};      // To store answers { 'question-0': '1', ... }
+    let currentPage = 1;
+    window.quizTotalScore = 0; // To store calculated score before email gate
+
+    // --- A/B Test Impression Tracking & Variant Initialization ---
+    // This function reads from localStorage and potentially calls window.logClientImpression
+    function initializeAbTestTracking() {
+      try {
+        console.log('[Quiz Page] Initializing A/B test tracking...');
+        
+        const variantInfoString = localStorage.getItem('quizVariant');
+        if (variantInfoString) {
+          try {
+            currentVariant = JSON.parse(variantInfoString); // Assigns to global currentVariant
+            console.log('[Quiz Page] A/B Test - Successfully parsed variant from localStorage:', currentVariant);
+
+            if (!currentVariant.experiment || !currentVariant.variantId) {
+               console.warn('[Quiz Page] A/B Test - Variant from localStorage is missing "experiment" name or "variantId":', currentVariant);
+            }
+            // Ensure experimentId (UUID) is present for impression logging
+            if (!currentVariant.experimentId) {
+                console.warn('[Quiz Page] A/B Test - Variant from localStorage is missing "experimentId" (UUID). Impression logging might be affected if it relies on UUID directly.');
+            }
+
+          } catch (e) {
+            console.error('[Quiz Page] A/B Test - Error parsing "quizVariant" from localStorage:', e, "String was:", variantInfoString);
+            currentVariant = null; 
+          }
+        } else {
+          console.log('[Quiz Page] A/B Test - No "quizVariant" found in localStorage.');
+        }
+        
+        // Attempt to log client impression
+        if (currentVariant && currentVariant.variantId && currentVariant.experimentId && typeof window.logClientImpression === 'function') {
+            const variantForImpressionLogging = {
+                id: currentVariant.variantId,
+                name: currentVariant.variantName || 'Unknown Variant Name',
+                experiment_id: currentVariant.experimentId, // UUID of the experiment
+                headline: '', 
+                subheadline: '', 
+            };
+            // The second argument to logClientImpression is experimentNameFromContext (textual name)
+            console.log('[Quiz Page] Attempting to log impression via window.logClientImpression for variant:', variantForImpressionLogging, 'Experiment Name Context:', currentVariant.experiment);
+            window.logClientImpression(variantForImpressionLogging, currentVariant.experiment)
+              .catch(error => {
+                console.error('[Quiz Page] Error calling window.logClientImpression:', error);
+              });
+        } else if (typeof window.logClientImpression !== 'function') {
+          console.warn('[Quiz Page] window.logClientImpression function not available. Impression not logged.');
+        } else if (currentVariant) {
+          console.log('[Quiz Page] Impression not logged: currentVariant missing variantId or experimentId (UUID). currentVariant:', currentVariant);
+        } else {
+          console.log('[Quiz Page] Impression not logged: No currentVariant data.');
+        }
+      } catch (error) {
+        console.error('[Quiz Page] Error in A/B test tracking initialization:', error);
+      }
+    }
+    
+    // Initialize A/B test tracking (runs once DOM is ready or immediately if already ready)
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeAbTestTracking);
+    } else {
+      initializeAbTestTracking();
+    }
+    
+    // --- Quiz Logic Functions (definitions are fine at top level) ---
+    function updateQuizProgress() {
+      const answeredRadios = Array.from(document.querySelectorAll('input[type="radio"]:checked'));
+      const uniqueAnsweredQuestions = new Set();
+      
+      quizAnswers = {}; 
+      answeredRadios.forEach(radio => {
+        uniqueAnsweredQuestions.add(radio.name);
+        quizAnswers[radio.name] = radio.value;
+      });
+      
+      const answeredCount = uniqueAnsweredQuestions.size;
+      const totalQuestions = 20; 
+      
+      const progress = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0;
+      const progressBar = document.getElementById('progress-bar');
+      const questionCounter = document.getElementById('question-counter');
+      if (progressBar) progressBar.style.width = \\\`\\\${Math.min(progress, 100)}%\\\`;
+      if (questionCounter) questionCounter.textContent = \\\`Answered \\\${answeredCount} of \\\${totalQuestions} questions\\\`;
+
+      localStorage.setItem('quizAnswers', JSON.stringify(quizAnswers));
+      // console.log('[Quiz Page] Progress updated, answers saved:', quizAnswers);
+    }
+
+    function goToPage(pageNumber) {
+      const page1Div = document.getElementById('page-1');
+      const page2Div = document.getElementById('page-2');
+      const pageIndicator = document.getElementById('page-indicator');
+      const quizContainer = document.getElementById('quiz-container');
+
+      console.log(\\\`[Quiz Page] goToPage called for page \\\${pageNumber}. Current page: \\\${currentPage}\\\`);
+
+      if (pageNumber === 2) {
+        let page1AnsweredCount = 0;
+        for (let i = 0; i < 10; i++) {
+          if (quizAnswers[\\\`question-\\\${i}\\\`]) {
+            page1AnsweredCount++;
+          }
+        }
+        if (page1AnsweredCount < 10) {
+          alert(\\\`Please answer all 10 questions on this page. You've answered \\\${page1AnsweredCount}.\\\`);
+          return;
+        }
+        if(page1Div) page1Div.classList.add('hidden');
+        if(page2Div) page2Div.classList.remove('hidden');
+        if(pageIndicator) pageIndicator.textContent = 'Page 2 of 2';
+        currentPage = 2;
+      } else if (pageNumber === 1) {
+        if(page2Div) page2Div.classList.add('hidden');
+        if(page1Div) page1Div.classList.remove('hidden');
+        if(pageIndicator) pageIndicator.textContent = 'Page 1 of 2';
+        currentPage = 1;
+      }
+      if(quizContainer) quizContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      console.log(\\\`[Quiz Page] Navigated to page \\\${currentPage}\\\`);
+    }
+
+    function loadSavedAnswers() {
+      const savedAnswersJSON = localStorage.getItem('quizAnswers');
+      if (savedAnswersJSON) {
+        try {
+          const parsedAnswers = JSON.parse(savedAnswersJSON);
+          quizAnswers = parsedAnswers; 
+          Object.entries(parsedAnswers).forEach(([name, value]) => {
+            const radio = document.querySelector(\\\`input[name="\\\${name}"][value="\\\${value}"]\\\`);
+            if (radio) {
+              radio.checked = true;
+            }
+          });
+          console.log('[Quiz Page] Loaded saved answers from localStorage.');
+        } catch (e) {
+          console.error('[Quiz Page] Error parsing saved answers from localStorage:', e);
+          localStorage.removeItem('quizAnswers'); 
+        }
+      }
+      updateQuizProgress(); 
+    }
+    
+    function initializeQuizState() {
+      const form = document.getElementById('quiz-form');
+      if (form) form.reset(); 
+
+      const isPageRefresh = window.performance && window.performance.navigation && window.performance.navigation.type === 1;
+      if (isPageRefresh) {
+        console.log('[Quiz Page] Page refresh detected. Clearing saved quiz answers.');
+        localStorage.removeItem('quizAnswers');
+        quizAnswers = {}; 
+      } else {
+        loadSavedAnswers();
+      }
+      // Ensure page 1 is shown by default, page 2 hidden, unless logic dictates otherwise
+      const page1Div = document.getElementById('page-1');
+      const page2Div = document.getElementById('page-2');
+      const pageIndicator = document.getElementById('page-indicator');
+      if(page1Div) page1Div.classList.remove('hidden');
+      if(page2Div) page2Div.classList.add('hidden');
+      if(pageIndicator) pageIndicator.textContent = 'Page 1 of 2';
+      currentPage = 1;
+
+      updateQuizProgress();
+      console.log('[Quiz Page] Quiz state initialized.');
+    }
+    
+    function getPageResultSummary(score) {
+        // This should ideally parse from a JSON island populated by Astro frontmatter
+        // For now, using the simplified placeholder logic
+        const scoreRangesData = JSON.parse(document.getElementById('score-ranges-json')?.textContent || '[]');
+        if (scoreRangesData.length > 0) {
+            for (const range of scoreRangesData) {
+                if (score <= range.maxScore) {
+                    return range;
+                }
+            }
+            return scoreRangesData[scoreRangesData.length - 1]; // Fallback
+        }
+        // Fallback if score-ranges-json is not found or empty
+        console.warn("[Quiz Page] score-ranges-json not found or empty. Using hardcoded summary logic.");
+        if (score <= 40) return { type: 'Mostly Sex 2.0', summary: 'Your score indicates you are largely operating within the traditional Sex 2.0 framework. You likely hold many common societal beliefs about love, relationships, and commitment, which can often lead to unnecessary conflict, jealousy, and confusion. But awareness is the first step to change. The good news is that the blueprint for a better way exists.' };
+        if (score <= 60) return { type: 'Sex 2.0 with Growing Awareness', summary: 'Your responses show a mix of traditional Sex 2.0 beliefs and a growing awareness that something isn\\\\'t quite right with the conventional map. You may feel the friction and frustration caused by outdated paradigms. This position is fertile ground for change! You are ready to explore a new framework that aligns more closely with your true nature and leads to less suffering.' };
+        if (score <= 80) return { type: 'Leaning Towards Sex 3.0', summary: 'You are strongly aligned with the core principles of Sex 3.0! You likely value honesty, freedom, and mutual reward over societal expectations and the need for control. You\\\\'ve probably experienced the limitations of the Sex 2.0 map firsthand. You are well on your way to building truly authentic and joyful connections based on a more natural and empowering understanding of human relationships.' };
+        return { type: 'Mostly Sex 3.0', summary: 'Wow! Your score indicates you already resonate strongly with the Sex 3.0 paradigm. You fundamentally understand that relationships thrive on mutual reward, honesty, trust, and respect, not on outdated notions of ownership or societal pressure. You are likely already navigating relationships with greater clarity and less suffering. You are a pioneer in building connections that are natural, free, and deeply fulfilling.' };
+    }
+
+    // --- DOMContentLoaded Event Listener ---
+   // document.addEventListener('DOMContentLoaded', () => { 
+   //   console.log('[Quiz Page] DOMContentLoaded - Initializing main quiz logic and event listeners.'); 
+   document.addEventListener('astro:page-load', () => {
+      console.log('[Quiz Page] astro:page-load event fired. Initializing main quiz logic and event listeners.');   
+  
+      // *** MOVED REFERRAL TRACKING HERE ***
+      const queryParamsForReferral = new URLSearchParams(window.location.search);
+      const referrerId = queryParamsForReferral.get("ref"); // Declared inside this scope
+      if (referrerId) {
+        localStorage.setItem("referrer_id", referrerId);
+        console.log('[Quiz Page] Stored referral ID in localStorage from URL param:', referrerId);
+      } else {
+        console.log('[Quiz Page] No "ref" URL parameter found for referral ID.');
+      }
+      // *** END OF MOVED REFERRAL TRACKING ***
+
+      initializeQuizState(); 
+
+      // DOM Element Getters (ensure these IDs exist in your quiz-lovelab.astro HTML)
+      const quizForm = document.getElementById('quiz-form');
+      const emailGateArea = document.getElementById('email-gate-area');
+      const resultsArea = document.getElementById('results-area');
+      const scorePreview = document.getElementById('score-preview');
+      const quizEmailForm = document.getElementById('quiz-email-form');
+      const quizEmailInput = document.getElementById('quiz-email-input');
+      const quizFormMessage = document.getElementById('quiz-form-message');
+      const userFirstNameInput = document.getElementById('user-first-name');
+      const firstNameError = document.getElementById('first-name-error');
+      const resultTypeHeading = document.getElementById('result-type-heading');
+      const resultSummaryText = document.getElementById('result-summary-text');
+      
+      // Event listeners for radio buttons
+      document.querySelectorAll('input[type="radio"]').forEach(radio => {
+        radio.addEventListener('click', updateQuizProgress);
+      });
+
+      // Page navigation buttons
+      const prevButton = document.getElementById('prev-page-btn');
+      const nextButton = document.getElementById('next-page-btn');
+      if (nextButton) {
+        console.log('[Quiz Page] Attaching click listener to Next button (next-page-btn).');
+        nextButton.addEventListener('click', () => goToPage(2));
+      } else {
+        console.warn('[Quiz Page] Next button (id="next-page-btn") not found.');
+      }
+      if (prevButton) {
+        console.log('[Quiz Page] Attaching click listener to Prev button (prev-page-btn).');
+        prevButton.addEventListener('click', () => goToPage(1));
+      } else {
+        console.warn('[Quiz Page] Prev button (id="prev-page-btn") not found.');
+      }
+
+      // "Calculate My Results" / Show Email Gate Button
+      const showEmailFormBtn = document.getElementById('show-email-form-btn');
+      if (showEmailFormBtn) {
+        console.log('[Quiz Page] Attaching click listener to Calculate Results button (show-email-form-btn).');
+        showEmailFormBtn.addEventListener('click', () => {
+          console.log('[Quiz Page] "Calculate My Results" button clicked.');
+          const firstName = userFirstNameInput ? userFirstNameInput.value.trim() : '';
+          if (userFirstNameInput && !firstName) {
+            if(firstNameError) firstNameError.classList.remove('hidden');
+            userFirstNameInput.classList.add('border-red-500');
+            userFirstNameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            userFirstNameInput.focus();
+            return;
+          }
+          if(userFirstNameInput) userFirstNameInput.classList.remove('border-red-500');
+          if(firstNameError) firstNameError.classList.add('hidden');
+          
+          if(firstName) localStorage.setItem('userFirstName', firstName);
+
+          const totalAnswered = Object.keys(quizAnswers).length;
+          if (totalAnswered < 20) {
+            alert(\\\`Please answer all 20 questions. You've answered \\\${totalAnswered}.\\\`);
+            return;
+          }
+
+          const quizQuestionsData = JSON.parse(document.getElementById('quiz-questions-json')?.textContent || '[]');
+          if (quizQuestionsData.length === 0) {
+            console.error("[Quiz Page] quiz-questions-json data not found or empty. Cannot calculate score.");
+            alert("Error: Quiz data is missing. Cannot calculate score.");
+            return;
+          }
+          
+          let calculatedScore = 0;
+          for (let i = 0; i < 20; i++) {
+            const answerValue = parseInt(quizAnswers[\\\`question-\\\${i}\\\`]);
+            if (!isNaN(answerValue) && answerValue > 0 && quizQuestionsData[i] && quizQuestionsData[i].scoring && quizQuestionsData[i].scoring[answerValue - 1] !== undefined) {
+              calculatedScore += quizQuestionsData[i].scoring[answerValue - 1];
+            }
+          }
+          window.quizTotalScore = calculatedScore;
+          console.log('[Quiz Page] Calculated Score for email gate:', window.quizTotalScore);
+
+          let resultType = 'Unknown';
+          const summaryData = getPageResultSummary(calculatedScore); // Use helper
+          resultType = summaryData.type;
+          
+          if(quizForm) quizForm.classList.add('hidden');
+          if(emailGateArea) emailGateArea.classList.remove('hidden');
+          if(scorePreview) scorePreview.textContent = \\\`Your score (\\\${calculatedScore}/100) indicates you are \\\${resultType}.\\\`;
+          if(emailGateArea) emailGateArea.scrollIntoView({ behavior: 'smooth' });
+        });
+      } else {
+         console.warn('[Quiz Page] Calculate Results button (id="show-email-form-btn") not found.');
+      }
+
+      if (userFirstNameInput) {
+        userFirstNameInput.addEventListener('input', () => {
+          userFirstNameInput.classList.remove('border-red-500');
+          if(firstNameError) firstNameError.classList.add('hidden');
+        });
+        const savedName = localStorage.getItem('userFirstName');
+        if (savedName) userFirstNameInput.value = savedName;
+      }
+
+      if (quizEmailForm) {
+        console.log('[Quiz Page] Attaching submit listener to Email Form (quiz-email-form).');
+        quizEmailForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          console.log('[Quiz Page] Email form submission initiated.');
+          const email = quizEmailInput ? quizEmailInput.value.trim() : '';
+          if (!email || !email.includes('@')) {
+            if(quizFormMessage) {
+                quizFormMessage.textContent = 'Please enter a valid email address.';
+                quizFormMessage.className = 'text-sm mt-2 text-red-600 dark:text-red-400';
+            }
+            return;
+          }
+        
+          const submitButton = quizEmailForm.querySelector('button[type="submit"]');
+          const originalButtonText = submitButton ? submitButton.innerHTML : 'See My Results';
+          if(submitButton) { submitButton.disabled = true; submitButton.innerHTML = 'Processing...'; }
+          if(quizFormMessage) quizFormMessage.textContent = '';
+
+          try {
+            const scoreToSubmit = window.quizTotalScore;
+            const scorePreviewText = scorePreview ? scorePreview.textContent || '' : '';
+            const resultTypeMatch = scorePreviewText.match(/you are (.+)\\\\./);
+            const resultTypeToSubmit = resultTypeMatch ? resultTypeMatch[1] : getPageResultSummary(scoreToSubmit).type;
+            const firstNameToSubmit = userFirstNameInput ? userFirstNameInput.value.trim() : '';
+
+            const formData = new FormData();
+            formData.append('email', email);
+            formData.append('firstName', firstNameToSubmit);
+            formData.append('score', scoreToSubmit.toString());
+            formData.append('resultType', resultTypeToSubmit);
+
+            if (currentVariant && currentVariant.experiment && currentVariant.variantId) {
+              formData.append('variantInfo', JSON.stringify({
+                experiment: currentVariant.experiment, 
+                experimentId: currentVariant.experimentId, // Send UUID if available
+                variantId: currentVariant.variantId,
+                variantName: currentVariant.variantName || '',
+                quizPath: currentVariant.quizPath || '',
+                quizName: currentVariant.quizName || ''
+              }));
+            }
+            
+            const storedReferrerId = localStorage.getItem('referrer_id');
+            if (storedReferrerId) formData.append('referrer_id', storedReferrerId);
+
+            if (typeof window.getClientSessionIdentifier === 'function') {
+              const sessionId = window.getClientSessionIdentifier();
+              if (sessionId) formData.append('session_identifier', sessionId);
+            }
+
+            console.log('[Quiz Page] Final form data for /api/quiz-submit:', Object.fromEntries(formData));
+            
+            const response = await fetch('/api/quiz-submit', { method: 'POST', body: formData });
+            const responseData = await response.json();
+
+            if (response.ok && responseData.success) {
+              console.log('[Quiz Page] Server responded success to quiz submission:', responseData);
+              if(emailGateArea) emailGateArea.classList.add('hidden');
+              if(resultsArea) resultsArea.classList.remove('hidden');
+              if(resultTypeHeading) resultTypeHeading.textContent = \\\`Your Relationship Map Type: \\\${resultTypeToSubmit}\\\`;
+              
+              const resultSummaryData = getPageResultSummary(scoreToSubmit);
+              if (resultSummaryText && resultSummaryData) resultSummaryText.textContent = resultSummaryData.summary;
+
+              if(resultsArea) resultsArea.scrollIntoView({ behavior: 'smooth' });
+              localStorage.removeItem('quizAnswers'); 
+            } else {
+              console.error('[Quiz Page] Server responded error to quiz submission:', responseData);
+              if(quizFormMessage) {
+                quizFormMessage.textContent = responseData.message || 'Submission failed. Please try again.';
+                quizFormMessage.className = 'text-sm mt-2 text-red-600 dark:text-red-400';
+              }
+            }
+          } catch (error) {
+            console.error('[Quiz Page] Error during email form submission fetch:', error);
+            if(quizFormMessage) {
+                quizFormMessage.textContent = 'An unexpected error occurred. Please try again.';
+                quizFormMessage.className = 'text-sm mt-2 text-red-600 dark:text-red-400';
+            }
+          } finally {
+            if(submitButton) { submitButton.disabled = false; submitButton.innerHTML = originalButtonText; }
+          }
+        });
+      } else {
+        console.warn('[Quiz Page] Email form (id="quiz-email-form") not found.');
+      }
+      console.log('[Quiz Page] All DOMContentLoaded setup complete.');
+    }); // End DOMContentLoaded
+  <\/script>`])), maybeRenderHead(), JSON.stringify(quizQuestions), JSON.stringify(scoreRanges), quizQuestions.slice(0, 10).map((question, index) => renderTemplate`<div class="mb-6 bg-white dark:bg-slate-700 rounded-lg"> <div class="p-6"> <p class="text-lg font-medium text-gray-800 dark:text-white mb-4">${index + 1}. ${question.text}</p> </div> <div class="flex justify-between items-center w-full flex-nowrap gap-6"> ${["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"].map((option, optionIndex) => renderTemplate`<div class="flex flex-col items-center"> <div class="flex items-center"> <input type="radio"${addAttribute(`q${index}-opt${optionIndex + 1}`, "id")}${addAttribute(`question-${index}`, "name")}${addAttribute(optionIndex + 1, "value")} class="h-4 w-4 text-orange-500 border-gray-300 focus:ring-orange-500 dark:bg-slate-700 dark:border-slate-600" required onclick="updateQuizProgress()"${addAttribute(optionIndex + 1 === 5, "checked")}> </div> <label${addAttribute(`q${index}-opt${optionIndex + 1}`, "for")} class="mt-1 text-sm text-center text-gray-700 dark:text-gray-300"> ${option} </label> </div>`)} </div> </div>`), quizQuestions.slice(10, 20).map((question, index) => renderTemplate`<div class="mb-6 bg-white dark:bg-slate-700 rounded-lg"> <div class="p-6"> <p class="text-lg font-medium text-gray-800 dark:text-white mb-4">${index + 11}. ${question.text}</p> </div> <div class="flex justify-between items-center w-full flex-nowrap gap-6"> ${["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"].map((option, optionIndex) => renderTemplate`<div class="flex flex-col items-center"> <div class="flex items-center"> <input type="radio"${addAttribute(`q${index + 10}-opt${optionIndex + 1}`, "id")}${addAttribute(`question-${index + 10}`, "name")}${addAttribute(optionIndex + 1, "value")} class="h-4 w-4 text-orange-500 border-gray-300 focus:ring-orange-500 dark:bg-slate-700 dark:border-slate-600" required onclick="updateQuizProgress()"${addAttribute(optionIndex + 1 === 5, "checked")}> </div> <label${addAttribute(`q${index + 10}-opt${optionIndex + 1}`, "for")} class="mt-1 text-sm text-center text-gray-700 dark:text-gray-300"> ${option} </label> </div>`)} </div> </div>`)) })}`;
+}, "C:/Dev/jason_personal_website/src/pages/quiz-lovelab.astro", void 0);
+
+const $$file = "C:/Dev/jason_personal_website/src/pages/quiz-lovelab.astro";
+const $$url = "/quiz-lovelab";
+
+const _page = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+  __proto__: null,
+  default: $$QuizLovelab,
+  file: $$file,
+  url: $$url
+}, Symbol.toStringTag, { value: 'Module' }));
+
+const page = () => _page;
+
+export { page };
