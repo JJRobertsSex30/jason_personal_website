@@ -742,30 +742,35 @@ export async function trackConversion(
     conversion_type: conversionType,
     details: details,
     session_identifier: sessionIdentifier,
+    
+    // Only fields that exist in conversions table schema
     country_code: geoData.country_code,
     device_type: getDeviceType(),
     referrer_source: getReferrerSource(),
     time_to_convert: calculateTimeToConvert(userIdentifierString, associatedExperimentId),
     conversion_value: details?.conversion_value as number || 1, // Default to 1 if not specified
     conversion_eligibility_verified: returnUserCheck.tracked,
+    utm_source: utmParams.utm_source || null,
+    utm_medium: utmParams.utm_medium || null,
+    utm_campaign: utmParams.utm_campaign || null,
+    original_exposure_date: new Date().toISOString(),
+    
+    // Store additional data in metadata instead of non-existent columns
     metadata: {
       ...getBrowserMetadata(),
       geolocation_source: geoData.country_code ? 'ipgeolocation.io' : 'unavailable',
       collection_timestamp: new Date().toISOString(),
+      // Store data that doesn't have dedicated columns in metadata
+      region: geoData.region,
+      city: geoData.city,
+      page_url: window.location.href,
+      user_agent: navigator.userAgent,
+      language_code: getLanguageCode(),
+      time_zone: getTimeZone(),
+      screen_resolution: getScreenResolution(),
+      viewport_size: getViewportSize(),
+      connection_type: getConnectionType(),
     },
-    original_exposure_date: new Date().toISOString(),
-    page_url: window.location.href,
-    user_agent: navigator.userAgent,
-    region: geoData.region,
-    city: geoData.city,
-    language_code: getLanguageCode(),
-    time_zone: getTimeZone(),
-    screen_resolution: getScreenResolution(),
-    viewport_size: getViewportSize(),
-    connection_type: getConnectionType(),
-    utm_source: utmParams.utm_source || null,
-    utm_medium: utmParams.utm_medium || null,
-    utm_campaign: utmParams.utm_campaign || null,
   };
 
   const { error: conversionError } = await supabase

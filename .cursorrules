@@ -81,6 +81,7 @@ When user requests "plan sprint" or "organize tasks":
 - Use `recordExists()` and `countRecords()` for data validation
 - Include proper error handling for all database operations
 - Document all custom SQL in database-operations.ts functions
+- **CRITICAL: Before any database insertion, ALWAYS verify column existence in database-schema.md** - Check that all fields in your insert object exist as actual columns in the target table schema. Never attempt to insert into non-existent columns.
 
 ### Environment Variables
 - **Environment variables are located in `.env.local` file** (NOT .env)
