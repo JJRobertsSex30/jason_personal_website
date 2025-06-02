@@ -706,7 +706,7 @@ const { experiments, abTestError } = Astro.props;
   }
 
   // Function to update the analytics display with fetched data
-  function updateAnalyticsDisplay(experimentId: string, analytics: Record<string, unknown>) {
+  function updateAnalyticsDisplay(experimentId: string, analytics: any) {
     const elements = document.querySelectorAll(`[data-experiment-id="${experimentId}"]`);
     
     elements.forEach(el => {
@@ -1084,8 +1084,9 @@ const { experiments, abTestError } = Astro.props;
               if (result.success) {
                 statusText.textContent = `✅ Success! Cleared ${result.deletedImpressions} impressions and ${result.deletedConversions} conversions.`;
                 
-                // Refresh the page after a short delay to show updated stats
+                // Refresh to the A/B testing tab after a short delay to show updated stats
                 setTimeout(() => {
+                  window.location.href = window.location.pathname + '#ab-testing-panel';
                   window.location.reload();
                 }, 2000);
               } else {

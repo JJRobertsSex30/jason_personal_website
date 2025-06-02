@@ -96,21 +96,21 @@ export const GET: APIRoute = async ({ request: _request }) => {
     // Average time on page from impressions metadata
     const { data: impressionsWithTime } = await supabase
       .from('impressions')
-      .select('metadata')
-      .not('metadata->time_on_page_seconds', 'is', null);
+      .select('time_on_page')
+      .not('time_on_page', 'is', null);
 
     const avgTimeOnPage = impressionsWithTime && impressionsWithTime.length > 0 
-      ? impressionsWithTime.reduce((sum, imp) => sum + (imp.metadata?.time_on_page_seconds || 0), 0) / impressionsWithTime.length
+      ? impressionsWithTime.reduce((sum, imp) => sum + (imp.time_on_page || 0), 0) / impressionsWithTime.length
       : 0;
 
     // 2. Geographic Insights
     const { data: geoData } = await supabase
       .from('impressions')
-      .select('country')
-      .not('country', 'is', null);
+      .select('country_code')
+      .not('country_code', 'is', null);
 
     const countryStats = geoData?.reduce((acc, item) => {
-      const country = item.country;
+      const country = item.country_code;
       acc[country] = (acc[country] || 0) + 1;
       return acc;
     }, {} as Record<string, number>) || {};
@@ -123,11 +123,11 @@ export const GET: APIRoute = async ({ request: _request }) => {
     // Best converting country
     const { data: conversionGeoData } = await supabase
       .from('conversions')
-      .select('metadata')
-      .not('metadata->country', 'is', null);
+      .select('country_code')
+      .not('country_code', 'is', null);
 
     const conversionCountryStats = conversionGeoData?.reduce((acc, item) => {
-      const country = item.metadata?.country;
+      const country = item.country_code;
       if (country) acc[country] = (acc[country] || 0) + 1;
       return acc;
     }, {} as Record<string, number>) || {};
@@ -183,18 +183,18 @@ export const GET: APIRoute = async ({ request: _request }) => {
     // 4. Engagement Metrics
     const { data: scrollData } = await supabase
       .from('impressions')
-      .select('metadata')
-      .not('metadata->scroll_depth_percent', 'is', null);
+      .select('scroll_depth_percent, time_on_page')
+      .not('scroll_depth_percent', 'is', null);
 
     const avgScrollDepth = scrollData && scrollData.length > 0
-      ? scrollData.reduce((sum, imp) => sum + (imp.metadata?.scroll_depth_percent || 0), 0) / scrollData.length
+      ? scrollData.reduce((sum, imp) => sum + (imp.scroll_depth_percent || 0), 0) / scrollData.length
       : 0;
 
     // Bounce rate (assume <30% scroll or <10 seconds as bounce)
     const bounceCount = scrollData && scrollData.length > 0 
       ? scrollData.filter(imp => 
-        (imp.metadata?.scroll_depth_percent || 0) < 30 && 
-        (imp.metadata?.time_on_page_seconds || 0) < 10
+        (imp.scroll_depth_percent || 0) < 30 && 
+        (imp.time_on_page || 0) < 10
       ).length
       : 0;
     const bounceRate = scrollData && scrollData.length > 0 ? (bounceCount / scrollData.length) * 100 : 0;
@@ -216,11 +216,11 @@ export const GET: APIRoute = async ({ request: _request }) => {
     // 5. Campaign Tracking
     const { data: utmData } = await supabase
       .from('impressions')
-      .select('metadata')
-      .not('metadata->utm_source', 'is', null);
+      .select('utm_source, utm_medium, utm_campaign')
+      .not('utm_source', 'is', null);
 
     const utmSourceStats = utmData?.reduce((acc, item) => {
-      const source = item.metadata?.utm_source || 'Unknown';
+      const source = item.utm_source || 'Unknown';
       acc[source] = (acc[source] || 0) + 1;
       return acc;
     }, {} as Record<string, number>) || {};
@@ -229,7 +229,7 @@ export const GET: APIRoute = async ({ request: _request }) => {
       .sort(([,a], [,b]) => b - a)[0]?.[0] || 'N/A';
 
     const utmCampaignStats = utmData?.reduce((acc, item) => {
-      const campaign = item.metadata?.utm_campaign || 'Unknown';
+      const campaign = item.utm_campaign || 'Unknown';
       acc[campaign] = (acc[campaign] || 0) + 1;
       return acc;
     }, {} as Record<string, number>) || {};
@@ -253,37 +253,37 @@ export const GET: APIRoute = async ({ request: _request }) => {
     // Get all impressions with UTM data
     const { data: allUTMImpressions } = await supabase
       .from('impressions')
-      .select('metadata, user_identifier, created_at');
+      .select('utm_source, utm_medium, utm_campaign, time_on_page, scroll_depth_percent, user_identifier, impression_at');
 
     // Get all conversions with UTM data
     const { data: allUTMConversions } = await supabase
       .from('conversions')
-      .select('metadata, user_identifier, created_at');
+      .select('utm_source, utm_medium, utm_campaign, user_identifier, created_at');
 
     // UTM Source Analysis
     const sourceStats = new Map<string, { impressions: number; conversions: number; timeOnPage: number[]; bounces: number }>();
     
     allUTMImpressions?.forEach(imp => {
-      const source = imp.metadata?.utm_source || 'direct';
+      const source = imp.utm_source || 'direct';
       if (!sourceStats.has(source)) {
         sourceStats.set(source, { impressions: 0, conversions: 0, timeOnPage: [], bounces: 0 });
       }
       const stats = sourceStats.get(source)!;
       stats.impressions++;
       
-      if (imp.metadata?.time_on_page_seconds) {
-        stats.timeOnPage.push(imp.metadata.time_on_page_seconds);
+      if (imp.time_on_page) {
+        stats.timeOnPage.push(imp.time_on_page);
       }
       
       // Count as bounce if low engagement
-      if ((imp.metadata?.scroll_depth_percent || 0) < 30 && (imp.metadata?.time_on_page_seconds || 0) < 30) {
+      if ((imp.scroll_depth_percent || 0) < 30 && (imp.time_on_page || 0) < 30) {
         stats.bounces++;
       }
     });
 
     // Match conversions to sources
     allUTMConversions?.forEach(conv => {
-      const source = conv.metadata?.utm_source || 'direct';
+      const source = conv.utm_source || 'direct';
       if (sourceStats.has(source)) {
         sourceStats.get(source)!.conversions++;
       }
@@ -301,7 +301,7 @@ export const GET: APIRoute = async ({ request: _request }) => {
     const mediumStats = new Map<string, { impressions: number; conversions: number }>();
     
     allUTMImpressions?.forEach(imp => {
-      const medium = imp.metadata?.utm_medium || 'none';
+      const medium = imp.utm_medium || 'none';
       if (!mediumStats.has(medium)) {
         mediumStats.set(medium, { impressions: 0, conversions: 0 });
       }
@@ -309,7 +309,7 @@ export const GET: APIRoute = async ({ request: _request }) => {
     });
 
     allUTMConversions?.forEach(conv => {
-      const medium = conv.metadata?.utm_medium || 'none';
+      const medium = conv.utm_medium || 'none';
       if (mediumStats.has(medium)) {
         mediumStats.get(medium)!.conversions++;
       }
@@ -333,9 +333,9 @@ export const GET: APIRoute = async ({ request: _request }) => {
     }>();
     
     allUTMImpressions?.forEach(imp => {
-      const campaign = imp.metadata?.utm_campaign || 'no-campaign';
-      const source = imp.metadata?.utm_source || 'direct';
-      const medium = imp.metadata?.utm_medium || 'none';
+      const campaign = imp.utm_campaign || 'no-campaign';
+      const source = imp.utm_source || 'direct';
+      const medium = imp.utm_medium || 'none';
       const key = `${campaign}|${source}|${medium}`;
       
       if (!campaignStats.has(key)) {
@@ -352,19 +352,19 @@ export const GET: APIRoute = async ({ request: _request }) => {
       const stats = campaignStats.get(key)!;
       stats.impressions++;
       
-      if (imp.metadata?.time_on_page_seconds) {
-        stats.timeOnPage.push(imp.metadata.time_on_page_seconds);
+      if (imp.time_on_page) {
+        stats.timeOnPage.push(imp.time_on_page);
       }
       
-      if ((imp.metadata?.scroll_depth_percent || 0) < 30 && (imp.metadata?.time_on_page_seconds || 0) < 30) {
+      if ((imp.scroll_depth_percent || 0) < 30 && (imp.time_on_page || 0) < 30) {
         stats.bounces++;
       }
     });
 
     allUTMConversions?.forEach(conv => {
-      const campaign = conv.metadata?.utm_campaign || 'no-campaign';
-      const source = conv.metadata?.utm_source || 'direct';
-      const medium = conv.metadata?.utm_medium || 'none';
+      const campaign = conv.utm_campaign || 'no-campaign';
+      const source = conv.utm_source || 'direct';
+      const medium = conv.utm_medium || 'none';
       const key = `${campaign}|${source}|${medium}`;
       
       if (campaignStats.has(key)) {
@@ -392,29 +392,29 @@ export const GET: APIRoute = async ({ request: _request }) => {
     }).sort((a, b) => b.conversions - a.conversions);
 
     // Attribution Summary
-    const totalAttributedConversions = allUTMConversions?.filter(conv => conv.metadata?.utm_source).length || 0;
-    const directConversions = allUTMConversions?.filter(conv => !conv.metadata?.utm_source || conv.metadata.utm_source === 'direct').length || 0;
+    const totalAttributedConversions = allUTMConversions?.filter(conv => conv.utm_source).length || 0;
+    const directConversions = allUTMConversions?.filter(conv => !conv.utm_source || conv.utm_source === 'direct').length || 0;
     
     const organicConversions = allUTMConversions?.filter(conv => 
-      conv.metadata?.utm_source === 'google' && conv.metadata?.utm_medium === 'organic'
+      conv.utm_source === 'google' && conv.utm_medium === 'organic'
     ).length || 0;
     
     const paidConversions = allUTMConversions?.filter(conv => 
-      conv.metadata?.utm_medium === 'cpc' || conv.metadata?.utm_medium === 'paid'
+      conv.utm_medium === 'cpc' || conv.utm_medium === 'paid'
     ).length || 0;
     
     const socialConversions = allUTMConversions?.filter(conv => 
-      ['facebook', 'twitter', 'linkedin', 'instagram', 'tiktok'].includes(conv.metadata?.utm_source)
+      ['facebook', 'twitter', 'linkedin', 'instagram', 'tiktok'].includes(conv.utm_source)
     ).length || 0;
     
     const emailConversions = allUTMConversions?.filter(conv => 
-      conv.metadata?.utm_medium === 'email' || conv.metadata?.utm_source === 'newsletter'
+      conv.utm_medium === 'email' || conv.utm_source === 'newsletter'
     ).length || 0;
 
     // Funnel Analysis
     const topOfFunnel = impressionsCount; // Total impressions
     const middleOfFunnel = allUTMImpressions?.filter(imp => 
-      (imp.metadata?.scroll_depth_percent || 0) > 30 || (imp.metadata?.time_on_page_seconds || 0) > 30
+      (imp.scroll_depth_percent || 0) > 30 || (imp.time_on_page || 0) > 30
     ).length || 0;
     const bottomOfFunnel = conversionsCount; // Total conversions
     

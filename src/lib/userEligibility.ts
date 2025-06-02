@@ -26,6 +26,7 @@ export interface UserEligibilityResult {
 /**
  * Check if a user is eligible for A/B testing
  * Returns false if user has converted anywhere on the site before
+ * Fails gracefully on network errors to ensure A/B testing continues working
  */
 export async function checkUserEligibilityForABTesting(
   userIdentifier: string,
@@ -41,7 +42,22 @@ export async function checkUserEligibilityForABTesting(
 
     if (conversionError) {
       console.error('[UserEligibility] Error checking site-wide conversions:', conversionError);
-      // On error, default to eligible to avoid blocking legitimate users
+      
+      // Check if this is a network connectivity issue
+      if (conversionError.message?.includes('NetworkError') || 
+          conversionError.message?.includes('fetch') ||
+          conversionError.message?.includes('network') ||
+          conversionError.code === '' || conversionError.code === 'NETWORK_ERROR') {
+        console.warn('[UserEligibility] Network connectivity issue detected. Allowing A/B testing to continue to prevent service disruption.');
+        // On network error, default to eligible to avoid blocking legitimate users
+        return {
+          isEligible: true,
+          reason: 'eligible'
+        };
+      }
+      
+      // For other types of errors, also default to eligible
+      console.warn('[UserEligibility] Database error occurred, defaulting to eligible to maintain service availability.');
       return {
         isEligible: true,
         reason: 'eligible'
@@ -62,24 +78,30 @@ export async function checkUserEligibilityForABTesting(
 
     // 2. If checking for specific experiment, also check recent impressions to prevent spam
     if (experimentId) {
-      const { data: recentImpressions, error: impressionError } = await supabase
-        .from('impressions')
-        .select('impression_at')
-        .eq('user_identifier', userIdentifier)
-        .eq('experiment_id', experimentId)
-        .gte('impression_at', new Date(Date.now() - 2 * 60 * 1000).toISOString()) // Last 2 minutes
-        .limit(1);
+      try {
+        const { data: recentImpressions, error: impressionError } = await supabase
+          .from('impressions')
+          .select('impression_at')  // Fix: Use impression_at instead of created_at
+          .eq('user_identifier', userIdentifier)
+          .eq('experiment_id', experimentId)
+          .gte('impression_at', new Date(Date.now() - 2 * 60 * 1000).toISOString()) // Last 2 minutes
+          .limit(1);
 
-      if (impressionError) {
-        console.error('[UserEligibility] Error checking recent impressions:', impressionError);
-      } else if (recentImpressions && recentImpressions.length > 0) {
-        return {
-          isEligible: false,
-          reason: 'duplicate_impression',
-          details: {
-            lastImpressionAt: recentImpressions[0].impression_at
-          }
-        };
+        if (impressionError) {
+          console.error('[UserEligibility] Error checking recent impressions:', impressionError);
+          // Don't fail the entire eligibility check for impression errors
+        } else if (recentImpressions && recentImpressions.length > 0) {
+          return {
+            isEligible: false,
+            reason: 'duplicate_impression',
+            details: {
+              lastImpressionAt: recentImpressions[0].impression_at
+            }
+          };
+        }
+      } catch (impressionCheckError) {
+        console.warn('[UserEligibility] Failed to check recent impressions, continuing with eligibility check:', impressionCheckError);
+        // Don't fail entire eligibility check for this
       }
     }
 
@@ -91,7 +113,10 @@ export async function checkUserEligibilityForABTesting(
 
   } catch (error) {
     console.error('[UserEligibility] Unexpected error in eligibility check:', error);
-    // On unexpected error, default to eligible to avoid blocking legitimate users
+    console.warn('[UserEligibility] Defaulting to eligible to maintain A/B testing service availability.');
+    
+    // On any unexpected error, default to eligible to avoid blocking legitimate users
+    // It's better to have slightly less precise A/B testing than broken A/B testing
     return {
       isEligible: true,
       reason: 'eligible'
@@ -102,13 +127,14 @@ export async function checkUserEligibilityForABTesting(
 /**
  * Track engagement for ineligible users separately from A/B testing
  * This maintains UX insights without contaminating experiment data
+ * Fails gracefully on network errors to prevent disruption
  */
 export async function trackIneligibleUserEngagement(
   userIdentifier: string,
   experimentName: string,
   variantName: string,
   pageUrl: string,
-  engagementType: 'page_view' | 'quiz_start' | 'quiz_complete' = 'page_view'
+  engagementType: 'page_view' | 'quiz_start' | 'quiz_complete' | 'conversion_attempt' = 'page_view'
 ): Promise<void> {
   try {
     // Insert into a separate engagement tracking table (or metadata field)
@@ -128,12 +154,23 @@ export async function trackIneligibleUserEngagement(
       });
 
     if (error) {
-      console.error('[UserEligibility] Error tracking ineligible user engagement:', error);
+      // Check if this is a network connectivity issue
+      if (error.message?.includes('NetworkError') || 
+          error.message?.includes('fetch') ||
+          error.message?.includes('network') ||
+          error.code === '' || error.code === 'NETWORK_ERROR') {
+        console.warn('[UserEligibility] Network issue while tracking ineligible user engagement. Service continues normally.');
+        return;
+      }
+      
+      // For other errors (like table doesn't exist), log but don't break
+      console.warn('[UserEligibility] Error tracking ineligible user engagement (non-critical):', error);
     } else {
       console.log(`[UserEligibility] Tracked engagement for ineligible user: ${engagementType}`);
     }
   } catch (error) {
-    console.error('[UserEligibility] Unexpected error tracking engagement:', error);
+    // Network or other errors should not break A/B testing functionality
+    console.warn('[UserEligibility] Non-critical error tracking engagement for ineligible user:', error);
   }
 }
 

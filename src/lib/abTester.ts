@@ -1,7 +1,7 @@
 console.log('[abTester.ts] Module loading/starting...');
 
 import { supabase } from './supabaseClient'; // Ensure this path is correct
-import { checkUserEligibilityForABTesting, trackIneligibleUserEngagement, handleReturnUserConversion } from './userEligibility';
+import { checkUserEligibilityForABTesting, trackIneligibleUserEngagement } from './userEligibility';
 
 export interface ABVariant {
   id: string; 
@@ -514,8 +514,10 @@ export async function logClientImpression(variant: ABVariant | null, experimentN
   // Check user eligibility for A/B testing
   const eligibility = await checkUserEligibilityForABTesting(userIdentifier, variant.experiment_id);
   
+  console.log(`[abTester] IMPRESSION ELIGIBILITY CHECK: User: ${userIdentifier}, Experiment: ${variant.experiment_id}, Eligible: ${eligibility.isEligible}, Reason: ${eligibility.reason}`);
+  
   if (!eligibility.isEligible) {
-    console.log(`[abTester] User ${userIdentifier} not eligible for A/B testing: ${eligibility.reason}`);
+    console.log(`[abTester] 🚫 IMPRESSION BLOCKED - User ${userIdentifier} not eligible for A/B testing: ${eligibility.reason}`);
     
     // Track engagement separately for analytics purposes
     await trackIneligibleUserEngagement(
@@ -528,6 +530,8 @@ export async function logClientImpression(variant: ABVariant | null, experimentN
     
     return; // Don't log impression or assign to experiment
   }
+  
+  console.log(`[abTester] ✅ IMPRESSION ELIGIBLE - proceeding with impression logging for user ${userIdentifier}`);
   
   // Short-term deduplication (2 minutes) to prevent rapid refresh spam only
   const shortTermKey = `impression_recent_${variant.experiment_id}_${variant.id}_${Math.floor(Date.now() / 120000)}`; // 2-minute windows
@@ -665,20 +669,6 @@ export async function trackConversion(
     return { status: 'INVALID_INPUT', message: msg };
   }
 
-  // Check if user is eligible for A/B testing (NEW)
-  const returnUserCheck = await handleReturnUserConversion(
-    userIdentifierString,
-    variantId,
-    conversionType,
-    details?.conversion_value as number | undefined,
-    details
-  );
-  
-  if (!returnUserCheck.tracked) {
-    console.log(`[abTester] Conversion not tracked as A/B test data: ${returnUserCheck.reason}`);
-    return { status: 'SUCCESS', message: returnUserCheck.reason };
-  }
-
   // Fetch experiment_id associated with the variantId
   const { data: variantRecord, error: variantError } = await supabase
     .from('variants')
@@ -693,6 +683,28 @@ export async function trackConversion(
   }
   const associatedExperimentId: string = variantRecord.experiment_id;
 
+  // Check if user is eligible for A/B testing (FIXED: Use same logic as impressions)
+  const eligibility = await checkUserEligibilityForABTesting(userIdentifierString, associatedExperimentId);
+  
+  console.log(`[abTester] CONVERSION ELIGIBILITY CHECK: User: ${userIdentifierString}, Experiment: ${associatedExperimentId}, Eligible: ${eligibility.isEligible}, Reason: ${eligibility.reason}`);
+  
+  if (!eligibility.isEligible) {
+    console.log(`[abTester] 🚫 CONVERSION BLOCKED - user not eligible for A/B testing: ${eligibility.reason}`);
+    
+    // Track engagement separately for analytics purposes (like impressions do)
+    await trackIneligibleUserEngagement(
+      userIdentifierString,
+      'conversion_attempt',
+      variantId,
+      typeof window !== 'undefined' ? window.location.href : 'unknown',
+      'quiz_complete'
+    );
+    
+    return { status: 'SUCCESS', message: `Conversion not tracked as A/B test data: ${eligibility.reason}` };
+  }
+  
+  console.log(`[abTester] ✅ CONVERSION ELIGIBLE - proceeding with conversion tracking for user ${userIdentifierString}`);
+  
   // Check for existing conversion for this user in this specific experiment, for this variant and type
   const { data: existingConversion, error: checkError } = await supabase
     .from('conversions')
@@ -771,7 +783,7 @@ export async function trackConversion(
     referrer_source: getReferrerSource(),
     time_to_convert: calculateTimeToConvert(userIdentifierString, associatedExperimentId),
     conversion_value: details?.conversion_value as number || 1, // Default to 1 if not specified
-    conversion_eligibility_verified: returnUserCheck.tracked,
+    conversion_eligibility_verified: eligibility.isEligible,
     conversion_context: {
       variant_id: variantId,
       experiment_id: associatedExperimentId,

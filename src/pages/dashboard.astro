@@ -1384,15 +1384,27 @@ if (Astro.request.method === 'GET') {
     initializeTabs();
     
     // Load content for the currently active tab (determined by initializeTabs)
+    // Get the hash AFTER tabs are initialized since initializeTabs may set it
     const currentHash = window.location.hash;
     console.log(`Loading content for active tab: ${currentHash}`);
     
     if (currentHash === '#analytics-panel') {
+      console.log('Loading analytics for analytics panel...');
       loadAnalytics();
     } else if (currentHash === '#campaign-performance-panel') {
+      console.log('Loading campaign performance...');
       loadCampaignPerformance();
     } else if (currentHash === '#user-journey-panel') {
+      console.log('Loading user journey...');
       loadUserJourney();
+    } else {
+      // Fallback: if no hash or unknown hash, and we default to analytics, load it
+      console.log('No specific hash found, checking if analytics tab is active...');
+      const analyticsTab = document.querySelector('#analytics-panel');
+      if (analyticsTab && !analyticsTab.classList.contains('hidden')) {
+        console.log('Analytics panel is visible, loading analytics...');
+        loadAnalytics();
+      }
     }
     // Note: A/B testing content is handled by ABTestManager component
     
@@ -1420,6 +1432,14 @@ if (Astro.request.method === 'GET') {
       });
     }
 
+    // Load analytics when analytics tab is clicked
+    const analyticsTab = document.getElementById('analytics-tab');
+    if (analyticsTab) {
+      analyticsTab.addEventListener('click', () => {
+        setTimeout(loadAnalytics, 100); // Small delay to ensure tab switch completes
+      });
+    }
+
     // Load user journey when user journey tab is clicked
     const userJourneyTab = document.getElementById('user-journey-tab');
     if (userJourneyTab) {
@@ -1427,9 +1447,6 @@ if (Astro.request.method === 'GET') {
         setTimeout(loadUserJourney, 100); // Small delay to ensure tab switch completes
       });
     }
-    
-    // The ABTestManager component also has its own 'astro:page-load' listener for its specific scripts (charts, toggles).
-    // No need to explicitly call its init function here, Astro handles it.
   });
 
   // Handle popstate for browser back/forward for tabs
