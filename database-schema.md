@@ -28,6 +28,92 @@ This document contains the complete schema documentation for Jason's Personal We
 - `content_unlocks` - Premium content access tracking
 - `referrals` - User referral system
 
+### **📋 Quiz Results Table**
+
+### **quiz_results**
+Flexible quiz system supporting multiple quiz types with different scoring systems, UI styles, and result formats.
+
+```sql
+CREATE TABLE quiz_results (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  quiz_type TEXT NOT NULL, -- Any quiz name (e.g., 'love-lab', 'relationship-assessment')
+  quiz_version TEXT DEFAULT '1.0', -- Versioning support for quiz updates
+  scores JSONB, -- Flexible scoring: {"total": 85, "dimensions": {...}} OR null for non-scored quizzes
+  result_type TEXT NOT NULL, -- Any result classification (e.g., 'secure', 'anxious', 'avoidant')
+  result_details JSONB, -- Rich result metadata and explanations
+  questions_and_answers JSONB NOT NULL, -- Complete Q&A with flexible structure for any UI type
+  quiz_metadata JSONB, -- Quiz-specific configuration and settings
+  email TEXT NOT NULL, -- User's email for result delivery
+  email_verified BOOLEAN DEFAULT FALSE, -- ConvertKit verification status
+  email_validation_status JSONB, -- EmailValidationService validation details
+  completed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  verification_requested_at TIMESTAMP WITH TIME ZONE,
+  verification_completed_at TIMESTAMP WITH TIME ZONE,
+  user_identifier TEXT, -- Session or user tracking
+  utm_source TEXT, -- Marketing attribution
+  utm_medium TEXT,
+  utm_campaign TEXT,
+  referrer_source TEXT,
+  ip_address INET,
+  user_agent TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+#### **Key Features:**
+- **Multi-Quiz Support:** Single table handles unlimited quiz types with different characteristics
+- **Flexible Scoring:** Supports numeric scores, multi-dimensional scoring, percentage-based, or no scoring
+- **Any UI Style:** Questions/answers JSONB accommodates radio buttons, dropdowns, sliders, text inputs
+- **Rich Results:** Detailed result metadata with personalized explanations
+- **Email Integration:** Full verification workflow with ConvertKit webhooks
+- **Email Validation:** Integration with EmailValidationService for quality control
+- **Marketing Attribution:** UTM tracking and referrer source capture
+- **Versioning:** Quiz version tracking for A/B testing and updates
+
+#### **JSONB Structure Examples:**
+
+**Flexible Scoring (scores column):**
+```json
+// Numeric scoring
+{"total": 85, "max_possible": 100, "percentage": 85}
+
+// Multi-dimensional scoring  
+{"total": 85, "dimensions": {"communication": 90, "trust": 80, "intimacy": 85}}
+
+// No scoring (personality-based)
+null
+```
+
+**Rich Results (result_details column):**
+```json
+{
+  "title": "Secure Attachment Style",
+  "description": "You have a secure attachment style...",
+  "recommendations": ["Focus on...", "Consider..."],
+  "next_steps": ["Take the advanced quiz", "Read our guide"],
+  "strengths": ["Emotional regulation", "Trust building"],
+  "growth_areas": ["Conflict resolution"]
+}
+```
+
+**Flexible Q&A (questions_and_answers column):**
+```json
+{
+  "quiz_config": {"total_questions": 20, "ui_style": "radio"},
+  "responses": [
+    {"question": "How do you handle conflict?", "answer": "Approach calmly", "value": 4},
+    {"question": "Your communication style?", "answer": "Direct but kind", "value": 5}
+  ]
+}
+```
+
+#### **Indexes:**
+- `idx_quiz_results_email` - Email lookup for verification
+- `idx_quiz_results_type_created` - Quiz type analysis over time
+- `idx_quiz_results_verification` - Verification status queries
+- `idx_quiz_results_utm` - Marketing attribution analysis
+
 ---
 
 ## 🏛️ **Table Details**
