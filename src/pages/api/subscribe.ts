@@ -192,9 +192,9 @@ export const POST: APIRoute = async ({ request }) => {
                 // Continue with null values - non-blocking error
               }
               
-              // Create comprehensive conversion data (exact same structure as ConversionPayload)
+              // Create conversion data with ONLY fields that exist in conversions table
               const conversionData = {
-                // Core fields
+                // Core required fields
                 variant_id: variantIdToTrack,
                 experiment_id: variantData.experiment_id,
                 user_identifier: email,
@@ -207,38 +207,19 @@ export const POST: APIRoute = async ({ request }) => {
                 },
                 session_identifier: null, // Server-side doesn't have client session
                 
-                // Geographic data (same as client-side)
+                // Fields that exist in conversions table schema
                 country_code: geoData.country_code,
-                region: geoData.region,
-                city: geoData.city,
-                
-                // Device & technical data
                 device_type: deviceType,
-                user_agent: userAgent,
-                
-                // Marketing & UTM (same as client-side)
+                referrer_source: referrer,
                 utm_source: utmSource,
                 utm_medium: utmMedium,
                 utm_campaign: utmCampaign,
-                referrer_source: referrer,
-                
-                // Performance data
-                time_to_convert: null, // Server-side can't calculate this
-                page_url: referrer, // Use referrer as page_url since we're on server
-                
-                // Browser-specific data (null on server-side)
-                language_code: null,
-                time_zone: null,
-                screen_resolution: null,
-                viewport_size: null,
-                connection_type: null,
-                
-                // Value & attribution
+                time_to_convert: null,
                 conversion_value: 1.0,
                 conversion_eligibility_verified: true,
                 original_exposure_date: new Date().toISOString(),
                 
-                // Enhanced metadata (same pattern as client-side)
+                // Enhanced metadata (put extra data here instead of non-existent columns)
                 metadata: {
                   source: 'subscribe_api',
                   server_side: true,
@@ -246,7 +227,11 @@ export const POST: APIRoute = async ({ request }) => {
                   signup_source: signupSource || 'hero-static',
                   geolocation_source: geoData.country_code ? 'ipgeolocation.io' : 'unavailable',
                   user_agent: userAgent,
-                  api_endpoint: 'subscribe'
+                  api_endpoint: 'subscribe',
+                  // Store extra data that doesn't have dedicated columns
+                  region: geoData.region,
+                  city: geoData.city,
+                  page_url: referrer
                 }
               };
 
