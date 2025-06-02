@@ -34,6 +34,7 @@
     "astro-embed": "^0.9.0",
     "astro-icon": "^1.1.5",
     "chart.js": "^4.4.9",
+    "disposable-email-domains": "^1.0.62",
     "limax": "4.1.0",
     "lodash.merge": "^4.6.2",
     "node-fetch": "^3.3.2",
