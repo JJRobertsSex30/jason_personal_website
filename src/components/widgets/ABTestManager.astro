@@ -706,7 +706,7 @@ const { experiments, abTestError } = Astro.props;
   }
 
   // Function to update the analytics display with fetched data
-  function updateAnalyticsDisplay(experimentId: string, analytics: any) {
+  function updateAnalyticsDisplay(experimentId: string, analytics: Record<string, unknown>) {
     const elements = document.querySelectorAll(`[data-experiment-id="${experimentId}"]`);
     
     elements.forEach(el => {
@@ -1143,38 +1143,57 @@ const { experiments, abTestError } = Astro.props;
 
     // Chart.js rendering logic
     const chartContainers = document.querySelectorAll('.chart-container');
+    console.log(`[Chart Debug] Found ${chartContainers.length} chart containers`);
+    
     if (chartContainers.length > 0) {
+      console.log(`[Chart Debug] Starting Chart.js import and initialization`);
       import('chart.js/auto').then(({default: Chart}) => {
-        chartContainers.forEach(containerEl => {
+        console.log(`[Chart Debug] Chart.js imported successfully`);
+        chartContainers.forEach((containerEl, index) => {
           const container = containerEl as HTMLElement; 
           const experimentId = container.dataset.experimentId;
+          console.log(`[Chart Debug] Processing container ${index + 1}, experimentId: ${experimentId}`);
+          
           if (!experimentId) {
-            console.error("Chart container missing experiment ID");
+            console.error(`[Chart Debug] Chart container ${index + 1} missing experiment ID`);
             return;
           }
+          
           const canvas = container.querySelector(`canvas#chart-${experimentId}`) as HTMLCanvasElement | null;
           if (!canvas) {
+            console.error(`[Chart Debug] Canvas not found for experiment ${experimentId}`);
             return;
           }
+          console.log(`[Chart Debug] Canvas found for experiment ${experimentId}`);
           
           let variantsData: ChartVariantData[] = [];
           try {
             const variantsJson = container.dataset.variants;
+            console.log(`[Chart Debug] Raw variants JSON for experiment ${experimentId}:`, variantsJson);
+            
             if (variantsJson) {
               variantsData = JSON.parse(variantsJson);
+              console.log(`[Chart Debug] Parsed variants data for experiment ${experimentId}:`, variantsData);
             } else {
+              console.warn(`[Chart Debug] No variants JSON data found for experiment ${experimentId}`);
               return;
             }
           } catch (e) {
-            console.error('Failed to parse variants data for chart:', e);
+            console.error(`[Chart Debug] Failed to parse variants data for chart experiment ${experimentId}:`, e);
             return;
           }
 
           const chartableVariants = variantsData.filter(v => typeof v.rate === 'number');
+          console.log(`[Chart Debug] Chartable variants for experiment ${experimentId}:`, chartableVariants);
 
           if (chartableVariants.length > 0) {
+            console.log(`[Chart Debug] Creating chart for experiment ${experimentId} with ${chartableVariants.length} variants`);
+            
             const labels = chartableVariants.map(v => `${v.name} (Imp: ${v.impressions ?? 0}, Conv: ${v.conversions ?? 0}, Rate: ${(v.rate ?? 0).toFixed(1)}%)`);
             const data = chartableVariants.map(v => v.rate ?? 0);
+            
+            console.log(`[Chart Debug] Chart labels:`, labels);
+            console.log(`[Chart Debug] Chart data:`, data);
             
             const N = chartableVariants.length;
             const baseColors = [
@@ -1193,54 +1212,84 @@ const { experiments, abTestError } = Astro.props;
             
             const existingChart = Chart.getChart(canvas);
             if (existingChart) {
-                existingChart.destroy();
+              console.log(`[Chart Debug] Destroying existing chart for experiment ${experimentId}`);
+              existingChart.destroy();
             }
 
-            new Chart(canvas, {
-              type: 'pie',
-              data: {
-                labels: labels,
-                datasets: [{
-                  label: 'Conversion Rate (%)',
-                  data: data,
-                  backgroundColor: backgroundColors,
-                  borderColor: borderColors,
-                  borderWidth: 1
-                }]
-              },
-              options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: { position: 'top', labels: { boxWidth: 20, font: { size: 10 }}},
-                  tooltip: {
-                    callbacks: {
-                      label: function(context) {
-                        let label = context.label || '';
-                        if (label) { label += ': '; }
-                        if (context.parsed !== null && typeof context.parsed === 'number') {
-                          label += context.parsed.toFixed(2) + '%';
+            try {
+              const newChart = new Chart(canvas, {
+                type: 'pie',
+                data: {
+                  labels: labels,
+                  datasets: [{
+                    label: 'Conversion Rate (%)',
+                    data: data,
+                    backgroundColor: backgroundColors,
+                    borderColor: borderColors,
+                    borderWidth: 1
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { position: 'top', labels: { boxWidth: 20, font: { size: 10 }}},
+                    tooltip: {
+                      callbacks: {
+                        label: function(context) {
+                          let label = context.label || '';
+                          if (label) { label += ': '; }
+                          if (context.parsed !== null && typeof context.parsed === 'number') {
+                            label += context.parsed.toFixed(2) + '%';
+                          }
+                          return label;
                         }
-                        return label;
                       }
                     }
                   }
                 }
-              }
-            });
+              });
+              console.log(`[Chart Debug] Chart created successfully for experiment ${experimentId}:`, newChart.id);
+            } catch (chartError) {
+              console.error(`[Chart Debug] Error creating chart for experiment ${experimentId}:`, chartError);
+            }
           } else {
+            console.log(`[Chart Debug] No chartable variants found for experiment ${experimentId} - destroying any existing chart`);
             const existingChart = Chart.getChart(canvas);
-            if (existingChart) { existingChart.destroy(); }
+            if (existingChart) { 
+              existingChart.destroy(); 
+            }
           }
         });
       }).catch(error => {
-        console.error('Failed to load Chart.js dynamically:', error);
+        console.error('[Chart Debug] Failed to load Chart.js dynamically:', error);
       });
+    } else {
+      console.log(`[Chart Debug] No chart containers found on page`);
     }
   }
   
   // Initialize these scripts when the main dashboard page loads this component
   if (typeof document !== 'undefined') { // Ensure this runs only in the browser
-    document.addEventListener('astro:page-load', initializeABTestManagerScripts);
+    console.log('[Chart Debug] Setting up chart initialization event listeners');
+    
+    // Use multiple events to ensure charts get initialized
+    document.addEventListener('astro:page-load', () => {
+      console.log('[Chart Debug] astro:page-load event fired');
+      initializeABTestManagerScripts();
+    });
+    
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log('[Chart Debug] DOMContentLoaded event fired');
+      initializeABTestManagerScripts();
+    });
+    
+    // Also try immediate initialization if DOM is already ready
+    if (document.readyState === 'loading') {
+      console.log('[Chart Debug] Document still loading, waiting for events');
+    } else {
+      console.log('[Chart Debug] Document already loaded, initializing immediately');
+      setTimeout(() => initializeABTestManagerScripts(), 100);
+    }
   }
 </script> 
