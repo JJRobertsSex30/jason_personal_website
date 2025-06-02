@@ -353,10 +353,27 @@ function checkIsFirstExposure(experimentId: string): boolean {
   const timestampKey = `ab_first_exposure_time_${experimentId}`;
   const hasBeenExposed = localStorage.getItem(exposureKey);
   
+  console.log(`[abTester] checkIsFirstExposure: Experiment ${experimentId}, hasBeenExposed: ${hasBeenExposed}`);
+  
   if (!hasBeenExposed) {
+    const currentTimestamp = Date.now();
     localStorage.setItem(exposureKey, 'true');
-    localStorage.setItem(timestampKey, Date.now().toString());
+    localStorage.setItem(timestampKey, currentTimestamp.toString());
+    
+    console.log(`[abTester] checkIsFirstExposure: Set first exposure timestamp for experiment ${experimentId}: ${currentTimestamp}`);
+    
     return true;
+  }
+  
+  // Even if not first exposure, ensure timestamp exists (recovery mechanism)
+  const existingTimestamp = localStorage.getItem(timestampKey);
+  if (!existingTimestamp) {
+    const recoveryTimestamp = Date.now();
+    localStorage.setItem(timestampKey, recoveryTimestamp.toString());
+    
+    console.log(`[abTester] checkIsFirstExposure: Recovery - Set missing timestamp for experiment ${experimentId}: ${recoveryTimestamp}`);
+  } else {
+    console.log(`[abTester] checkIsFirstExposure: Existing timestamp found for experiment ${experimentId}: ${existingTimestamp}`);
   }
   
   return false;
@@ -488,6 +505,11 @@ export async function logClientImpression(variant: ABVariant | null, experimentN
   const userIdentifier = getClientUserIdentifier();
   const sessionIdentifier = getClientSessionIdentifier();
   
+  // ALWAYS ensure first exposure timestamp is set, regardless of eligibility or deduplication
+  // This is critical for time_to_convert calculations
+  console.log(`[abTester] logClientImpression: Ensuring first exposure timestamp for experiment ${variant.experiment_id}`);
+  const isFirstExposure = checkIsFirstExposure(variant.experiment_id);
+  
   // Check user eligibility for A/B testing
   const eligibility = await checkUserEligibilityForABTesting(userIdentifier, variant.experiment_id);
   
@@ -519,7 +541,6 @@ export async function logClientImpression(variant: ABVariant | null, experimentN
   // Collect comprehensive analytics data
   const utmParams = getUTMParameters();
   const timeOnPage = pageLoadStartTime ? Math.round((Date.now() - pageLoadStartTime) / 1000) : null;
-  const isFirstExposure = checkIsFirstExposure(variant.experiment_id);
   
   // Fetch geolocation data
   let geoData = {
@@ -793,13 +814,22 @@ function calculateTimeToConvert(userIdentifier: string, experimentId: string): n
   
   const timestampKey = `ab_first_exposure_time_${experimentId}`;
   
+  console.log(`[abTester] calculateTimeToConvert: Looking for timestamp key: ${timestampKey}`);
+  
   // Check if we have a stored timestamp for first exposure
   const firstExposureTime = localStorage.getItem(timestampKey);
+  
+  console.log(`[abTester] calculateTimeToConvert: Found timestamp: ${firstExposureTime}`);
+  
   if (firstExposureTime) {
     try {
       const exposureTimestamp = parseInt(firstExposureTime);
       const currentTime = Date.now();
-      return Math.round((currentTime - exposureTimestamp) / 1000); // Return seconds
+      const timeToConvertSeconds = Math.round((currentTime - exposureTimestamp) / 1000);
+      
+      console.log(`[abTester] calculateTimeToConvert: Exposure timestamp: ${exposureTimestamp}, Current: ${currentTime}, Time to convert: ${timeToConvertSeconds} seconds`);
+      
+      return timeToConvertSeconds; // Return seconds
     } catch (error) {
       console.warn('[abTester] Error parsing first exposure timestamp:', error);
       return null;
@@ -816,6 +846,27 @@ function calculateTimeToConvert(userIdentifier: string, experimentId: string): n
     return 0; // Immediate conversion
   }
   
+  // FALLBACK: If no first exposure timestamp found, check if we can set one now
+  // This handles cases where conversion happens before impression logging
+  console.log(`[abTester] calculateTimeToConvert: No timestamp found for experiment ${experimentId}. Checking for fallback options.`);
+  
+  // Check if this is the user's first time with this experiment
+  const exposureKey = `ab_first_exposure_${experimentId}`;
+  const hasBeenExposed = localStorage.getItem(exposureKey);
+  
+  if (!hasBeenExposed) {
+    // This is their first exposure, set timestamp now as a fallback
+    const currentTimestamp = Date.now();
+    localStorage.setItem(exposureKey, 'true');
+    localStorage.setItem(timestampKey, currentTimestamp.toString());
+    
+    console.log(`[abTester] calculateTimeToConvert: Set fallback timestamp for first exposure: ${currentTimestamp}`);
+    
+    // Return 0 seconds since this is the moment of first exposure
+    return 0;
+  }
+  
+  console.log(`[abTester] calculateTimeToConvert: User has been exposed before but no timestamp found. Returning null.`);
   return null;
 }
 
@@ -841,6 +892,38 @@ function getReferrerSource(): string | null {
   return null;
 }
 
+// Debug utility function to inspect localStorage AB data
+function debugABLocalStorage(): void {
+  if (typeof localStorage === 'undefined') {
+    console.log('[debugAB] localStorage not available');
+    return;
+  }
+  
+  const abKeys: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && (key.startsWith('ab_') || key.includes('experiment') || key.includes('variant'))) {
+      abKeys.push(key);
+    }
+  }
+  
+  console.log('[debugAB] A/B Testing localStorage entries:');
+  abKeys.forEach(key => {
+    const value = localStorage.getItem(key);
+    if (key.includes('time')) {
+      const timestamp = parseInt(value || '0');
+      const date = new Date(timestamp);
+      console.log(`[debugAB] ${key}: ${value} (${date.toISOString()})`);
+    } else {
+      console.log(`[debugAB] ${key}: ${value}`);
+    }
+  });
+  
+  if (abKeys.length === 0) {
+    console.log('[debugAB] No A/B testing data found in localStorage');
+  }
+}
+
 // Declare global window interface extensions
 declare global {
   interface Window {
@@ -856,9 +939,11 @@ if (typeof window !== 'undefined') {
   window.trackConversion = trackConversion;
   window.logClientImpression = logClientImpression; 
   window.getClientSessionIdentifier = getClientSessionIdentifier;
+  (window as unknown as Window & { debugABLocalStorage: typeof debugABLocalStorage }).debugABLocalStorage = debugABLocalStorage;
   console.log('[abTester.ts] window.trackConversion assigned:', !!window.trackConversion);
   console.log('[abTester.ts] window.logClientImpression assigned:', !!window.logClientImpression);
   console.log('[abTester.ts] window.getClientSessionIdentifier assigned:', !!window.getClientSessionIdentifier);
+  console.log('[abTester.ts] window.debugABLocalStorage assigned:', !!(window as unknown as Window & { debugABLocalStorage: typeof debugABLocalStorage }).debugABLocalStorage);
 }
 
 // Dummy export to ensure this file is treated as a module
