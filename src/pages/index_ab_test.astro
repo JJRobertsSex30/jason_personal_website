@@ -1,6 +1,6 @@
 ---
 import Layout from '~/layouts/PageLayout.astro';
-import HeroCustomAB from '~/components/widgets/HeroCustomAB.astro';
+import Hero from '~/components/widgets/Hero.astro';
 import Content from '~/components/widgets/Content.astro';
 import { Icon } from 'astro-icon/components';
 
@@ -20,7 +20,7 @@ const metadata = {
 const HERO_EXPERIMENT_NAME = 'Hero Headline AB Test 1'; 
 const chosenHeroContent: ABVariant = await getVariant(HERO_EXPERIMENT_NAME);
 console.log(`[Index Page SSR] Assigned Hero variant for experiment "${HERO_EXPERIMENT_NAME}":`, JSON.stringify(chosenHeroContent, null, 2));
-console.log(`[Index Page SSR] HERO_EXPERIMENT_NAME to be passed to HeroCustomAB: "${HERO_EXPERIMENT_NAME}"`);
+console.log(`[Index Page SSR] HERO_EXPERIMENT_NAME to be passed to Hero: "${HERO_EXPERIMENT_NAME}"`);
 console.log(`[Index Page SSR] chosenHeroContent.id to be passed as abTestVariantKey: "${chosenHeroContent.id}"`);
 
 
@@ -93,7 +93,7 @@ const finalCtaButton = {
 
 <Layout metadata={metadata}>
   <main>
-    <HeroCustomAB 
+    <Hero
       headline={chosenHeroContent.headline}
       subheadline={chosenHeroContent.subheadline}
       image={heroImageForWidget}
@@ -118,7 +118,7 @@ const finalCtaButton = {
       </div>
     )}
 
-    {/* --- ISOLATION TEST DIV (Uncomment this and comment out HeroCustomAB and Content below if CTA is still missing) --- */}
+    {/* --- ISOLATION TEST DIV (Uncomment this and comment out Hero and Content below if CTA is still missing) --- */}
     {/*
     <div style="margin: 40px; padding: 40px; border: 5px dashed red; background-color: lightyellow; font-size: 28px; text-align: center;">
       IS THIS TEST DIV VISIBLE? (CTA SECTION TEST)
