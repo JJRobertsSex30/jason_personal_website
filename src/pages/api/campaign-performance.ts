@@ -65,13 +65,13 @@ export const GET: APIRoute = async ({ request: _request }) => {
     // Get all impressions with full metadata
     const { data: allImpressions } = await supabase
       .from('impressions')
-      .select('metadata, user_identifier, created_at, user_agent, device_type')
-      .order('created_at', { ascending: true });
+      .select('utm_source, utm_medium, utm_campaign, time_on_page, scroll_depth_percent, user_identifier, impression_at, user_agent, device_type, country_code')
+      .order('impression_at', { ascending: true });
 
     // Get all conversions with full metadata
     const { data: allConversions } = await supabase
       .from('conversions')
-      .select('metadata, user_identifier, created_at, conversion_value')
+      .select('utm_source, utm_medium, utm_campaign, user_identifier, created_at, conversion_value')
       .order('created_at', { ascending: true });
 
     if (!allImpressions || !allConversions) {
@@ -88,7 +88,7 @@ export const GET: APIRoute = async ({ request: _request }) => {
     }>();
     
     allImpressions.forEach(imp => {
-      const source = imp.metadata?.utm_source || 'direct';
+      const source = imp.utm_source || 'direct';
       if (!sourceStats.has(source)) {
         sourceStats.set(source, { 
           impressions: 0, 
@@ -102,19 +102,18 @@ export const GET: APIRoute = async ({ request: _request }) => {
       const stats = sourceStats.get(source)!;
       stats.impressions++;
       
-      if (imp.metadata?.time_on_page_seconds) {
-        stats.timeOnPage.push(imp.metadata.time_on_page_seconds);
+      if (imp.time_on_page) {
+        stats.timeOnPage.push(imp.time_on_page);
       }
       
-      // Count as bounce if low engagement
-      if ((imp.metadata?.scroll_depth_percent || 0) < 30 && (imp.metadata?.time_on_page_seconds || 0) < 30) {
+      if ((imp.scroll_depth_percent || 0) < 30 && (imp.time_on_page || 0) < 30) {
         stats.bounces++;
       }
     });
 
     // Match conversions to sources
     allConversions.forEach(conv => {
-      const source = conv.metadata?.utm_source || 'direct';
+      const source = conv.utm_source || 'direct';
       if (sourceStats.has(source)) {
         const stats = sourceStats.get(source)!;
         stats.conversions++;
@@ -148,7 +147,7 @@ export const GET: APIRoute = async ({ request: _request }) => {
     }>();
     
     allImpressions.forEach(imp => {
-      const medium = imp.metadata?.utm_medium || 'none';
+      const medium = imp.utm_medium || 'none';
       if (!mediumStats.has(medium)) {
         mediumStats.set(medium, { impressions: 0, conversions: 0, timeOnPage: [] });
       }
@@ -156,13 +155,13 @@ export const GET: APIRoute = async ({ request: _request }) => {
       const stats = mediumStats.get(medium)!;
       stats.impressions++;
       
-      if (imp.metadata?.time_on_page_seconds) {
-        stats.timeOnPage.push(imp.metadata.time_on_page_seconds);
+      if (imp.time_on_page) {
+        stats.timeOnPage.push(imp.time_on_page);
       }
     });
 
     allConversions.forEach(conv => {
-      const medium = conv.metadata?.utm_medium || 'none';
+      const medium = conv.utm_medium || 'none';
       if (mediumStats.has(medium)) {
         mediumStats.get(medium)!.conversions++;
       }
@@ -195,9 +194,9 @@ export const GET: APIRoute = async ({ request: _request }) => {
     }>();
     
     allImpressions.forEach(imp => {
-      const campaign = imp.metadata?.utm_campaign || 'no-campaign';
-      const source = imp.metadata?.utm_source || 'direct';
-      const medium = imp.metadata?.utm_medium || 'none';
+      const campaign = imp.utm_campaign || 'no-campaign';
+      const source = imp.utm_source || 'direct';
+      const medium = imp.utm_medium || 'none';
       const key = `${campaign}|${source}|${medium}`;
       
       if (!campaignStats.has(key)) {
@@ -215,19 +214,19 @@ export const GET: APIRoute = async ({ request: _request }) => {
       const stats = campaignStats.get(key)!;
       stats.impressions++;
       
-      if (imp.metadata?.time_on_page_seconds) {
-        stats.timeOnPage.push(imp.metadata.time_on_page_seconds);
+      if (imp.time_on_page) {
+        stats.timeOnPage.push(imp.time_on_page);
       }
       
-      if ((imp.metadata?.scroll_depth_percent || 0) < 30 && (imp.metadata?.time_on_page_seconds || 0) < 30) {
+      if ((imp.scroll_depth_percent || 0) < 30 && (imp.time_on_page || 0) < 30) {
         stats.bounces++;
       }
     });
 
     allConversions.forEach(conv => {
-      const campaign = conv.metadata?.utm_campaign || 'no-campaign';
-      const source = conv.metadata?.utm_source || 'direct';
-      const medium = conv.metadata?.utm_medium || 'none';
+      const campaign = conv.utm_campaign || 'no-campaign';
+      const source = conv.utm_source || 'direct';
+      const medium = conv.utm_medium || 'none';
       const key = `${campaign}|${source}|${medium}`;
       
       if (campaignStats.has(key)) {
@@ -259,46 +258,46 @@ export const GET: APIRoute = async ({ request: _request }) => {
     }).sort((a, b) => b.conversions - a.conversions);
 
     // 4. Attribution Summary
-    const totalAttributedConversions = allConversions.filter(conv => conv.metadata?.utm_source).length;
+    const totalAttributedConversions = allConversions.filter(conv => conv.utm_source).length;
     const directConversions = allConversions.filter(conv => 
-      !conv.metadata?.utm_source || conv.metadata.utm_source === 'direct'
+      !conv.utm_source || conv.utm_source === 'direct'
     ).length;
     
     const organicConversions = allConversions.filter(conv => 
-      conv.metadata?.utm_source === 'google' && conv.metadata?.utm_medium === 'organic'
+      conv.utm_source === 'google' && conv.utm_medium === 'organic'
     ).length;
     
     const paidConversions = allConversions.filter(conv => 
-      conv.metadata?.utm_medium === 'cpc' || 
-      conv.metadata?.utm_medium === 'paid' ||
-      conv.metadata?.utm_medium === 'ppc'
+      conv.utm_medium === 'cpc' || 
+      conv.utm_medium === 'paid' ||
+      conv.utm_medium === 'ppc'
     ).length;
     
     const socialConversions = allConversions.filter(conv => 
-      ['facebook', 'twitter', 'linkedin', 'instagram', 'tiktok', 'youtube'].includes(conv.metadata?.utm_source) ||
-      conv.metadata?.utm_medium === 'social'
+      ['facebook', 'twitter', 'linkedin', 'instagram', 'tiktok', 'youtube'].includes(conv.utm_source) ||
+      conv.utm_medium === 'social'
     ).length;
     
     const emailConversions = allConversions.filter(conv => 
-      conv.metadata?.utm_medium === 'email' || 
-      conv.metadata?.utm_source === 'newsletter' ||
-      conv.metadata?.utm_source === 'mailchimp'
+      conv.utm_medium === 'email' || 
+      conv.utm_source === 'newsletter' ||
+      conv.utm_source === 'mailchimp'
     ).length;
 
     const referralConversions = allConversions.filter(conv => 
-      conv.metadata?.utm_medium === 'referral'
+      conv.utm_medium === 'referral'
     ).length;
 
     // 5. Funnel Analysis
     const totalImpressions = allImpressions.length;
     const engagedUsers = allImpressions.filter(imp => 
-      (imp.metadata?.scroll_depth_percent || 0) > 50 || 
-      (imp.metadata?.time_on_page_seconds || 0) > 60
+      (imp.scroll_depth_percent || 0) > 50 || 
+      (imp.time_on_page || 0) > 60
     ).length;
     
     const qualifiedUsers = allImpressions.filter(imp => 
-      (imp.metadata?.scroll_depth_percent || 0) > 80 || 
-      (imp.metadata?.time_on_page_seconds || 0) > 120
+      (imp.scroll_depth_percent || 0) > 80 || 
+      (imp.time_on_page || 0) > 120
     ).length;
     
     const totalConversions = allConversions.length;
@@ -354,7 +353,7 @@ export const GET: APIRoute = async ({ request: _request }) => {
       const dateStr = date.toISOString().split('T')[0];
       
       const dayImpressions = allImpressions.filter(imp => 
-        imp.created_at.startsWith(dateStr)
+        imp.impression_at.startsWith(dateStr)
       ).length;
       
       const dayConversions = allConversions.filter(conv => 
