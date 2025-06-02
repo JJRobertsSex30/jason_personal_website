@@ -175,164 +175,6 @@ const { experiments, abTestError } = Astro.props;
                 )}
             </div>
 
-            {/* Enhanced Analytics Dashboard */}
-            <div class="mt-6 pt-6 border-t border-dashed border-slate-300 dark:border-slate-600">
-              <h5 class="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-4 text-center">📊 Analytics Dashboard</h5>
-              
-              {/* Analytics Grid */}
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                
-                {/* Performance Overview Card */}
-                <div class="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
-                  <h6 class="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-2 flex items-center">
-                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z"></path>
-                      <path d="M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z"></path>
-                    </svg>
-                    Performance Overview
-                  </h6>
-                  <div class="space-y-1 text-xs">
-                    <div class="flex justify-between">
-                      <span class="text-slate-600 dark:text-slate-400">Total Impressions:</span>
-                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="total-impressions">Loading...</span>
-                    </div>
-                    <div class="flex justify-between">
-                      <span class="text-slate-600 dark:text-slate-400">Total Conversions:</span>
-                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="total-conversions">Loading...</span>
-                    </div>
-                    <div class="flex justify-between">
-                      <span class="text-slate-600 dark:text-slate-400">Overall Rate:</span>
-                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="overall-rate">Loading...</span>
-                    </div>
-                    <div class="flex justify-between">
-                      <span class="text-slate-600 dark:text-slate-400">Avg. Time on Page:</span>
-                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="avg-time-on-page">Loading...</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Geographic Insights Card */}
-                <div class="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 p-4 rounded-lg border border-green-200 dark:border-green-700">
-                  <h6 class="text-sm font-semibold text-green-800 dark:text-green-300 mb-2 flex items-center">
-                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"></path>
-                    </svg>
-                    Geographic Insights
-                  </h6>
-                  <div class="space-y-1 text-xs">
-                    <div class="flex justify-between">
-                      <span class="text-slate-600 dark:text-slate-400">Top Country:</span>
-                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="top-country">Loading...</span>
-                    </div>
-                    <div class="flex justify-between">
-                      <span class="text-slate-600 dark:text-slate-400">Countries:</span>
-                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="country-count">Loading...</span>
-                    </div>
-                    <div class="flex justify-between">
-                      <span class="text-slate-600 dark:text-slate-400">Best Converting:</span>
-                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="best-country">Loading...</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Device & Browser Card */}
-                <div class="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 p-4 rounded-lg border border-purple-200 dark:border-purple-700">
-                  <h6 class="text-sm font-semibold text-purple-800 dark:text-purple-300 mb-2 flex items-center">
-                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2h-2.22l.123.489.804.804A1 1 0 0113 18H7a1 1 0 01-.707-1.707l.804-.804L7.22 15H5a2 2 0 01-2-2V5zm5.771 7H5V5h10v7H8.771z" clip-rule="evenodd"></path>
-                    </svg>
-                    Device & Browser
-                  </h6>
-                  <div class="space-y-1 text-xs">
-                    <div class="flex justify-between">
-                      <span class="text-slate-600 dark:text-slate-400">Top Device:</span>
-                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="top-device">Loading...</span>
-                    </div>
-                    <div class="flex justify-between">
-                      <span class="text-slate-600 dark:text-slate-400">Top Browser:</span>
-                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="top-browser">Loading...</span>
-                    </div>
-                    <div class="flex justify-between">
-                      <span class="text-slate-600 dark:text-slate-400">Mobile %:</span>
-                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="mobile-percentage">Loading...</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Engagement Metrics Card */}
-                <div class="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 p-4 rounded-lg border border-orange-200 dark:border-orange-700">
-                  <h6 class="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-2 flex items-center">
-                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    Engagement
-                  </h6>
-                  <div class="space-y-1 text-xs">
-                    <div class="flex justify-between">
-                      <span class="text-slate-600 dark:text-slate-400">Avg. Scroll:</span>
-                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="avg-scroll">Loading...</span>
-                    </div>
-                    <div class="flex justify-between">
-                      <span class="text-slate-600 dark:text-slate-400">Bounce Rate:</span>
-                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="bounce-rate">Loading...</span>
-                    </div>
-                    <div class="flex justify-between">
-                      <span class="text-slate-600 dark:text-slate-400">Return Visitors:</span>
-                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="return-visitors">Loading...</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Campaign Tracking Card */}
-                <div class="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/20 dark:to-indigo-800/20 p-4 rounded-lg border border-indigo-200 dark:border-indigo-700">
-                  <h6 class="text-sm font-semibold text-indigo-800 dark:text-indigo-300 mb-2 flex items-center">
-                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z" clip-rule="evenodd"></path>
-                    </svg>
-                    Campaign Tracking
-                  </h6>
-                  <div class="space-y-1 text-xs">
-                    <div class="flex justify-between">
-                      <span class="text-slate-600 dark:text-slate-400">Top Source:</span>
-                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="top-utm-source">Loading...</span>
-                    </div>
-                    <div class="flex justify-between">
-                      <span class="text-slate-600 dark:text-slate-400">Top Campaign:</span>
-                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="top-utm-campaign">Loading...</span>
-                    </div>
-                    <div class="flex justify-between">
-                      <span class="text-slate-600 dark:text-slate-400">Direct Traffic:</span>
-                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="direct-traffic">Loading...</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Statistical Significance Card */}
-                <div class="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 p-4 rounded-lg border border-red-200 dark:border-red-700">
-                  <h6 class="text-sm font-semibold text-red-800 dark:text-red-300 mb-2 flex items-center">
-                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm1 2a1 1 0 000 2h6a1 1 0 100-2H7zm6 7a1 1 0 011 1v3a1 1 0 11-2 0v-3a1 1 0 011-1zm-3 3a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zm-4-1a1 1 0 011 1v3a1 1 0 11-2 0v-3a1 1 0 011-1z" clip-rule="evenodd"></path>
-                    </svg>
-                    Statistical Significance
-                  </h6>
-                  <div class="space-y-1 text-xs">
-                    <div class="flex justify-between">
-                      <span class="text-slate-600 dark:text-slate-400">Confidence:</span>
-                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="confidence-level">95%</span>
-                    </div>
-                    <div class="flex justify-between">
-                      <span class="text-slate-600 dark:text-slate-400">Sample Size:</span>
-                      <span class="font-medium text-slate-800 dark:text-slate-200" data-experiment-id={exp.id} data-metric="sample-size">Loading...</span>
-                    </div>
-                    <div class="flex justify-between">
-                      <span class="text-slate-600 dark:text-slate-400">Status:</span>
-                      <span class="font-medium" data-experiment-id={exp.id} data-metric="significance-status">Loading...</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
             {/* Pie Chart Section */}
             {exp.variants && exp.variants.filter(v => typeof v.conversion_rate === 'number').length > 0 ? (
               <div class="mt-6 pt-6 border-t border-dashed border-slate-300 dark:border-slate-600">
@@ -706,7 +548,26 @@ const { experiments, abTestError } = Astro.props;
   }
 
   // Function to update the analytics display with fetched data
-  function updateAnalyticsDisplay(experimentId: string, analytics: any) {
+  function updateAnalyticsDisplay(experimentId: string, analytics: {
+    totalImpressions?: number;
+    totalConversions?: number;
+    overallRate?: number;
+    avgTimeOnPage?: number;
+    topCountry?: string;
+    countryCount?: number;
+    bestCountry?: string;
+    topDevice?: string;
+    topBrowser?: string;
+    mobilePercentage?: number;
+    avgScroll?: number;
+    bounceRate?: number;
+    returnVisitors?: number;
+    topUtmSource?: string;
+    topUtmCampaign?: string;
+    directTraffic?: number;
+    sampleSize?: number;
+    isSignificant?: boolean;
+  }) {
     const elements = document.querySelectorAll(`[data-experiment-id="${experimentId}"]`);
     
     elements.forEach(el => {
