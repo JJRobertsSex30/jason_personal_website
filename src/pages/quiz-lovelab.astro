@@ -635,87 +635,191 @@ const scoreRanges = [
 
       if (quizEmailForm) {
         console.log('[Quiz Page] Attaching submit listener to Email Form (quiz-email-form).');
-        quizEmailForm.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          console.log('[Quiz Page] Email form submission initiated.');
-          const email = quizEmailInput ? quizEmailInput.value.trim() : '';
-          if (!email || !email.includes('@')) {
-            if(quizFormMessage) {
-                quizFormMessage.textContent = 'Please enter a valid email address.';
-                quizFormMessage.className = 'text-sm mt-2 text-red-600 dark:text-red-400';
-            }
-            return;
-          }
         
-          const submitButton = quizEmailForm.querySelector('button[type="submit"]');
-          const originalButtonText = submitButton ? submitButton.innerHTML : 'See My Results';
-          if(submitButton) { submitButton.disabled = true; submitButton.innerHTML = 'Processing...'; }
-          if(quizFormMessage) quizFormMessage.textContent = '';
-
-          try {
-            const scoreToSubmit = window.quizTotalScore;
-            const scorePreviewText = scorePreview ? scorePreview.textContent || '' : '';
-            const resultTypeMatch = scorePreviewText.match(/you are (.+)\./);
-            const resultTypeToSubmit = resultTypeMatch ? resultTypeMatch[1] : getPageResultSummary(scoreToSubmit).type;
-            const firstNameToSubmit = userFirstNameInput ? userFirstNameInput.value.trim() : '';
-
-            const formData = new FormData();
-            formData.append('email', email);
-            formData.append('firstName', firstNameToSubmit);
-            formData.append('score', scoreToSubmit.toString());
-            formData.append('resultType', resultTypeToSubmit);
-
-            if (currentVariant && currentVariant.experiment && currentVariant.variantId) {
-              formData.append('variantInfo', JSON.stringify({
-                experiment: currentVariant.experiment, 
-                experimentId: currentVariant.experimentId, // Send UUID if available
-                variantId: currentVariant.variantId,
-                variantName: currentVariant.variantName || '',
-                quizPath: currentVariant.quizPath || '',
-                quizName: currentVariant.quizName || ''
-              }));
-            }
+        // Import email validation service
+        import('/src/lib/emailValidationService.js').then(({ EmailValidationService }) => {
+          console.log('[Quiz Page] Email validation service loaded successfully.');
+          
+          quizEmailForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log('[Quiz Page] Email form submission initiated with validation.');
+            const email = quizEmailInput ? quizEmailInput.value.trim() : '';
             
-            const storedReferrerId = localStorage.getItem('referrer_id');
-            if (storedReferrerId) formData.append('referrer_id', storedReferrerId);
-
-            if (typeof window.getClientSessionIdentifier === 'function') {
-              const sessionId = window.getClientSessionIdentifier();
-              if (sessionId) formData.append('session_identifier', sessionId);
-            }
-
-            console.log('[Quiz Page] Final form data for /api/quiz-submit:', Object.fromEntries(formData));
-            
-            const response = await fetch('/api/quiz-submit', { method: 'POST', body: formData });
-            const responseData = await response.json();
-
-            if (response.ok && responseData.success) {
-              console.log('[Quiz Page] Server responded success to quiz submission:', responseData);
-              if(emailGateArea) emailGateArea.classList.add('hidden');
-              if(resultsArea) resultsArea.classList.remove('hidden');
-              if(resultTypeHeading) resultTypeHeading.textContent = `Your Relationship Map Type: ${resultTypeToSubmit}`;
-              
-              const resultSummaryData = getPageResultSummary(scoreToSubmit);
-              if (resultSummaryText && resultSummaryData) resultSummaryText.textContent = resultSummaryData.summary;
-
-              if(resultsArea) resultsArea.scrollIntoView({ behavior: 'smooth' });
-              localStorage.removeItem('quizAnswers'); 
-            } else {
-              console.error('[Quiz Page] Server responded error to quiz submission:', responseData);
+            if (!email) {
               if(quizFormMessage) {
-                quizFormMessage.textContent = responseData.message || 'Submission failed. Please try again.';
-                quizFormMessage.className = 'text-sm mt-2 text-red-600 dark:text-red-400';
+                  quizFormMessage.textContent = 'Please enter your email address.';
+                  quizFormMessage.className = 'text-sm mt-2 text-red-600 dark:text-red-400';
               }
+              return;
             }
-          } catch (error) {
-            console.error('[Quiz Page] Error during email form submission fetch:', error);
-            if(quizFormMessage) {
-                quizFormMessage.textContent = 'An unexpected error occurred. Please try again.';
-                quizFormMessage.className = 'text-sm mt-2 text-red-600 dark:text-red-400';
+            
+            // Validate email using our comprehensive service
+            const validationResult = EmailValidationService.validateEmail(email);
+            
+            if (!validationResult.isValid) {
+              const errorMessage = EmailValidationService.getDisplayMessage(validationResult);
+              if(quizFormMessage) {
+                  quizFormMessage.textContent = errorMessage;
+                  quizFormMessage.className = 'text-sm mt-2 text-red-600 dark:text-red-400';
+              }
+              return;
             }
-          } finally {
-            if(submitButton) { submitButton.disabled = false; submitButton.innerHTML = originalButtonText; }
-          }
+          
+            const submitButton = quizEmailForm.querySelector('button[type="submit"]');
+            const originalButtonText = submitButton ? submitButton.innerHTML : 'See My Results';
+            if(submitButton) { submitButton.disabled = true; submitButton.innerHTML = 'Processing...'; }
+            if(quizFormMessage) quizFormMessage.textContent = '';
+
+            try {
+              const scoreToSubmit = window.quizTotalScore;
+              const scorePreviewText = scorePreview ? scorePreview.textContent || '' : '';
+              const resultTypeMatch = scorePreviewText.match(/you are (.+)\./);
+              const resultTypeToSubmit = resultTypeMatch ? resultTypeMatch[1] : getPageResultSummary(scoreToSubmit).type;
+              const firstNameToSubmit = userFirstNameInput ? userFirstNameInput.value.trim() : '';
+
+              const formData = new FormData();
+              formData.append('email', email);
+              formData.append('firstName', firstNameToSubmit);
+              formData.append('score', scoreToSubmit.toString());
+              formData.append('resultType', resultTypeToSubmit);
+
+              if (currentVariant && currentVariant.experiment && currentVariant.variantId) {
+                formData.append('variantInfo', JSON.stringify({
+                  experiment: currentVariant.experiment, 
+                  experimentId: currentVariant.experimentId, // Send UUID if available
+                  variantId: currentVariant.variantId,
+                  variantName: currentVariant.variantName || '',
+                  quizPath: currentVariant.quizPath || '',
+                  quizName: currentVariant.quizName || ''
+                }));
+              }
+              
+              const storedReferrerId = localStorage.getItem('referrer_id');
+              if (storedReferrerId) formData.append('referrer_id', storedReferrerId);
+
+              if (typeof window.getClientSessionIdentifier === 'function') {
+                const sessionId = window.getClientSessionIdentifier();
+                if (sessionId) formData.append('session_identifier', sessionId);
+              }
+
+              console.log('[Quiz Page] Final form data for /api/quiz-submit:', Object.fromEntries(formData));
+              
+              const response = await fetch('/api/quiz-submit', { method: 'POST', body: formData });
+              const responseData = await response.json();
+
+              if (response.ok && responseData.success) {
+                console.log('[Quiz Page] Server responded success to quiz submission:', responseData);
+                if(emailGateArea) emailGateArea.classList.add('hidden');
+                if(resultsArea) resultsArea.classList.remove('hidden');
+                if(resultTypeHeading) resultTypeHeading.textContent = `Your Relationship Map Type: ${resultTypeToSubmit}`;
+                
+                const resultSummaryData = getPageResultSummary(scoreToSubmit);
+                if (resultSummaryText && resultSummaryData) resultSummaryText.textContent = resultSummaryData.summary;
+
+                if(resultsArea) resultsArea.scrollIntoView({ behavior: 'smooth' });
+                localStorage.removeItem('quizAnswers'); 
+              } else {
+                console.error('[Quiz Page] Server responded error to quiz submission:', responseData);
+                if(quizFormMessage) {
+                  quizFormMessage.textContent = responseData.message || 'Submission failed. Please try again.';
+                  quizFormMessage.className = 'text-sm mt-2 text-red-600 dark:text-red-400';
+                }
+              }
+            } catch (error) {
+              console.error('[Quiz Page] Error during email form submission fetch:', error);
+              if(quizFormMessage) {
+                  quizFormMessage.textContent = 'An unexpected error occurred. Please try again.';
+                  quizFormMessage.className = 'text-sm mt-2 text-red-600 dark:text-red-400';
+              }
+            } finally {
+              if(submitButton) { submitButton.disabled = false; submitButton.innerHTML = originalButtonText; }
+            }
+          });
+        }).catch(error => {
+          console.error('[Quiz Page] Error loading email validation service:', error);
+          // Fallback behavior without email validation
+          quizEmailForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log('[Quiz Page] Email form submission initiated with fallback validation.');
+            const email = quizEmailInput ? quizEmailInput.value.trim() : '';
+            if (!email || !email.includes('@')) {
+              if(quizFormMessage) {
+                  quizFormMessage.textContent = 'Please enter a valid email address.';
+                  quizFormMessage.className = 'text-sm mt-2 text-red-600 dark:text-red-400';
+              }
+              return;
+            }
+          
+            const submitButton = quizEmailForm.querySelector('button[type="submit"]');
+            const originalButtonText = submitButton ? submitButton.innerHTML : 'See My Results';
+            if(submitButton) { submitButton.disabled = true; submitButton.innerHTML = 'Processing...'; }
+            if(quizFormMessage) quizFormMessage.textContent = '';
+
+            try {
+              const scoreToSubmit = window.quizTotalScore;
+              const scorePreviewText = scorePreview ? scorePreview.textContent || '' : '';
+              const resultTypeMatch = scorePreviewText.match(/you are (.+)\./);
+              const resultTypeToSubmit = resultTypeMatch ? resultTypeMatch[1] : getPageResultSummary(scoreToSubmit).type;
+              const firstNameToSubmit = userFirstNameInput ? userFirstNameInput.value.trim() : '';
+
+              const formData = new FormData();
+              formData.append('email', email);
+              formData.append('firstName', firstNameToSubmit);
+              formData.append('score', scoreToSubmit.toString());
+              formData.append('resultType', resultTypeToSubmit);
+
+              if (currentVariant && currentVariant.experiment && currentVariant.variantId) {
+                formData.append('variantInfo', JSON.stringify({
+                  experiment: currentVariant.experiment, 
+                  experimentId: currentVariant.experimentId,
+                  variantId: currentVariant.variantId,
+                  variantName: currentVariant.variantName || '',
+                  quizPath: currentVariant.quizPath || '',
+                  quizName: currentVariant.quizName || ''
+                }));
+              }
+              
+              const storedReferrerId = localStorage.getItem('referrer_id');
+              if (storedReferrerId) formData.append('referrer_id', storedReferrerId);
+
+              if (typeof window.getClientSessionIdentifier === 'function') {
+                const sessionId = window.getClientSessionIdentifier();
+                if (sessionId) formData.append('session_identifier', sessionId);
+              }
+
+              console.log('[Quiz Page] Final form data for /api/quiz-submit:', Object.fromEntries(formData));
+              
+              const response = await fetch('/api/quiz-submit', { method: 'POST', body: formData });
+              const responseData = await response.json();
+
+              if (response.ok && responseData.success) {
+                console.log('[Quiz Page] Server responded success to quiz submission:', responseData);
+                if(emailGateArea) emailGateArea.classList.add('hidden');
+                if(resultsArea) resultsArea.classList.remove('hidden');
+                if(resultTypeHeading) resultTypeHeading.textContent = `Your Relationship Map Type: ${resultTypeToSubmit}`;
+                
+                const resultSummaryData = getPageResultSummary(scoreToSubmit);
+                if (resultSummaryText && resultSummaryData) resultSummaryText.textContent = resultSummaryData.summary;
+
+                if(resultsArea) resultsArea.scrollIntoView({ behavior: 'smooth' });
+                localStorage.removeItem('quizAnswers'); 
+              } else {
+                console.error('[Quiz Page] Server responded error to quiz submission:', responseData);
+                if(quizFormMessage) {
+                  quizFormMessage.textContent = responseData.message || 'Submission failed. Please try again.';
+                  quizFormMessage.className = 'text-sm mt-2 text-red-600 dark:text-red-400';
+                }
+              }
+            } catch (error) {
+              console.error('[Quiz Page] Error during email form submission fetch:', error);
+              if(quizFormMessage) {
+                  quizFormMessage.textContent = 'An unexpected error occurred. Please try again.';
+                  quizFormMessage.className = 'text-sm mt-2 text-red-600 dark:text-red-400';
+              }
+            } finally {
+              if(submitButton) { submitButton.disabled = false; submitButton.innerHTML = originalButtonText; }
+            }
+          });
         });
       } else {
         console.warn('[Quiz Page] Email form (id="quiz-email-form") not found.');
