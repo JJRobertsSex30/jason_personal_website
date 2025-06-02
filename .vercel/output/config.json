@@ -1,0 +1,179 @@
+{
+	"version": 3,
+	"routes": [
+		{
+			"src": "^/(.*)/$",
+			"headers": {
+				"Location": "/$1"
+			},
+			"status": 308
+		},
+		{
+			"handle": "filesystem"
+		},
+		{
+			"src": "^/_astro/(.*)$",
+			"headers": {
+				"cache-control": "public, max-age=31536000, immutable"
+			},
+			"continue": true
+		},
+		{
+			"src": "^/_server-islands/([^/]+?)$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/_image$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/404$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/about$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/api/ab-testing-enhanced$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/api/analytics$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/api/campaign-performance$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/api/dashboard-data$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/api/geolocation$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/api/logout$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/api/quiz-submit$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/api/subscribe$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/api/user-journey$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/contact$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/dashboard$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/dbTest$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/homes/mobile-app$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/homes/personal$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/homes/saas$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/homes/startup$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/index_ab_test$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/index2$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/landing/click-through$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/landing/lead-generation$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/landing/pre-launch$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/landing/product$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/landing/sales$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/landing/subscription$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/login$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/pricing$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/privacy$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/quiz$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/quiz-lovelab$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/rss\\.xml/?$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/services$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/terms$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/test-dashboard$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/.*$",
+			"dest": "_render",
+			"status": 404
+		}
+	]
+}

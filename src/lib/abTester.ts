@@ -806,6 +806,16 @@ function calculateTimeToConvert(userIdentifier: string, experimentId: string): n
     }
   }
   
+  // Simple fallback: if no timestamp exists, this might be immediate conversion
+  // Set timestamp now and return 0 (immediate conversion)
+  const exposureKey = `ab_first_exposure_${experimentId}`;
+  if (!localStorage.getItem(exposureKey)) {
+    const now = Date.now();
+    localStorage.setItem(exposureKey, 'true');
+    localStorage.setItem(timestampKey, now.toString());
+    return 0; // Immediate conversion
+  }
+  
   return null;
 }
 
