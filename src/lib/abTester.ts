@@ -65,6 +65,7 @@ interface ConversionPayload {
   time_to_convert?: number | null;
   conversion_value?: number | null;
   conversion_eligibility_verified?: boolean | null;
+  conversion_context?: Record<string, unknown> | null;
   metadata?: Record<string, unknown> | null;
   original_exposure_date?: string | null; // ISO string
   // Additional comprehensive fields
@@ -771,6 +772,16 @@ export async function trackConversion(
     time_to_convert: calculateTimeToConvert(userIdentifierString, associatedExperimentId),
     conversion_value: details?.conversion_value as number || 1, // Default to 1 if not specified
     conversion_eligibility_verified: returnUserCheck.tracked,
+    conversion_context: {
+      variant_id: variantId,
+      experiment_id: associatedExperimentId,
+      user_identifier_type: 'ab_user_identifier',
+      conversion_timestamp: new Date().toISOString(),
+      client_info: {
+        page_url: typeof window !== 'undefined' ? window.location.href : null,
+        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null
+      }
+    },
     utm_source: utmParams.utm_source || null,
     utm_medium: utmParams.utm_medium || null,
     utm_campaign: utmParams.utm_campaign || null,
