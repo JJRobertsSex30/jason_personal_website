@@ -364,6 +364,15 @@ const { experiments, abTestError } = Astro.props;
               >
                 {exp.managingVariants ? 'Hide Variants' : 'Manage Variants'}
               </button>
+              <button 
+                type="button" 
+                class="text-sm bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 clear-data-btn"
+                data-experiment-id={exp.id}
+                data-experiment-name={exp.name}
+                title="Clear all impression and conversion data for this experiment"
+              >
+                Clear Data
+              </button>
               <form method="POST" action={Astro.url.pathname} class="inline-block delete-experiment-form" data-experiment-name={exp.name}>
                 <input type="hidden" name="_action" value="delete_experiment" />
                 <input type="hidden" name="experiment_id" value={exp.id} />
@@ -581,6 +590,71 @@ const { experiments, abTestError } = Astro.props;
         <button type="button" id="cancel-delete-variant-btn" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-slate-700 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-slate-800 sm:mt-0 sm:w-auto sm:text-sm transition duration-150 ease-in-out">
           Cancel
         </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Clear Data Confirmation Modal -->
+<div id="clear-data-confirmation-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="clear-data-modal-title" role="dialog" aria-modal="true">
+  <!-- Background overlay -->
+  <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+
+    <!-- This element is to trick the browser into centering the modal contents. -->
+    <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+    <!-- Modal panel -->
+    <div class="relative inline-block align-bottom bg-white dark:bg-slate-800 rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+      <div class="sm:flex sm:items-start">
+        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-orange-100 dark:bg-orange-900/30 sm:mx-0 sm:h-10 sm:w-10">
+          <!-- Warning icon -->
+          <svg class="h-6 w-6 text-orange-600 dark:text-orange-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+        </div>
+        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+          <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white" id="clear-data-modal-title">
+            Clear Experiment Data
+          </h3>
+          <div class="mt-2">
+            <p class="text-sm text-gray-500 dark:text-gray-300" id="clear-data-modal-description">
+              Are you sure you want to clear all data for this experiment? This will permanently delete:
+            </p>
+            <ul class="text-sm text-gray-500 dark:text-gray-300 mt-2 ml-4 list-disc list-inside">
+              <li>All impression records from all variants in this experiment</li>
+              <li>All conversion records from all variants in this experiment</li>
+            </ul>
+            <p class="text-sm text-red-600 dark:text-red-400 mt-2 font-semibold">
+              This action cannot be undone. The experiment structure and variants will remain, but all tracking data will be lost.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+        <button type="button" id="confirm-clear-data-btn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-orange-600 text-base font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 dark:focus:ring-offset-slate-800 sm:ml-3 sm:w-auto sm:text-sm transition duration-150 ease-in-out">
+          Clear All Data
+        </button>
+        <button type="button" id="cancel-clear-data-btn" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-slate-700 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-slate-800 sm:mt-0 sm:w-auto sm:text-sm transition duration-150 ease-in-out">
+          Cancel
+        </button>
+      </div>
+      <div id="clear-data-status" class="mt-3 hidden">
+        <div class="rounded-md bg-blue-50 dark:bg-blue-900/30 p-3">
+          <div class="flex">
+            <div class="flex-shrink-0">
+              <svg class="h-5 w-5 text-blue-400 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </div>
+            <div class="ml-3">
+              <p class="text-sm text-blue-800 dark:text-blue-200" id="clear-data-status-text">
+                Clearing experiment data...
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -933,6 +1007,111 @@ const { experiments, abTestError } = Astro.props;
           // Cleanup function
           const cleanup = () => {
             modal.classList.add('hidden');
+            confirmBtn.removeEventListener('click', handleConfirm);
+            cancelBtn.removeEventListener('click', handleCancel);
+            modal.removeEventListener('click', handleBackdropClick);
+            document.removeEventListener('keydown', handleEscape);
+          };
+          
+          // Handle backdrop click
+          const handleBackdropClick = (e: MouseEvent) => {
+            if (e.target === modal) {
+              handleCancel();
+            }
+          };
+          
+          // Handle escape key
+          const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+              handleCancel();
+            }
+          };
+          
+          // Add event listeners
+          confirmBtn.addEventListener('click', handleConfirm);
+          cancelBtn.addEventListener('click', handleCancel);
+          modal.addEventListener('click', handleBackdropClick);
+          document.addEventListener('keydown', handleEscape);
+        }
+      });
+    });
+
+    // Event listener for Clear Data buttons
+    document.querySelectorAll('.clear-data-btn').forEach(btnEl => {
+      const btn = btnEl as HTMLButtonElement;
+      btn.addEventListener('click', () => {
+        const experimentId = btn.dataset.experimentId;
+        const experimentName = btn.dataset.experimentName || 'this experiment';
+        
+        if (!experimentId) return;
+        
+        const modal = document.getElementById('clear-data-confirmation-modal');
+        const modalDescription = document.getElementById('clear-data-modal-description');
+        const confirmBtn = document.getElementById('confirm-clear-data-btn') as HTMLButtonElement | null;
+        const cancelBtn = document.getElementById('cancel-clear-data-btn') as HTMLButtonElement | null;
+        const statusDiv = document.getElementById('clear-data-status');
+        const statusText = document.getElementById('clear-data-status-text');
+        
+        if (modal && modalDescription && confirmBtn && cancelBtn && statusDiv && statusText) {
+          // Update modal text with specific experiment name
+          const descriptionText = modalDescription.querySelector('p');
+          if (descriptionText) {
+            descriptionText.textContent = `Are you sure you want to clear all data for "${experimentName}"? This will permanently delete:`;
+          }
+          
+          // Show modal
+          modal.classList.remove('hidden');
+          
+          // Handle confirm
+          const handleConfirm = async () => {
+            try {
+              // Show loading state
+              statusDiv.classList.remove('hidden');
+              statusText.textContent = 'Clearing experiment data...';
+              confirmBtn.disabled = true;
+              cancelBtn.disabled = true;
+              
+              const response = await fetch('/api/clear-experiment-data', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ experimentId })
+              });
+              
+              const result = await response.json();
+              
+              if (result.success) {
+                statusText.textContent = `✅ Success! Cleared ${result.deletedImpressions} impressions and ${result.deletedConversions} conversions.`;
+                
+                // Refresh the page after a short delay to show updated stats
+                setTimeout(() => {
+                  window.location.reload();
+                }, 2000);
+              } else {
+                statusText.textContent = `❌ Error: ${result.error}`;
+                confirmBtn.disabled = false;
+                cancelBtn.disabled = false;
+              }
+            } catch (error) {
+              console.error('Error clearing experiment data:', error);
+              statusText.textContent = '❌ Error: Failed to clear experiment data. Please try again.';
+              confirmBtn.disabled = false;
+              cancelBtn.disabled = false;
+            }
+          };
+          
+          // Handle cancel
+          const handleCancel = () => {
+            cleanup();
+          };
+          
+          // Cleanup function
+          const cleanup = () => {
+            modal.classList.add('hidden');
+            statusDiv.classList.add('hidden');
+            confirmBtn.disabled = false;
+            cancelBtn.disabled = false;
             confirmBtn.removeEventListener('click', handleConfirm);
             cancelBtn.removeEventListener('click', handleCancel);
             modal.removeEventListener('click', handleBackdropClick);
