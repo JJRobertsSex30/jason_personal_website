@@ -76,58 +76,45 @@ export const POST: APIRoute = async ({ request }) => {
     // Track conversion using the new eligibility system
     if (variantIdToTrack) {
       try {
-        console.log(`Tracking A/B conversion via eligibility system for variant ${variantIdToTrack}, email: ${email}`);
-        
-        // Import the eligibility checking function
-        const { handleReturnUserConversion } = await import('~/lib/userEligibility');
+        console.log(`Tracking A/B conversion for variant ${variantIdToTrack}, email: ${email}`);
         
         // Get ab_user_identifier from form data (sent by client-side)
         const abUserIdentifier = formData.get('ab_user_identifier');
         
         if (abUserIdentifier && typeof abUserIdentifier === 'string') {
-          console.log(`Using ab_user_identifier for eligibility check: ${abUserIdentifier}`);
+          console.log(`Using ab_user_identifier for conversion tracking: ${abUserIdentifier}`);
           
-          // Check eligibility using the same identifier as impression tracking
-          const eligibilityResult = await handleReturnUserConversion(
-            abUserIdentifier, // Use same identifier as impression tracking
-            variantIdToTrack,
-            'email_signup',
-            1, // conversion value
-            {
-              source: signupSource || 'hero-static',
-              email: email,
-              original_variant: abTestVariantId
-            }
-          );
-          
-          if (eligibilityResult.tracked) {
-            console.log('A/B conversion tracked successfully via eligibility system');
-          } else {
-            console.log(`User not eligible for A/B testing: ${eligibilityResult.reason}`);
-            
-            // Get experiment_id for the variant
-            const { data: variantData, error: variantError } = await supabase
-              .from('variants')
-              .select('experiment_id')
-              .eq('id', variantIdToTrack)
-              .single();
+          // Get experiment_id for the variant
+          const { data: variantData, error: variantError } = await supabase
+            .from('variants')
+            .select('experiment_id')
+            .eq('id', variantIdToTrack)
+            .single();
 
-            if (variantError || !variantData) {
-              console.error('Error fetching variant experiment_id:', variantError);
+          if (variantError || !variantData) {
+            console.error('Error fetching variant experiment_id:', variantError);
+          } else {
+            // Check for existing conversion by this email for this experiment (to prevent exact duplicates)
+            const { data: existingConversion, error: conversionCheckError } = await supabase
+              .from('conversions')
+              .select('id, variant_id')
+              .eq('experiment_id', variantData.experiment_id)
+              .eq('user_identifier', email)
+              .eq('conversion_type', 'email_signup')
+              .maybeSingle();
+
+            if (conversionCheckError && conversionCheckError.code !== 'PGRST116') {
+              console.error(`DB error checking existing conversions: ${conversionCheckError.message}`);
+            } else if (existingConversion) {
+              console.log(`Conversion already exists for email ${email} in this experiment. Skipping duplicate conversion to maintain data integrity.`);
             } else {
-              // Track new conversion with experiment_id - Use same comprehensive approach as client-side
-              
-              console.log('[Subscribe API] === DEBUGGING CONVERSION DATA COLLECTION ===');
+              // MODIFIED: Skip eligibility checks for email signups to allow unlimited submissions with different emails
+              console.log(`Tracking new email signup conversion: email=${email}, variant=${variantIdToTrack}`);
+              console.log(`Note: Skipping eligibility restrictions to enable unlimited signups with different emails`);
               
               // Collect comprehensive analytics data for conversion (same pattern as abTester.ts)
               const userAgent = request.headers.get('user-agent') || null;
               const referrer = request.headers.get('referer') || request.headers.get('referrer') || null;
-              
-              console.log('[Subscribe API] Headers:', {
-                userAgent: userAgent ? 'Present' : 'Missing',
-                referrer: referrer ? 'Present' : 'Missing',
-                allHeaders: Object.fromEntries(request.headers.entries())
-              });
               
               // Parse device type from user agent (same logic as getDeviceType())
               let deviceType: 'mobile' | 'tablet' | 'desktop' | null = null;
@@ -141,15 +128,10 @@ export const POST: APIRoute = async ({ request }) => {
                 }
               }
               
-              console.log('[Subscribe API] Device detection:', { userAgent, deviceType });
-              
               // Get UTM parameters from form data
               const utmSource = (formData.get('utm_source') as string) || null;
               const utmMedium = (formData.get('utm_medium') as string) || null;
               const utmCampaign = (formData.get('utm_campaign') as string) || null;
-              
-              console.log('[Subscribe API] UTM data:', { utmSource, utmMedium, utmCampaign });
-              console.log('[Subscribe API] All form data:', Object.fromEntries(formData.entries()));
               
               // Fetch geolocation data (same pattern as abTester.ts)
               let geoData = {
@@ -159,7 +141,7 @@ export const POST: APIRoute = async ({ request }) => {
               };
 
               try {
-                console.log('[Subscribe API] Conversion: Fetching geolocation data...');
+                console.log('[Subscribe API] Fetching geolocation data...');
                 const geoResponse = await fetch('/api/geolocation', {
                   method: 'GET',
                   headers: {
@@ -167,11 +149,8 @@ export const POST: APIRoute = async ({ request }) => {
                   }
                 });
 
-                console.log('[Subscribe API] Geolocation response status:', geoResponse.status);
-
                 if (geoResponse.ok) {
                   const geoResult = await geoResponse.json();
-                  console.log('[Subscribe API] Geolocation raw result:', geoResult);
                   
                   if (geoResult.success && geoResult.data) {
                     geoData = {
@@ -179,16 +158,15 @@ export const POST: APIRoute = async ({ request }) => {
                       region: geoResult.data.region || null,
                       city: geoResult.data.city || null
                     };
-                    console.log('[Subscribe API] Conversion: Geolocation data retrieved:', geoData);
+                    console.log('[Subscribe API] Geolocation data retrieved:', geoData);
                   } else {
-                    console.log('[Subscribe API] Conversion: Geolocation API returned no data');
+                    console.log('[Subscribe API] Geolocation API returned no data');
                   }
                 } else {
-                  const errorText = await geoResponse.text();
-                  console.warn('[Subscribe API] Conversion: Geolocation API request failed:', geoResponse.status, errorText);
+                  console.warn('[Subscribe API] Geolocation API request failed:', geoResponse.status);
                 }
               } catch (error) {
-                console.warn('[Subscribe API] Conversion: Failed to fetch geolocation data:', error);
+                console.warn('[Subscribe API] Failed to fetch geolocation data:', error);
                 // Continue with null values - non-blocking error
               }
               
@@ -203,7 +181,8 @@ export const POST: APIRoute = async ({ request }) => {
                   source: signupSource || 'hero-static',
                   email: email,
                   original_variant: abTestVariantId,
-                  ab_user_identifier: abUserIdentifier
+                  ab_user_identifier: abUserIdentifier,
+                  submission_type: 'unlimited_signups_enabled'
                 },
                 session_identifier: null, // Server-side doesn't have client session
                 
@@ -216,7 +195,7 @@ export const POST: APIRoute = async ({ request }) => {
                 utm_campaign: utmCampaign,
                 time_to_convert: null,
                 conversion_value: 1.0,
-                conversion_eligibility_verified: true,
+                conversion_eligibility_verified: true, // Set as verified since we're allowing unlimited submissions
                 original_exposure_date: new Date().toISOString(),
                 
                 // Enhanced metadata (put extra data here instead of non-existent columns)
@@ -235,9 +214,6 @@ export const POST: APIRoute = async ({ request }) => {
                 }
               };
 
-              console.log('[Subscribe API] === FINAL CONVERSION DATA ===');
-              console.log('[Subscribe API] Conversion data to insert:', JSON.stringify(conversionData, null, 2));
-
               const { error: conversionError } = await supabase
                 .from('conversions')
                 .insert(conversionData);
@@ -245,12 +221,12 @@ export const POST: APIRoute = async ({ request }) => {
               if (conversionError) {
                 console.error('Error tracking A/B conversion:', conversionError);
               } else {
-                console.log('A/B conversion tracked successfully via eligibility system');
+                console.log('Email signup conversion tracked successfully (eligibility checks bypassed for unlimited submissions).');
               }
             }
           }
         } else {
-          console.log('No ab_user_identifier provided for eligibility check');
+          console.log('No ab_user_identifier provided for conversion tracking');
         }
       } catch (error) {
         console.error('Error in A/B conversion tracking:', error);

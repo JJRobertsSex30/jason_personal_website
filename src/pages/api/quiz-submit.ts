@@ -170,9 +170,13 @@ export const POST = async ({ request }) => {
         if (conversionCheckError && conversionCheckError.code !== 'PGRST116') {
           console.error(`[API Quiz Submit ${requestTimestamp}] DB error checking existing conversions: ${conversionCheckError.message}`);
         } else if (existingConversion) {
-          console.log(`[API Quiz Submit ${requestTimestamp}] Conversion already exists for email ${email} in experiment ${actualExperimentUUID}. Skipping duplicate conversion.`);
+          console.log(`[API Quiz Submit ${requestTimestamp}] Conversion already exists for email ${email} in experiment ${actualExperimentUUID}. Skipping duplicate conversion to maintain data integrity.`);
         } else {
-          console.log(`[API Quiz Submit ${requestTimestamp}] Tracking new conversion: expUUID=${actualExperimentUUID}, varID=${parsedVariantData.variantId}, email=${email}, session=${sessionIdFromClient}`);
+          // MODIFIED: Skip eligibility checks for quiz submissions to allow unlimited retaking
+          // The quiz experience should be frictionless and allow different email submissions
+          console.log(`[API Quiz Submit ${requestTimestamp}] Tracking new quiz conversion: expUUID=${actualExperimentUUID}, varID=${parsedVariantData.variantId}, email=${email}, session=${sessionIdFromClient}`);
+          console.log(`[API Quiz Submit ${requestTimestamp}] Note: Skipping eligibility restrictions for quiz submissions to enable unlimited retaking with different emails`);
+          
           const { error: conversionError } = await supabase
             .from('conversions')
             .insert({
@@ -181,18 +185,20 @@ export const POST = async ({ request }) => {
               user_identifier: email, 
               conversion_type: 'quiz_completion',
               session_identifier: sessionIdFromClient,
+              conversion_eligibility_verified: true, // Set as verified since we're allowing quiz retaking
               details: {
                 quiz_score: score,
                 quiz_result: resultType,
                 referral_code_used: referralCodeUsedBySubmitter,
                 variant_name: parsedVariantData.variantName || 'unknown',
-                original_experiment_name: parsedVariantData.experiment 
+                original_experiment_name: parsedVariantData.experiment,
+                submission_type: 'quiz_unlimited_retaking_enabled'
               }
             });
           if (conversionError) {
             console.error(`[API Quiz Submit ${requestTimestamp}] DB error tracking conversion: ${conversionError.message}. Details: ${conversionError.details}`);
           } else {
-            console.log(`[API Quiz Submit ${requestTimestamp}] Conversion tracked successfully.`);
+            console.log(`[API Quiz Submit ${requestTimestamp}] Quiz conversion tracked successfully (eligibility checks bypassed for unlimited retaking).`);
           }
         }
       } else {
