@@ -1,5 +1,5 @@
 ---
-// src/components/widgets/HeroCustomAB.astro
+// src/components/widgets/Hero.astro
 import { Image } from 'astro:assets';
 import type { ImageMetadata } from 'astro';
 import heroBgImage from '~/assets/images/jj2.png'; // Default image if none provided
@@ -13,6 +13,7 @@ export interface Props {
   };
   abTestVariantKey?: string; // This prop will receive the VARIANT'S ID (UUID)
   experimentName?: string;   // This prop will receive the textual name of the experiment
+  experimentIdUUID?: string; // <-- ADDED: To receive the Experiment's UUID
 }
 
 const { 
@@ -20,15 +21,17 @@ const {
   subheadline = "Unlock insights and start your journey with our expert guidance. Enter your email to begin.",
   image = { src: heroBgImage, alt: 'Inspirational image for hero section' },
   abTestVariantKey = 'default_variant_id_from_hero', // Default for the variant ID
-  experimentName = 'default_experiment_name_from_hero_component'  // More specific default
+  experimentName = 'default_experiment_name_from_hero_component',  // More specific default
+  experimentIdUUID = 'default_experiment_id_uuid_from_hero' // <-- ADDED
 } = Astro.props;
 
 // --- Enhanced SSR Logging for Props ---
-console.log(`[HeroCustomAB SSR] Raw Astro.props.headline: "${Astro.props.headline}"`);
-console.log(`[HeroCustomAB SSR] Raw Astro.props.experimentName: "${Astro.props.experimentName}"`);
-console.log(`[HeroCustomAB SSR] Raw Astro.props.abTestVariantKey: "${Astro.props.abTestVariantKey}"`);
+console.log(`[Hero SSR] Raw Astro.props.headline: "${Astro.props.headline}"`);
+console.log(`[Hero SSR] Raw Astro.props.experimentName: "${Astro.props.experimentName}"`);
+console.log(`[Hero SSR] Raw Astro.props.abTestVariantKey: "${Astro.props.abTestVariantKey}"`);
+console.log(`[Hero SSR] Raw Astro.props.experimentIdUUID: "${Astro.props.experimentIdUUID}"`); // <-- ADDED
 
-console.log(`[HeroCustomAB SSR] Destructured values: headline="${headline ? headline.substring(0,30) + '...' : 'N/A'}", experimentName="${experimentName}", abTestVariantKey (variantId)="${abTestVariantKey}"`);
+console.log(`[Hero SSR] Destructured values: headline="${headline ? headline.substring(0,30) + '...' : 'N/A'}", experimentName="${experimentName}", abTestVariantKey (variantId)="${abTestVariantKey}", experimentIdUUID="${experimentIdUUID}"`); // <-- MODIFIED
 // --- End Enhanced SSR Logging ---
 ---
 
@@ -92,241 +95,103 @@ console.log(`[HeroCustomAB SSR] Destructured values: headline="${headline ? head
 
 <script define:vars={{ 
   clientVariantIdFromProps: abTestVariantKey, 
-  clientExperimentNameFromProps: experimentName // This uses the destructured 'experimentName' from frontmatter
+  clientExperimentNameFromProps: experimentName, // This uses the destructured 'experimentName' from frontmatter
+  clientExperimentIdUUIDFromProps: experimentIdUUID // <-- ADDED
 }}>
-  // Import email validation service
-  import('/src/lib/emailValidationService.js').then(({ EmailValidationService }) => {
-    document.addEventListener('DOMContentLoaded', function() {
-      console.log('[HeroCustomAB Client] Component mounted with email validation. Variant ID:', clientVariantIdFromProps, 'Experiment Name:', clientExperimentNameFromProps);
-      
-      const form = document.getElementById('hero-custom-ab-form');
-      const messageElement = document.getElementById('hero-custom-ab-form-message');
-      const abUserIdentifierInput = document.getElementById('ab-user-identifier-input');
-      
-      // Populate ab_user_identifier from localStorage for consistent eligibility checking
-      function getClientUserIdentifier() {
-        let userId = localStorage.getItem('ab_user_identifier');
-        if (!userId) {
-          userId = crypto.randomUUID();
-          localStorage.setItem('ab_user_identifier', userId);
-          console.log('[HeroCustomAB] New ab_user_identifier generated:', userId);
-        }
-        return userId;
-      }
-      
-      if (abUserIdentifierInput) {
-        const userIdentifier = getClientUserIdentifier();
-        abUserIdentifierInput.value = userIdentifier;
-        console.log('[HeroCustomAB] Set ab_user_identifier in form:', userIdentifier);
-      }
-      
-      if (!form || !messageElement) {
-          console.error('[HeroCustomAB Client] Form or message element not found.');
-          return;
-      }
-      
-      form.addEventListener('submit', async function(event) {
-        event.preventDefault();
-        
-        const emailInput = form.querySelector('input[type="email"]');
-        const submitButton = form.querySelector('button[type="submit"]');
-        
-        if (!(emailInput instanceof HTMLInputElement) || !(submitButton instanceof HTMLButtonElement)) {
-            console.error("[HeroCustomAB Client] Email input or submit button not found or are of incorrect type.");
-            messageElement.textContent = "Form error. Please refresh and try again.";
-            messageElement.className = 'text-sm mt-4 text-red-600 dark:text-red-500 min-h-[1.25em]';
-            return;
-        }
-        
-        const email = emailInput.value.trim();
-        
-        if (!email) {
-          messageElement.textContent = 'Please enter your email address.';
-          messageElement.className = 'text-sm mt-4 text-red-600 dark:text-red-500 min-h-[1.25em]';
-          return;
-        }
-        
-        // Validate email using our comprehensive service
-        const validationResult = EmailValidationService.validateEmail(email);
-        
-        if (!validationResult.isValid) {
-          const errorMessage = EmailValidationService.getDisplayMessage(validationResult);
-          messageElement.textContent = errorMessage;
-          messageElement.className = 'text-sm mt-4 text-red-600 dark:text-red-500 min-h-[1.25em]';
-          return;
-        }
-        
-        submitButton.disabled = true;
-        submitButton.textContent = 'Subscribing...';
-        messageElement.textContent = 'Processing your request...';
-        messageElement.className = 'text-sm mt-4 text-gray-700 dark:text-gray-300 min-h-[1.25em]';
-        
-        try {
-          const formDataForApiSubscribe = new FormData(form); 
-          
-          const response = await fetch('/api/subscribe', { 
-            method: 'POST',
-            body: formDataForApiSubscribe
-          });
-          
-          const result = await response.json();
-          let conversionDisplayMessage = '';
-          
-          if (response.ok && result.success) {
-            conversionDisplayMessage = result.message || 'Thank you for subscribing! Please check your email to confirm.'; 
-            messageElement.className = 'text-sm mt-4 text-green-600 dark:text-green-500 min-h-[1.25em]';
-            emailInput.value = ''; 
-            
-            if (typeof window.trackConversion === 'function') {
-              console.log(`[HeroCustomAB Client] Attempting to track A/B conversion. Variant ID: '${clientVariantIdFromProps}', User: '${email}'`);
-              
-              const abResult = await window.trackConversion(
-                clientVariantIdFromProps,    
-                email,                       
-                'hero_form_submission',      
-                {                            
-                  source: 'hero-custom-ab',
-                  experiment_context_name: clientExperimentNameFromProps 
-                } 
-              );
-              console.log(`[HeroCustomAB Client] A/B Test Conversion track result:`, abResult);
-              
-              if (abResult.status === 'DUPLICATE') {
-                console.warn('[HeroCustomAB Client] A/B Test: Duplicate conversion detected by abTester for:', email);
-              } else if (abResult.status === 'ERROR') {
-                console.error('[HeroCustomAB Client] A/B Test: Error tracking conversion via abTester:', abResult.message);
-              }
-            } else {
-              console.warn('[HeroCustomAB Client] window.trackConversion function not found. A/B conversion not tracked.');
-            }
+  document.addEventListener('DOMContentLoaded', function() {
+    console.log('[Hero Client - Simplified] DOMContentLoaded. Props:', { clientVariantIdFromProps, clientExperimentNameFromProps, clientExperimentIdUUIDFromProps });
+    const form = document.getElementById('hero-custom-ab-form');
+    const messageElement = document.getElementById('hero-custom-ab-form-message');
 
+    if (!form || !messageElement) {
+      console.error('[Hero Client - Simplified] Form or message element not found.');
+      return;
+    }
+    
+    // Ensure ab_user_identifier is set
+    function ensureAbUserIdentifier() {
+      let userId = localStorage.getItem('ab_user_identifier');
+      if (!userId) {
+        userId = crypto.randomUUID();
+        localStorage.setItem('ab_user_identifier', userId);
+        console.log('[Hero Client - Simplified] New ab_user_identifier generated and stored:', userId);
+      }
+      const hiddenInput = form.querySelector('input[name="ab_user_identifier"]');
+      if (hiddenInput) {
+        hiddenInput.value = userId;
+        console.log('[Hero Client - Simplified] ab_user_identifier set in form field:', userId);
+      }
+    }
+    ensureAbUserIdentifier();
+
+    // Ensure session_identifier is set
+    function ensureSessionIdentifier() {
+      let sessionId = sessionStorage.getItem('ab_session_identifier'); // Use sessionStorage for session-specific ID
+      if (!sessionId) {
+        sessionId = crypto.randomUUID();
+        sessionStorage.setItem('ab_session_identifier', sessionId);
+        console.log('[Hero Client - Simplified] New session_identifier generated and stored:', sessionId);
+      }
+      // Add a hidden input for session_identifier if it doesn't exist, or update existing one
+      let sessionInput = form.querySelector('input[name="session_identifier"]');
+      if (!sessionInput) {
+        sessionInput = document.createElement('input');
+        sessionInput.type = 'hidden';
+        sessionInput.name = 'session_identifier';
+        form.appendChild(sessionInput);
+      }
+      sessionInput.value = sessionId;
+      console.log('[Hero Client - Simplified] session_identifier set in form field:', sessionId);
+    }
+    ensureSessionIdentifier();
+
+    form.addEventListener('submit', async function(event) {
+      event.preventDefault();
+      console.log('[Hero Client - Simplified] Form submitted.');
+      messageElement.textContent = 'Subscribing...';
+      messageElement.className = 'text-sm mt-4 text-gray-700 dark:text-gray-300 min-h-[1.25em]';
+      const submitButton = form.querySelector('button[type="submit"]');
+      if (submitButton) submitButton.disabled = true;
+
+      try {
+        const formData = new FormData(form); // FormData will now pick up session_identifier
+        
+        // Add exposure_timestamp if available
+        if (clientExperimentIdUUIDFromProps && clientExperimentIdUUIDFromProps !== 'default_experiment_id_uuid_from_hero') {
+          const exposureTimestampKey = `ab_first_exposure_time_${clientExperimentIdUUIDFromProps}`;
+          const storedExposureTimestamp = localStorage.getItem(exposureTimestampKey);
+          if (storedExposureTimestamp) {
+            formData.append('exposure_timestamp', storedExposureTimestamp);
+            console.log(`[Hero Client - Simplified] Appended exposure_timestamp (${storedExposureTimestamp}) from localStorage for key: ${exposureTimestampKey}`);
           } else {
-            conversionDisplayMessage = result.message || 'Subscription failed. Please try again.';
-            messageElement.className = 'text-sm mt-4 text-red-600 dark:text-red-500 min-h-[1.25em]';
+            console.warn(`[Hero Client - Simplified] No exposure_timestamp found in localStorage for key: ${exposureTimestampKey}. time_to_convert will likely be null.`);
           }
-          messageElement.textContent = conversionDisplayMessage;
+        } else {
+          console.warn('[Hero Client - Simplified] clientExperimentIdUUIDFromProps is not valid. Cannot retrieve exposure_timestamp. time_to_convert will likely be null.');
+        }
 
-        } catch (error) {
-          console.error('[HeroCustomAB Client] Error during form submission or A/B tracking:', error);
-          messageElement.textContent = 'An unexpected error occurred. Please try again.';
+        const response = await fetch('/api/subscribe', {
+          method: 'POST',
+          body: formData
+        });
+        const result = await response.json();
+        if (response.ok && result.success) {
+          messageElement.textContent = result.message || 'Thank you for subscribing! Please check your email to confirm.';
+          messageElement.className = 'text-sm mt-4 text-green-600 dark:text-green-500 min-h-[1.25em]';
+        } else {
+          messageElement.textContent = result.message || 'Subscription failed. Please try again.';
           messageElement.className = 'text-sm mt-4 text-red-600 dark:text-red-500 min-h-[1.25em]';
-        } finally {
+        }
+      } catch (e) {
+        console.error('[Hero Client - Simplified] Error:', e);
+        messageElement.textContent = 'An unexpected error occurred. Please try again.';
+        messageElement.className = 'text-sm mt-4 text-red-600 dark:text-red-500 min-h-[1.25em]';
+      } finally {
+        if (submitButton) {
           submitButton.disabled = false;
           submitButton.textContent = 'Get Started Now';
         }
-      });
-    });
-  }).catch(error => {
-    console.error('[HeroCustomAB Client] Error loading email validation service:', error);
-    // Fallback behavior without email validation
-    document.addEventListener('DOMContentLoaded', function() {
-      console.log('[HeroCustomAB Client] Component mounted with fallback validation. Variant ID:', clientVariantIdFromProps, 'Experiment Name:', clientExperimentNameFromProps);
-      
-      const form = document.getElementById('hero-custom-ab-form');
-      const messageElement = document.getElementById('hero-custom-ab-form-message');
-      const abUserIdentifierInput = document.getElementById('ab-user-identifier-input');
-      
-      function getClientUserIdentifier() {
-        let userId = localStorage.getItem('ab_user_identifier');
-        if (!userId) {
-          userId = crypto.randomUUID();
-          localStorage.setItem('ab_user_identifier', userId);
-          console.log('[HeroCustomAB] New ab_user_identifier generated:', userId);
-        }
-        return userId;
       }
-      
-      if (abUserIdentifierInput) {
-        const userIdentifier = getClientUserIdentifier();
-        abUserIdentifierInput.value = userIdentifier;
-        console.log('[HeroCustomAB] Set ab_user_identifier in form:', userIdentifier);
-      }
-      
-      if (!form || !messageElement) {
-          console.error('[HeroCustomAB Client] Form or message element not found.');
-          return;
-      }
-      
-      form.addEventListener('submit', async function(event) {
-        event.preventDefault();
-        
-        const emailInput = form.querySelector('input[type="email"]');
-        const submitButton = form.querySelector('button[type="submit"]');
-        
-        if (!(emailInput instanceof HTMLInputElement) || !(submitButton instanceof HTMLButtonElement)) {
-            console.error("[HeroCustomAB Client] Email input or submit button not found or are of incorrect type.");
-            messageElement.textContent = "Form error. Please refresh and try again.";
-            messageElement.className = 'text-sm mt-4 text-red-600 dark:text-red-500 min-h-[1.25em]';
-            return;
-        }
-        
-        const email = emailInput.value.trim();
-        
-        if (!email || !email.includes('@')) {
-          messageElement.textContent = 'Please enter a valid email address.';
-          messageElement.className = 'text-sm mt-4 text-red-600 dark:text-red-500 min-h-[1.25em]';
-          return;
-        }
-        
-        submitButton.disabled = true;
-        submitButton.textContent = 'Subscribing...';
-        messageElement.textContent = 'Processing your request...';
-        messageElement.className = 'text-sm mt-4 text-gray-700 dark:text-gray-300 min-h-[1.25em]';
-        
-        try {
-          const formDataForApiSubscribe = new FormData(form); 
-          
-          const response = await fetch('/api/subscribe', { 
-            method: 'POST',
-            body: formDataForApiSubscribe
-          });
-          
-          const result = await response.json();
-          let conversionDisplayMessage = '';
-          
-          if (response.ok && result.success) {
-            conversionDisplayMessage = result.message || 'Thank you for subscribing! Please check your email to confirm.'; 
-            messageElement.className = 'text-sm mt-4 text-green-600 dark:text-green-500 min-h-[1.25em]';
-            emailInput.value = ''; 
-            
-            if (typeof window.trackConversion === 'function') {
-              console.log(`[HeroCustomAB Client] Attempting to track A/B conversion. Variant ID: '${clientVariantIdFromProps}', User: '${email}'`);
-              
-              const abResult = await window.trackConversion(
-                clientVariantIdFromProps,    
-                email,                       
-                'hero_form_submission',      
-                {                            
-                  source: 'hero-custom-ab',
-                  experiment_context_name: clientExperimentNameFromProps 
-                } 
-              );
-              console.log(`[HeroCustomAB Client] A/B Test Conversion track result:`, abResult);
-              
-              if (abResult.status === 'DUPLICATE') {
-                console.warn('[HeroCustomAB Client] A/B Test: Duplicate conversion detected by abTester for:', email);
-              } else if (abResult.status === 'ERROR') {
-                console.error('[HeroCustomAB Client] A/B Test: Error tracking conversion via abTester:', abResult.message);
-              }
-            } else {
-              console.warn('[HeroCustomAB Client] window.trackConversion function not found. A/B conversion not tracked.');
-            }
-
-          } else {
-            conversionDisplayMessage = result.message || 'Subscription failed. Please try again.';
-            messageElement.className = 'text-sm mt-4 text-red-600 dark:text-red-500 min-h-[1.25em]';
-          }
-          messageElement.textContent = conversionDisplayMessage;
-
-        } catch (error) {
-          console.error('[HeroCustomAB Client] Error during form submission or A/B tracking:', error);
-          messageElement.textContent = 'An unexpected error occurred. Please try again.';
-          messageElement.className = 'text-sm mt-4 text-red-600 dark:text-red-500 min-h-[1.25em]';
-        } finally {
-          submitButton.disabled = false;
-          submitButton.textContent = 'Get Started Now';
-        }
-      });
     });
   });
 </script>

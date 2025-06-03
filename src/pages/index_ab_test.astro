@@ -99,6 +99,7 @@ const finalCtaButton = {
       image={heroImageForWidget}
       abTestVariantKey={chosenHeroContent.id} 
       experimentName={HERO_EXPERIMENT_NAME}
+      experimentIdUUID={chosenHeroContent.experiment_id}
     />
 
     {Astro.cookies.has('astro_developer_toolbar') && (

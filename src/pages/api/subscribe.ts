@@ -74,6 +74,30 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
+    // Upsert user profile
+    try {
+      const { data: userProfile, error: profileError } = await supabase
+        .from('user_profiles')
+        .upsert({
+          email: email as string,
+          // Conditionally add first_name if it exists and is not an empty string
+          ...(firstName && typeof firstName === 'string' && firstName.trim() !== '' && { first_name: firstName }),
+        }, {
+          onConflict: 'email',
+        })
+        .select('id, email, insight_gems') // Select fields you might need
+        .single();
+
+      if (profileError) {
+        console.error('Error upserting user profile:', profileError);
+        // Not returning an error to the client, as newsletter subscription was the primary goal
+      } else {
+        console.log('User profile upserted successfully:', userProfile);
+      }
+    } catch (e) {
+      console.error('Exception during user profile upsert:', e);
+    }
+
     // Determine variant ID to track for A/B testing
     let variantIdToTrack: string | null = null;
     
@@ -124,7 +148,13 @@ export const POST: APIRoute = async ({ request }) => {
               
               // Collect comprehensive analytics data for conversion (same pattern as abTester.ts)
               const userAgent = request.headers.get('user-agent') || null;
-              const referrer = request.headers.get('referer') || request.headers.get('referrer') || null;
+              let referrer = request.headers.get('referer') || request.headers.get('referrer') || null;
+
+              // Truncate referrer if it exceeds 200 characters
+              if (referrer && referrer.length > 200) {
+                console.warn(`[Subscribe API] Referrer is too long (${referrer.length} chars), truncating to 200. Original: ${referrer}`);
+                referrer = referrer.substring(0, 200);
+              }
               
               // Parse device type from user agent (same logic as getDeviceType())
               let deviceType: 'mobile' | 'tablet' | 'desktop' | null = null;
@@ -152,7 +182,12 @@ export const POST: APIRoute = async ({ request }) => {
 
               try {
                 console.log('[Subscribe API] Fetching geolocation data...');
-                const geoResponse = await fetch('/api/geolocation', {
+                // Attempt to fetch from the absolute path for server-side calls
+                const protocol = request.headers.get('x-forwarded-proto') || 'http';
+                const host = request.headers.get('host');
+                const geoApiUrl = host ? `${protocol}://${host}/api/geolocation` : '/api/geolocation';
+                
+                const geoResponse = await fetch(geoApiUrl, {
                   method: 'GET',
                   headers: {
                     'Content-Type': 'application/json'
@@ -173,11 +208,49 @@ export const POST: APIRoute = async ({ request }) => {
                     console.log('[Subscribe API] Geolocation API returned no data');
                   }
                 } else {
-                  console.warn('[Subscribe API] Geolocation API request failed:', geoResponse.status);
+                  console.warn(`[Subscribe API] Geolocation API request failed: ${geoResponse.status} at ${geoApiUrl}`);
                 }
               } catch (error) {
                 console.warn('[Subscribe API] Failed to fetch geolocation data:', error);
                 // Continue with null values - non-blocking error
+              }
+
+              const clientSessionIdentifier = formData.get('session_identifier');
+              const clientExposureTimestampString = formData.get('exposure_timestamp') as string | null; // Expecting ISO string or stringified number
+              console.log('[Subscribe API] Received exposure_timestamp string from formData:', clientExposureTimestampString, 'Type:', typeof clientExposureTimestampString);
+
+              let calculatedTimeToConvert: number | null = null;
+              let actualOriginalExposureDate: string | null = null; // Initialize as null
+
+              if (clientExposureTimestampString) {
+                try {
+                  // Ensure it's treated as a number for Date constructor if it's a stringified number
+                  const timestampAsNumber = Number(clientExposureTimestampString);
+                  if (!isNaN(timestampAsNumber)) {
+                    const exposureDate = new Date(timestampAsNumber);
+                    const exposureTime = exposureDate.getTime();
+                    const conversionTime = new Date().getTime();
+
+                    if (exposureTime <= conversionTime) { // Also ensure not in the future
+                      // Round to the nearest whole second for integer column
+                      calculatedTimeToConvert = Math.round(Math.max(0, (conversionTime - exposureTime) / 1000)); 
+                      actualOriginalExposureDate = exposureDate.toISOString(); // Store as ISO string
+                      console.log(`[Subscribe API] Calculated time_to_convert: ${calculatedTimeToConvert}s, original_exposure_date: ${actualOriginalExposureDate}`);
+                    } else {
+                      console.warn('[Subscribe API] exposure_timestamp is in the future:', clientExposureTimestampString);
+                      actualOriginalExposureDate = new Date().toISOString(); // Fallback to conversion time as ISO string
+                    }
+                  } else {
+                    console.warn('[Subscribe API] Could not parse exposure_timestamp string to a number:', clientExposureTimestampString);
+                    actualOriginalExposureDate = new Date().toISOString(); // Fallback
+                  }
+                } catch (e) {
+                  console.warn('[Subscribe API] Error processing exposure_timestamp:', clientExposureTimestampString, e);
+                  actualOriginalExposureDate = new Date().toISOString(); // Fallback
+                }
+              } else {
+                console.log('[Subscribe API] exposure_timestamp not provided by client. time_to_convert will be null.');
+                actualOriginalExposureDate = new Date().toISOString(); // Fallback to conversion time as original exposure
               }
               
               // Create conversion data with ONLY fields that exist in conversions table
@@ -185,16 +258,16 @@ export const POST: APIRoute = async ({ request }) => {
                 // Core required fields
                 variant_id: variantIdToTrack,
                 experiment_id: variantData.experiment_id,
-                user_identifier: email,
+                user_identifier: email, // Using email as the consistent user identifier here
                 conversion_type: 'email_signup',
                 details: {
                   source: signupSource || 'hero-static',
                   email: email,
                   original_variant: abTestVariantId,
-                  ab_user_identifier: abUserIdentifier,
+                  ab_user_identifier: abUserIdentifier, // This is the client-generated ab testing user id
                   submission_type: 'unlimited_signups_enabled'
                 },
-                session_identifier: null, // Server-side doesn't have client session
+                session_identifier: (clientSessionIdentifier && typeof clientSessionIdentifier === 'string') ? clientSessionIdentifier : null,
                 
                 // Fields that exist in conversions table schema
                 country_code: geoData.country_code,
@@ -203,24 +276,30 @@ export const POST: APIRoute = async ({ request }) => {
                 utm_source: utmSource,
                 utm_medium: utmMedium,
                 utm_campaign: utmCampaign,
-                time_to_convert: null,
+                time_to_convert: calculatedTimeToConvert,
                 conversion_value: 1.0,
                 conversion_eligibility_verified: true, // Set as verified since we're allowing unlimited submissions
-                original_exposure_date: new Date().toISOString(),
+                original_exposure_date: actualOriginalExposureDate, // Will be ISO string or null (if initialised to null and error occurs)
+                conversion_context: {
+                  type: 'direct_signup',
+                  source_detail: signupSource || 'hero-static',
+                  entry_point: 'hero_form',
+                  form_id: 'subscribe_api_hero' // Generic ID for this endpoint
+                },
                 
                 // Enhanced metadata (put extra data here instead of non-existent columns)
                 metadata: {
                   source: 'subscribe_api',
                   server_side: true,
                   collection_timestamp: new Date().toISOString(),
-                  signup_source: signupSource || 'hero-static',
-                  geolocation_source: geoData.country_code ? 'ipgeolocation.io' : 'unavailable',
+                  signup_source_detail: signupSource || 'hero-static', // Redundant with conversion_context but kept for now
+                  geolocation_source: geoData.country_code ? 'api/geolocation' : 'unavailable',
                   user_agent: userAgent,
                   api_endpoint: 'subscribe',
                   // Store extra data that doesn't have dedicated columns
                   region: geoData.region,
                   city: geoData.city,
-                  page_url: referrer
+                  page_url: referrer // The page where the submission happened
                 }
               };
 
