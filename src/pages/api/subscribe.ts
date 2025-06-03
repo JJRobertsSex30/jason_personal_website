@@ -74,28 +74,70 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
-    // Upsert user profile
+    // Upsert user profile - REPLACING WITH SELECT THEN INSERT/UPDATE LOGIC
     try {
-      const { data: userProfile, error: profileError } = await supabase
+      console.log(`[API Subscribe] Looking up user: ${email}`);
+      const { data: existingUser, error: userLookupError } = await supabase
         .from('user_profiles')
-        .upsert({
-          email: email as string,
-          // Conditionally add first_name if it exists and is not an empty string
-          ...(firstName && typeof firstName === 'string' && firstName.trim() !== '' && { first_name: firstName }),
-        }, {
-          onConflict: 'email',
-        })
-        .select('id, email, insight_gems') // Select fields you might need
-        .single();
+        .select('id, email, referral_code') // Select needed fields
+        .eq('email', email as string)
+        .maybeSingle();
 
-      if (profileError) {
-        console.error('Error upserting user profile:', profileError);
-        // Not returning an error to the client, as newsletter subscription was the primary goal
-      } else {
-        console.log('User profile upserted successfully:', userProfile);
+      if (userLookupError) {
+        console.error(`[API Subscribe] DB error looking up user ${email}: ${userLookupError.message}`);
+        // Decide if this is critical, for now, we'll log and continue if possible
+        // to allow conversion tracking to still attempt if ConvertKit was successful.
       }
+
+      let userId: string | undefined;
+      // let userOwnReferralCode: string | undefined; // Not strictly needed in this scope further down for subscribe
+
+      if (existingUser) {
+        userId = existingUser.id;
+        // userOwnReferralCode = existingUser.referral_code || '';
+        console.log(`[API Subscribe] Existing user: ID ${userId}.firstName: ${firstName}`);
+        // Update existing user if necessary (e.g., first_name)
+        if (firstName && typeof firstName === 'string' && firstName.trim() !== '') {
+          const { error: updateError } = await supabase
+            .from('user_profiles')
+            .update({ first_name: firstName })
+            .eq('id', userId);
+          if (updateError) {
+            console.error(`[API Subscribe] DB error updating user ${userId}: ${updateError.message}`);
+          } else {
+            console.log(`[API Subscribe] User ${userId} first_name updated.`);
+          }
+        }
+      } else {
+        // New user: Generate ID and referral code, then insert
+        const newUserId = crypto.randomUUID();
+        const newUserReferralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+        console.log(`[API Subscribe] Creating new user: ${email}, ID ${newUserId}, Referral ${newUserReferralCode}`);
+        
+        const { error: insertError } = await supabase
+          .from('user_profiles')
+          .insert({
+            id: newUserId,
+            email: email as string,
+            first_name: (firstName && typeof firstName === 'string' && firstName.trim() !== '') ? firstName : null,
+            referral_code: newUserReferralCode,
+            // insight_gems will use DB default
+          });
+
+        if (insertError) {
+          console.error(`[API Subscribe] DB error creating user ${email}: ${insertError.message}`);
+          // Decide if critical
+        } else {
+          userId = newUserId;
+          // userOwnReferralCode = newUserReferralCode;
+          console.log(`[API Subscribe] New user created: ID ${userId}`);
+        }
+      }
+      // userProfile variable is not available in this pattern in the same way as with .upsert().select().single()
+      // If userId is needed later, it's captured above.
+
     } catch (e) {
-      console.error('Exception during user profile upsert:', e);
+      console.error('[API Subscribe] Exception during user profile handling:', e);
     }
 
     // Determine variant ID to track for A/B testing
