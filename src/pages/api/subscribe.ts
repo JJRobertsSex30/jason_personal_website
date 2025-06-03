@@ -75,7 +75,7 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     // Determine variant ID to track for A/B testing
-    let variantIdToTrack = null;
+    let variantIdToTrack: string | null = null;
     
     // Option 1: Direct Supabase variant ID (from custom A/B test components)
     if (abTestVariantId && typeof abTestVariantId === 'string') {

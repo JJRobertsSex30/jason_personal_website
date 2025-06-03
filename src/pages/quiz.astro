@@ -595,13 +595,18 @@ function getResultSummary(score: number) {
 
               // MODIFIED: Set entry point as 'quiz' instead of 'quiz-lovelab'
               if (currentVariant && currentVariant.experiment && currentVariant.variantId) {
+                // Extract quizPath from raw_config_json if available
+                const actualQuizPath = (currentVariant.raw_config_json && typeof currentVariant.raw_config_json.quiz_path === 'string')
+                                          ? currentVariant.raw_config_json.quiz_path
+                                          : ''; // Default to empty if not found
+
                 formData.append('variantInfo', JSON.stringify({
                   experiment: currentVariant.experiment, 
                   experimentId: currentVariant.experimentId, // Send UUID if available
                   variantId: currentVariant.variantId,
                   variantName: currentVariant.variantName || '',
-                  quizPath: currentVariant.quizPath || '',
-                  quizName: 'quiz' // Entry point identifier - different from quiz-lovelab
+                  quizPath: actualQuizPath, // Use the extracted path
+                  quizName: 'quiz' // This page is for the general 'quiz'
                 }));
               }
               
@@ -680,13 +685,18 @@ function getResultSummary(score: number) {
               formData.append('resultType', resultTypeToSubmit);
 
               if (currentVariant && currentVariant.experiment && currentVariant.variantId) {
+                // Extract quizPath from raw_config_json if available
+                const actualQuizPath = (currentVariant.raw_config_json && typeof currentVariant.raw_config_json.quiz_path === 'string')
+                                          ? currentVariant.raw_config_json.quiz_path
+                                          : ''; // Default to empty if not found
+
                 formData.append('variantInfo', JSON.stringify({
                   experiment: currentVariant.experiment, 
-                  experimentId: currentVariant.experimentId,
+                  experimentId: currentVariant.experimentId, // Send UUID if available
                   variantId: currentVariant.variantId,
                   variantName: currentVariant.variantName || '',
-                  quizPath: currentVariant.quizPath || '',
-                  quizName: 'quiz'
+                  quizPath: actualQuizPath, // Use the extracted path
+                  quizName: 'quiz' // This page is for the general 'quiz'
                 }));
               }
               

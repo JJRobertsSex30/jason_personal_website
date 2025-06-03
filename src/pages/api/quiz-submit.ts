@@ -118,12 +118,15 @@ export const POST = async ({ request }) => {
         isNewUser = true;
         const newUserId = crypto.randomUUID();
         const newUserOwnReferralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
-        currentInsightGems = 0; 
+        // Initialize currentInsightGems to 100 for new users, this will be used by ConvertKit payload
+        // The database will use its default of 100 because we are not specifying insight_gems in the insert
+        currentInsightGems = 100; 
         
-        console.log(`[API Quiz Submit ${requestTimestamp}] Creating new user: ${email}, ID ${newUserId}, Own Referral ${newUserOwnReferralCode}`);
+        console.log(`[API Quiz Submit ${requestTimestamp}] Creating new user: ${email}, ID ${newUserId}, Own Referral ${newUserOwnReferralCode}. Initial gems will be set to 100 by DB default.`);
+        // Remove insight_gems from insert to let DB default (100) apply
         const { error: insertError } = await supabase
           .from('user_profiles')
-          .insert({ id: newUserId, email, first_name: firstName, referral_code: newUserOwnReferralCode, insight_gems: 0 });
+          .insert({ id: newUserId, email, first_name: firstName, referral_code: newUserOwnReferralCode });
 
         if (insertError) {
           console.error(`[API Quiz Submit ${requestTimestamp}] DB error creating user ${email}: ${insertError.message}`);

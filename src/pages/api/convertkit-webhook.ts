@@ -1,6 +1,6 @@
 export const prerender = false;
 import type { APIRoute } from 'astro';
-import { updateRecord } from '~/lib/database-operations';
+import { updateRecords } from '~/lib/database-operations';
 
 export const POST: APIRoute = async ({ request }) => {
   const requestTimestamp = new Date().toISOString();
@@ -37,11 +37,11 @@ export const POST: APIRoute = async ({ request }) => {
       
       console.log(`[ConvertKit Webhook ${requestTimestamp}] Processing email verification for: ${email}`);
 
-      // Update quiz_results table to mark email as verified
-      const { data: updatedRecords, error: updateError } = await updateRecord(
-        'quiz_results',
-        { is_email_verified: true },
-        { 
+      // Use updateRecords to update based on filters
+      const { data: updatedData, error: updateError } = await updateRecords(
+        'quiz_results', // tableName
+        { is_email_verified: true }, // updates: what to set
+        { // filters: the WHERE clause
           email: email,
           is_email_verified: false  // Only update records that aren't already verified
         }
@@ -58,8 +58,9 @@ export const POST: APIRoute = async ({ request }) => {
         });
       }
 
-      const recordsUpdated = Array.isArray(updatedRecords) ? updatedRecords.length : (updatedRecords ? 1 : 0);
-      console.log(`[ConvertKit Webhook ${requestTimestamp}] Successfully updated ${recordsUpdated} quiz records for ${email}`);
+      // The result from updateRecords is QueryResult, data is an array or null.
+      const recordsUpdatedCount = updatedData ? updatedData.length : 0;
+      console.log(`[ConvertKit Webhook ${requestTimestamp}] Successfully updated ${recordsUpdatedCount} quiz records for ${email}`);
 
       // Log the verification event for analytics
       try {
@@ -71,7 +72,7 @@ export const POST: APIRoute = async ({ request }) => {
           subscriber_id: subscriberData.id || null,
           metadata: {
             webhook_payload: payload,
-            records_updated: recordsUpdated,
+            records_updated: recordsUpdatedCount, // Use the count
             subscriber_state: subscriberData.state || null,
             subscriber_created_at: subscriberData.created_at || null,
             custom_fields: subscriberData.fields || null
@@ -89,7 +90,7 @@ export const POST: APIRoute = async ({ request }) => {
       return new Response(JSON.stringify({ 
         success: true, 
         message: `Email verification processed for ${email}`,
-        records_updated: recordsUpdated
+        records_updated: recordsUpdatedCount // Use the count
       }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }

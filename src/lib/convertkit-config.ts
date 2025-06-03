@@ -30,8 +30,8 @@ export interface EngagementData {
 export const CONVERTKIT_TAG_IDS = {
   // Source tags (create these in ConvertKit)
   source_hero: 8126106,           // Hero signup
-  source_quiz: 8126109,           // Regular quiz
-  source_lovelab: 8126111,        // Love lab quiz
+  source_quiz: 8126109,           // Love lab quiz 1 page
+  source_lovelab: 8126111,        // Love lab quiz 2 pages
   
   // Result tags (your old acc ones)
   // result_sex_30_leaning: 7939502,     // 'Leaning Towards Sex 3.0'
@@ -98,10 +98,6 @@ export const convertKitConfig: ConvertKitConfig = {
     
     if (data.gems && data.gems > 100) {
       tags.push(convertKitConfig.engagementTagIds.gem_collector);
-    }
-    
-    if (data.hasReferral) {
-      tags.push(convertKitConfig.engagementTagIds.referrer);
     }
     
     return tags;

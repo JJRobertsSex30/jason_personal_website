@@ -684,14 +684,30 @@ const scoreRanges = [
               formData.append('resultType', resultTypeToSubmit);
 
               if (currentVariant && currentVariant.experiment && currentVariant.variantId) {
+                console.log('[LoveLab Quiz DEBUG] currentVariant before creating variantInfo:', JSON.stringify(currentVariant, null, 2));
+
+                // Extract quizPath from raw_config_json if available
+                const actualQuizPath = (currentVariant.raw_config_json && typeof currentVariant.raw_config_json.quiz_path === 'string')
+                                          ? currentVariant.raw_config_json.quiz_path
+                                          : ''; // Default to empty if not found
+                console.log('[LoveLab Quiz DEBUG] actualQuizPath determined:', actualQuizPath);
+
+                // Determine quizName based on context or config
+                const actualQuizName = (actualQuizPath.includes('love-lab'))
+                                          ? 'love-lab'
+                                          : 'quiz'; // Fallback
+                console.log('[LoveLab Quiz DEBUG] actualQuizName determined:', actualQuizName);
+
                 formData.append('variantInfo', JSON.stringify({
                   experiment: currentVariant.experiment, 
                   experimentId: currentVariant.experimentId, // Send UUID if available
                   variantId: currentVariant.variantId,
                   variantName: currentVariant.variantName || '',
-                  quizPath: currentVariant.quizPath || '',
-                  quizName: currentVariant.quizName || ''
+                  quizPath: actualQuizPath, // Use the extracted path
+                  quizName: actualQuizName   // Use the determined name
                 }));
+              } else {
+                console.log('[LoveLab Quiz DEBUG] currentVariant is missing or invalid, not appending variantInfo.', JSON.stringify(currentVariant, null, 2));
               }
               
               const storedReferrerId = localStorage.getItem('referrer_id');
@@ -769,13 +785,23 @@ const scoreRanges = [
               formData.append('resultType', resultTypeToSubmit);
 
               if (currentVariant && currentVariant.experiment && currentVariant.variantId) {
+                // Extract quizPath from raw_config_json if available
+                const actualQuizPath = (currentVariant.raw_config_json && typeof currentVariant.raw_config_json.quiz_path === 'string')
+                                          ? currentVariant.raw_config_json.quiz_path
+                                          : ''; // Default to empty if not found
+
+                // Determine quizName based on context or config
+                const actualQuizName = (actualQuizPath.includes('love-lab'))
+                                          ? 'love-lab'
+                                          : 'quiz'; // Fallback
+
                 formData.append('variantInfo', JSON.stringify({
                   experiment: currentVariant.experiment, 
                   experimentId: currentVariant.experimentId,
                   variantId: currentVariant.variantId,
                   variantName: currentVariant.variantName || '',
-                  quizPath: currentVariant.quizPath || '',
-                  quizName: currentVariant.quizName || ''
+                  quizPath: actualQuizPath, // Use the extracted path
+                  quizName: actualQuizName   // Use the determined name
                 }));
               }
               
