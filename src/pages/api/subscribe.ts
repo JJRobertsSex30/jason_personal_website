@@ -2,6 +2,7 @@
 export const prerender = false;
 import type { APIRoute } from 'astro';
 import { supabase } from '~/lib/supabaseClient';
+import { CONVERTKIT_TAG_IDS } from '~/lib/convertkit-config';
 
 export const POST: APIRoute = async ({ request }) => {
   try {
@@ -38,6 +39,9 @@ export const POST: APIRoute = async ({ request }) => {
 
     const convertKitApiUrl = `https://api.convertkit.com/v3/forms/${convertKitFormId}/subscribe`;
 
+    // Get first name from form data (hero forms might have different field names)
+    const firstName = formData.get('firstName') || formData.get('first_name') || formData.get('name') || '';
+
     const response = await fetch(convertKitApiUrl, {
       method: 'POST',
       headers: {
@@ -46,9 +50,15 @@ export const POST: APIRoute = async ({ request }) => {
       body: JSON.stringify({
         api_secret: convertKitApiKey,
         email: email,
-        // Add other fields or tags if needed, e.g.:
-        // fields: { first_name: formData.get('name') },
-        // tags: [12345], // Replace with actual tag ID if you use tags
+        first_name: firstName,
+        fields: {
+          signup_source: 'hero',
+          signup_timestamp: new Date().toISOString(),
+          ab_test_variant_id: abTestVariantId || '',
+          signup_source_detail: signupSource || 'hero-static',
+          page_referrer: request.headers.get('referer') || '',
+        },
+        tags: [CONVERTKIT_TAG_IDS.source_hero], // Add hero source tag
       }),
     });
 

@@ -1,5 +1,6 @@
 // src/pages/api/quiz-submit.ts
 import { createClient } from '@supabase/supabase-js';
+import { createConvertKitPayload, submitToConvertKit } from '~/lib/convertkit-config';
 
 interface VariantData {
   experiment: string; // This is the experiment NAME from client
@@ -262,47 +263,41 @@ export const POST = async ({ request }) => {
       // gemsEarnedThisSession = 100; 
 
 
-      // Add user to ConvertKit
+      // Add user to ConvertKit using unified system
       if (convertKitApiKey && convertKitFormId) {
         console.log(`[API Quiz Submit ${requestTimestamp}] Adding/updating in ConvertKit: ${email}`);
         try {
-          const resultTypeToTagId: Record<string, number> = {
-            'Leaning Towards Sex 3.0': 7939502,
-            'Mostly Sex 2.0': 7939497,
-            'Mostly Sex 3.0': 7939504,
-            'Sex 2.0 with Growing Awareness': 7939500
-          };
-          const tagId = resultTypeToTagId[resultType];
-          const tags = tagId ? [tagId] : [];
-
-          const convertKitApiUrl = `https://api.convertkit.com/v3/forms/${convertKitFormId}/subscribe`;
-          const ckResponse = await fetch(convertKitApiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              api_key: convertKitApiKey,
-              email: email,
-              first_name: firstName,
-              fields: {
-                'love_lab_quiz_score': scoreString || '0', 
-                'referral_id': userOwnReferralCode || '', 
-                'insight_gems': currentInsightGems.toString(), 
-                'quiz_result_type': resultType || 'unknown',
-                'quiz_taken_at': new Date().toISOString() // Use requestTimestamp for consistency if preferred
-              },
-              tags: tags
-            }),
+          // Determine quiz source based on the quiz type/path
+          const quizSource = parsedVariantData?.quizName === 'love-lab' || 
+                           parsedVariantData?.quizPath?.includes('love-lab') ? 
+                           'quiz-lovelab' : 'quiz';
+          
+          // Create ConvertKit payload with unified tagging
+          const convertKitPayload = createConvertKitPayload(email, quizSource, {
+            firstName: firstName,
+            resultType: resultType,
+            score: score,
+            gems: currentInsightGems,
+            referralId: userOwnReferralCode,
+            customFields: {
+              // Add any additional custom fields specific to this quiz
+              quiz_version: parsedVariantData?.variantName || 'default',
+              experiment_name: parsedVariantData?.experiment || 'none',
+            }
           });
 
-          if (!ckResponse.ok) {
-            const errorBody = await ckResponse.text(); 
-            console.error(`[API Quiz Submit ${requestTimestamp}] ConvertKit API error for ${email}. Status: ${ckResponse.status} ${ckResponse.statusText}. Response: ${errorBody}`);
+          console.log(`[API Quiz Submit ${requestTimestamp}] ConvertKit payload:`, JSON.stringify(convertKitPayload, null, 2));
+
+          // Submit to ConvertKit using the helper function
+          const ckResult = await submitToConvertKit(convertKitPayload, convertKitFormId);
+          
+          if (!ckResult.success) {
+            console.error(`[API Quiz Submit ${requestTimestamp}] ConvertKit submission failed for ${email}: ${ckResult.error}`);
           } else {
-            const successBody = await ckResponse.json();
-            console.log(`[API Quiz Submit ${requestTimestamp}] ConvertKit OK for ${email}. Response:`, successBody);
+            console.log(`[API Quiz Submit ${requestTimestamp}] ConvertKit submission successful for ${email} with source: ${quizSource}`);
           }
         } catch (ckError) {
-          console.error(`[API Quiz Submit ${requestTimestamp}] Error during ConvertKit API call for ${email}: ${ckError.message}`);
+          console.error(`[API Quiz Submit ${requestTimestamp}] Error during ConvertKit submission for ${email}: ${ckError.message}`);
         }
       } else {
         console.warn(`[API Quiz Submit ${requestTimestamp}] ConvertKit not configured. Skipping for ${email}.`);
