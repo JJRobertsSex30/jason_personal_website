@@ -189,7 +189,12 @@ export const POST: APIRoute = async ({ request, site: _site }) => {
   }
 
   // 3. Generate and Store Verification Token
-  const { token: verificationToken, error: tokenError } = await generateAndStoreVerificationToken(userProfileId, email);
+  const { token: verificationToken, error: tokenError } = await generateAndStoreVerificationToken(
+    userProfileId, 
+    email,
+    experimentId, // Pass experimentId from requestBody
+    variantId     // Pass variantId from requestBody
+  );
 
   if (tokenError || !verificationToken) {
     return new Response(JSON.stringify({ message: 'Error generating verification token.', error: typeof tokenError === 'string' ? tokenError : tokenError?.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });

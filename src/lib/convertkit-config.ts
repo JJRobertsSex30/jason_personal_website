@@ -266,4 +266,176 @@ export async function getConvertKitSubscriberByEmail(email: string): Promise<{ s
     console.error(`[ConvertKit] Exception fetching subscriber ${email}: ${message}`, error);
     return { success: false, error: message };
   }
-} 
+}
+
+// NEW ConvertKit Helper Functions Start
+
+/**
+ * Adds a specific tag to a ConvertKit subscriber.
+ */
+export async function addTagToSubscriber(
+  email: string,
+  tagId: number,
+  firstName?: string // Optional: Pass if you want to update/set first name during this interaction
+): Promise<{ success: boolean; error?: string }> {
+  const apiKey = import.meta.env.CONVERTKIT_API_KEY as string;
+  if (!apiKey) {
+    console.error('[ConvertKit] API Key not configured. Cannot add tag.');
+    return { success: false, error: 'API Key not configured' };
+  }
+  if (!email || !tagId) {
+    return { success: false, error: 'Email and Tag ID are required.' };
+  }
+
+  const url = `https://api.convertkit.com/v3/tags/${tagId}/subscribe`;
+  const payload: { api_key: string; email: string; first_name?: string } = {
+    api_key: apiKey,
+    email: email.toLowerCase().trim(),
+  };
+  if (firstName) {
+    payload.first_name = firstName;
+  }
+
+  console.log(`[ConvertKit] Adding tag ${tagId} to ${email}. Payload:`, JSON.stringify(payload, null, 2));
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({ message: response.statusText }));
+      const errorMessage = errorBody.message || `Failed to add tag ${tagId}`;
+      console.error(`[ConvertKit] Error adding tag ${tagId} to ${email}: ${response.status} - ${errorMessage}`, errorBody);
+      return { success: false, error: errorMessage };
+    }
+
+    const result = await response.json();
+    console.log(`[ConvertKit] Successfully added tag ${tagId} to ${email}:`, result);
+    return { success: true };
+
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'An unknown error occurred';
+    console.error(`[ConvertKit] Exception adding tag ${tagId} to ${email}: ${message}`, error);
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Removes a specific tag from a ConvertKit subscriber.
+ * Note: ConvertKit API uses "unsubscribe" from a tag to remove it.
+ */
+export async function removeTagFromSubscriber(
+  email: string,
+  tagId: number
+): Promise<{ success: boolean; error?: string }> {
+  const apiSecret = import.meta.env.CONVERTKIT_API_SECRET as string;
+  if (!apiSecret) {
+    console.error('[ConvertKit] API Secret not configured. Cannot remove tag.');
+    return { success: false, error: 'API Secret not configured' };
+  }
+  if (!email || !tagId) {
+    return { success: false, error: 'Email and Tag ID are required.' };
+  }
+
+  const url = `https://api.convertkit.com/v3/tags/${tagId}/unsubscribe`;
+  const payload = {
+    api_secret: apiSecret,
+    email: email.toLowerCase().trim(),
+  };
+
+  console.log(`[ConvertKit] Removing tag ${tagId} from ${email} using API Secret. Payload:`, JSON.stringify(payload, null, 2));
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({ message: response.statusText }));
+      const errorMessage = errorBody.message || `Failed to remove tag ${tagId}`;
+      console.error(`[ConvertKit] Error removing tag ${tagId} from ${email}: ${response.status} - ${errorMessage}`, errorBody);
+      return { success: false, error: errorMessage };
+    }
+
+    const result = await response.json();
+    console.log(`[ConvertKit] Successfully removed tag ${tagId} from ${email}:`, result);
+    return { success: true };
+
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'An unknown error occurred';
+    console.error(`[ConvertKit] Exception removing tag ${tagId} from ${email}: ${message}`, error);
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Updates the first_name of a ConvertKit subscriber.
+ * This is achieved by re-subscribing to the default public form with the new first_name.
+ */
+export async function updateSubscriberFirstName(
+  email: string,
+  firstName: string
+): Promise<{ success: boolean; error?: string }> {
+  const apiKey = import.meta.env.CONVERTKIT_API_KEY as string;
+  const formId = import.meta.env.PUBLIC_CONVERTKIT_FORM_ID as string;
+
+  if (!apiKey) {
+    console.error('[ConvertKit] API Key not configured. Cannot update first name.');
+    return { success: false, error: 'API Key not configured' };
+  }
+  if (!formId) {
+    console.warn('[ConvertKit] PUBLIC_CONVERTKIT_FORM_ID not configured. Cannot reliably update first name via form subscription. Consider a direct subscriber update endpoint if available or configure form ID.');
+    // Fallback or alternative: Directly update subscriber if we implement that. For now, rely on form.
+    // This might require fetching subscriber ID first then PUT /v3/subscribers/:id
+    // return { success: false, error: 'Default Form ID not configured for updating first name.' };
+    // For now, let's try to proceed if email and first_name are there, using a general subscriber update approach (though less common for just first_name)
+    // However, the most common way to update with just email is via form/tag subscription if it also updates fields.
+    // The `update` subscriber endpoint requires subscriber ID: PUT /v3/subscribers/:subscriber_id
+    // Let's ensure this function relies on the form re-subscription method for simplicity and consistency.
+    console.error('[ConvertKit] PUBLIC_CONVERTKIT_FORM_ID must be set to update first name via form re-subscription.');
+    return { success: false, error: 'PUBLIC_CONVERTKIT_FORM_ID not configured.' };
+  }
+  if (!email || !firstName) {
+    return { success: false, error: 'Email and First Name are required.' };
+  }
+
+  const url = `https://api.convertkit.com/v3/forms/${formId}/subscribe`;
+  const payload = {
+    api_key: apiKey,
+    email: email.toLowerCase().trim(),
+    first_name: firstName,
+  };
+
+  console.log(`[ConvertKit] Updating first name for ${email} to "${firstName}" via form ${formId}. Payload:`, JSON.stringify(payload, null, 2));
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({ message: response.statusText }));
+      const errorMessage = errorBody.message || 'Failed to update first name';
+      console.error(`[ConvertKit] Error updating first name for ${email} via form ${formId}: ${response.status} - ${errorMessage}`, errorBody);
+      return { success: false, error: errorMessage };
+    }
+
+    const result = await response.json();
+    console.log(`[ConvertKit] Successfully updated first name for ${email} via form ${formId}:`, result);
+    return { success: true };
+
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'An unknown error occurred';
+    console.error(`[ConvertKit] Exception updating first name for ${email} via form ${formId}: ${message}`, error);
+    return { success: false, error: message };
+  }
+}
+
+// NEW ConvertKit Helper Functions End 

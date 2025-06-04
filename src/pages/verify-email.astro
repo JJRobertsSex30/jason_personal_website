@@ -1,0 +1,127 @@
+---
+import Layout from '~/layouts/Layout.astro';
+import { verifyTokenAndLogConversion, updateUserFirstName } from '~/lib/database-operations';
+import { addTagToSubscriber, removeTagFromSubscriber, updateSubscriberFirstName, CONVERTKIT_TAG_IDS } from '~/lib/convertkit-config';
+
+// IMPORTANT: Replace 0 with your actual ConvertKit Tag ID for "Email Not Verified"
+const EMAIL_NOT_VERIFIED_TAG_ID = 8139746; // <<< USER: REPLACE THIS WITH YOUR ACTUAL TAG ID
+
+let pageTitleInternal = 'Verify Email';
+let messageInternal = '';
+let errorMessageInternal = '';
+let showFirstNameForm = false;
+let verifiedUserProfileId: string | null | undefined = null;
+let verifiedUserEmail: string | null | undefined = null;
+
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    const firstName = formData.get('firstName') as string;
+    const userProfileId = formData.get('userProfileId') as string;
+    const userEmail = formData.get('userEmail') as string;
+
+    if (!firstName || !userProfileId || !userEmail) {
+      throw new Error('Missing form data for updating first name.');
+    }
+
+    // Update DB
+    const dbUpdateResult = await updateUserFirstName(userProfileId, firstName);
+    if (dbUpdateResult.error) {
+      console.error('DB Error updating first name:', dbUpdateResult.error);
+      // Non-fatal for user, but log it
+    }
+
+    // Update ConvertKit
+    const kitUpdateResult = await updateSubscriberFirstName(userEmail, firstName);
+    if (!kitUpdateResult.success) {
+      console.warn('ConvertKit Error updating first name:', kitUpdateResult.error);
+      // Non-fatal for user, but log it
+    }
+
+    pageTitleInternal = 'Thank You!';
+    messageInternal = 'Your name has been updated. Welcome aboard!';
+    showFirstNameForm = false;
+  } catch (error: unknown) {
+    console.error('Error processing first name submission:', error);
+    if (error instanceof Error) {
+      errorMessageInternal = error.message;
+    } else {
+      errorMessageInternal = 'Could not process your request. Please try again.';
+    }
+    showFirstNameForm = true; // Keep form visible to allow retry or show error context
+  }
+} else if (Astro.request.method === 'GET') {
+  const currentToken = Astro.url.searchParams.get('token');
+  if (currentToken) {
+    const verificationResult = await verifyTokenAndLogConversion(currentToken);
+    if (verificationResult.success) {
+      pageTitleInternal = 'Email Verified!';
+      messageInternal = verificationResult.message || 'Your email has been successfully verified.';
+      verifiedUserProfileId = verificationResult.userProfileId;
+      verifiedUserEmail = verificationResult.email;
+      showFirstNameForm = true;
+
+      if (verifiedUserEmail) {
+        // Add 'Email Verified' tag
+        const addTagRes = await addTagToSubscriber(verifiedUserEmail, CONVERTKIT_TAG_IDS.email_verified);
+        if (!addTagRes.success) {
+          console.warn(`Failed to add 'Email Verified' tag to ${verifiedUserEmail}:`, addTagRes.error);
+        }
+
+        // Remove 'Email Not Verified' tag
+        const removeTagRes = await removeTagFromSubscriber(verifiedUserEmail, EMAIL_NOT_VERIFIED_TAG_ID);
+        if (!removeTagRes.success) {
+          console.warn(`Failed to remove 'Email Not Verified' tag from ${verifiedUserEmail}:`, removeTagRes.error);
+        }
+      }
+    } else {
+      pageTitleInternal = 'Verification Failed';
+      errorMessageInternal = verificationResult.message || 'Could not verify your email. The link may be invalid or expired.';
+      showFirstNameForm = false;
+    }
+  } else {
+    pageTitleInternal = 'Verification Issue';
+    errorMessageInternal = 'No verification token provided. Please use the link from your email.';
+    showFirstNameForm = false;
+  }
+}
+---
+
+<Layout metadata={{ title: pageTitleInternal }}>
+  <style>
+    .container { max-width: 600px; margin: 2rem auto; padding: 2rem; background-color: #f9fafb; border-radius: 0.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); text-align: center; }
+    h1 { font-size: 1.875rem; font-weight: bold; color: #1f2937; margin-bottom: 1rem; }
+    .message { color: #10b981; margin-bottom: 1.5rem; font-size: 1.125rem; }
+    .errorMessage { color: #ef4444; margin-bottom: 1.5rem; font-size: 1.125rem; }
+    form { margin-top: 1.5rem; display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+    label { font-weight: 500; color: #374151; }
+    input[type="text"] { padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; width: 100%; max-width: 300px; }
+    button[type="submit"] { padding: 0.625rem 1.25rem; background-color: #10b981; color: white; font-weight: 500; border: none; border-radius: 0.375rem; cursor: pointer; transition: background-color 0.2s; }
+    button[type="submit"]:hover { background-color: #059669; }
+  </style>
+
+  <div class="container">
+    <h1>{pageTitleInternal}</h1>
+    {messageInternal && <p class="message">{messageInternal}</p>}
+    {errorMessageInternal && <p class="errorMessage">{errorMessageInternal}</p>}
+
+    {showFirstNameForm && verifiedUserProfileId && verifiedUserEmail && (
+      <form method="POST">
+        <input type="hidden" name="userProfileId" value={verifiedUserProfileId} />
+        <input type="hidden" name="userEmail" value={verifiedUserEmail} />
+        <div>
+          <label for="firstName">What should we call you?</label>
+          <input type="text" id="firstName" name="firstName" required placeholder="Your first name" />
+        </div>
+        <button type="submit">Save Name & Continue</button>
+      </form>
+    )}
+
+    {!showFirstNameForm && !errorMessageInternal && (
+      <p><a href="/">Return to homepage</a></p>
+    )}
+     {errorMessageInternal && (
+      <p><a href="/">Return to homepage or try verification again</a></p>
+    )}
+  </div>
+</Layout> 

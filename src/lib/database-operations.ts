@@ -56,6 +56,18 @@ export interface GenerateTokenResult {
   token: string | null;
   error: PostgrestError | string | null;
 }
+
+// NEW INTERFACE for verifyTokenAndLogConversion result
+export interface VerifiedTokenData {
+  success: boolean;
+  message: string;
+  userProfileId?: string;
+  email?: string;
+  experimentId?: string | null; // Can be null if not set on token
+  variantId?: string | null;   // Can be null if not set on token
+  error?: PostgrestError | string | null;
+}
+
 // NEW TYPE DEFINITIONS END
 
 /**
@@ -494,12 +506,35 @@ export async function findOrCreateUserForVerification(email: string): Promise<Fi
 
     if (existingUsers && existingUsers.length > 0) {
       const existingUser = existingUsers[0] as UserProfile;
+      
+      // Ensure insight_gems is populated
+      existingUser.insight_gems = existingUser.insight_gems ?? 100; // Default if null/undefined
+
+      // Check and generate referral_code if missing for existing user
+      if (!existingUser.referral_code) {
+        console.log(`[DB Ops] Existing user ${existingUser.email} missing referral_code. Generating one.`);
+        const newReferralCode = crypto.randomUUID();
+        const { data: updatedUser, error: updateError } = await supabase
+          .from('user_profiles')
+          .update({ referral_code: newReferralCode, updated_at: new Date().toISOString() })
+          .eq('id', existingUser.id)
+          .select('*')
+          .single();
+
+        if (updateError) {
+          console.warn(`[DB Ops] Failed to update referral_code for existing user ${existingUser.email}:`, updateError.message);
+          // Proceed with the original existingUser data, referral_code will be null
+        } else if (updatedUser) {
+          console.log(`[DB Ops] Successfully generated and saved new referral_code for existing user ${existingUser.email}.`);
+          // Update existingUser with the newly fetched data including the referral code and other potentially updated fields
+          Object.assign(existingUser, updatedUser);
+        }
+      }
+
       if (existingUser.is_email_verified) {
         return { user: existingUser, isNewUser: false, isAlreadyVerified: true, error: null };
       }
       // User exists but is not verified
-      // Ensure insight_gems is populated if it wasn't selected or is missing, using a default if necessary
-      existingUser.insight_gems = existingUser.insight_gems ?? 100; // Default if null/undefined
       return { user: existingUser, isNewUser: false, isAlreadyVerified: false, error: null };
     }
 
@@ -534,42 +569,181 @@ export async function findOrCreateUserForVerification(email: string): Promise<Fi
   }
 }
 
-export async function generateAndStoreVerificationToken(userId: string, email: string): Promise<GenerateTokenResult> {
+export async function generateAndStoreVerificationToken(
+  userId: string, 
+  email: string,
+  experimentId?: string | null, // Optional experimentId
+  variantId?: string | null     // Optional variantId
+): Promise<GenerateTokenResult> {
+  console.log(`[DB Ops] generateAndStoreVerificationToken called for userId: ${userId}, email: ${email}, experimentId: ${experimentId}, variantId: ${variantId}`);
   if (!userId || !email) {
-    return { token: null, error: 'User ID and email are required to generate a token.'};
+    return { token: null, error: 'User ID and email are required to generate a token.' };
   }
-  try {
-    const token = crypto.randomUUID(); 
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24); // Token valid for 24 hours
 
-    const { error: tokenInsertError } = await supabase
+  const token = globalThis.crypto.randomUUID(); // Simple UUID token
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // Token expires in 24 hours
+
+  try {
+    const { error: insertError } = await supabase
       .from('email_verification_tokens')
       .insert({
         user_profile_id: userId,
         token: token,
-        email: email.toLowerCase().trim(),
+        email: email,
         expires_at: expiresAt.toISOString(),
+        experiment_id: experimentId, // Store experiment_id
+        variant_id: variantId,       // Store variant_id
       });
 
-    if (tokenInsertError) {
-      console.error('Error storing verification token:', tokenInsertError);
-      return { token: null, error: tokenInsertError };
+    if (insertError) {
+      console.error(`[DB Ops] Error inserting verification token for user ${userId}:`, insertError);
+      return { token: null, error: insertError };
     }
 
-    const { error: userUpdateError } = await supabase
+    // Update last_verification_email_sent_at in user_profiles
+    const { error: updateUserError } = await supabase
       .from('user_profiles')
       .update({ last_verification_email_sent_at: new Date().toISOString() })
       .eq('id', userId);
 
-    if (userUpdateError) {
-      console.warn('Warning: Failed to update last_verification_email_sent_at for user:', userId, userUpdateError);
+    if (updateUserError) {
+      console.warn(`[DB Ops] Failed to update last_verification_email_sent_at for user ${userId}:`, updateUserError.message);
+      // Non-critical, so we don't return an error for the whole token generation
+    }
+    console.log(`[DB Ops] Successfully generated and stored verification token for user ${userId}. Token: ${token}`);
+    return { token, error: null };
+
+  } catch (err: unknown) {
+    console.error('[DB Ops] Exception in generateAndStoreVerificationToken:', err);
+    const message = err instanceof Error ? err.message : 'An unexpected error occurred during token generation.';
+    return { token: null, error: message };
+  }
+}
+
+// NEW FUNCTION: verifyTokenAndLogConversion
+export async function verifyTokenAndLogConversion(tokenValue: string): Promise<VerifiedTokenData> {
+  console.log(`[DB Ops] verifyTokenAndLogConversion called for token: ${tokenValue}`);
+  if (!tokenValue) {
+    return { success: false, message: 'Verification token is required.', error: 'Token not provided' };
+  }
+
+  try {
+    // 1. Find the token
+    const { data: tokenRecord, error: findError } = await supabase
+      .from('email_verification_tokens')
+      .select('*')
+      .eq('token', tokenValue)
+      .single();
+
+    if (findError || !tokenRecord) {
+      console.warn(`[DB Ops] Verification token not found or error fetching: ${tokenValue}`, findError);
+      return { success: false, message: 'Invalid or expired verification link. Please try again.', error: findError || 'Token not found' };
     }
 
-    return { token, error: null };
-  } catch (err) {
-    console.error('Unexpected error in generateAndStoreVerificationToken:', err);
-    return { token: null, error: (err as Error).message || 'Unexpected error occurred generating token' };
+    // 2. Check if already used
+    if (tokenRecord.is_used) {
+      console.log(`[DB Ops] Verification token ${tokenValue} has already been used for user ${tokenRecord.user_profile_id}.`);
+      return { success: false, message: 'This verification link has already been used.', userProfileId: tokenRecord.user_profile_id, email: tokenRecord.email, error: 'Token already used' };
+    }
+
+    // 3. Check if expired
+    if (new Date(tokenRecord.expires_at) < new Date()) {
+      console.log(`[DB Ops] Verification token ${tokenValue} has expired for user ${tokenRecord.user_profile_id}.`);
+      return { success: false, message: 'This verification link has expired. Please request a new one.', error: 'Token expired' };
+    }
+
+    const now = new Date().toISOString();
+
+    // 4. Mark token as used
+    const { error: updateTokenError } = await supabase
+      .from('email_verification_tokens')
+      .update({ is_used: true, used_at: now })
+      .eq('id', tokenRecord.id);
+
+    if (updateTokenError) {
+      console.error(`[DB Ops] Error marking token ${tokenValue} as used for user ${tokenRecord.user_profile_id}:`, updateTokenError);
+      return { success: false, message: 'Error processing verification. Please try again.', error: updateTokenError };
+    }
+
+    // 5. Update user_profiles table
+    const { error: updateUserError } = await supabase
+      .from('user_profiles')
+      .update({ is_email_verified: true, email_verified_at: now })
+      .eq('id', tokenRecord.user_profile_id);
+
+    if (updateUserError) {
+      console.error(`[DB Ops] Error updating user profile ${tokenRecord.user_profile_id} to verified:`, updateUserError);
+      // Potentially roll back token usage or log for manual intervention? For now, report error.
+      return { success: false, message: 'Error finalizing email verification. Please contact support.', error: updateUserError };
+    }
+    console.log(`[DB Ops] User profile ${tokenRecord.user_profile_id} marked as verified.`);
+
+    // 6. Log conversion (if experiment_id and variant_id are present)
+    if (tokenRecord.experiment_id && tokenRecord.variant_id) {
+      const conversionData = {
+        experiment_id: tokenRecord.experiment_id,
+        variant_id: tokenRecord.variant_id,
+        user_identifier: tokenRecord.user_profile_id,
+        conversion_type: 'email_verified', // Standardized conversion type
+        metadata: { 
+          source: 'email_verification_link',
+          email: tokenRecord.email,
+          token_id: tokenRecord.id
+        }
+      };
+      const { error: conversionError } = await supabase.from('conversions').insert(conversionData);
+      if (conversionError) {
+        console.warn(`[DB Ops] Failed to log 'email_verified' conversion for user ${tokenRecord.user_profile_id}, experiment ${tokenRecord.experiment_id}:`, conversionError.message);
+        // Non-critical for the verification itself, so just log a warning.
+      } else {
+        console.log(`[DB Ops] 'email_verified' conversion logged for user ${tokenRecord.user_profile_id}, experiment ${tokenRecord.experiment_id}.`);
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Email successfully verified!',
+      userProfileId: tokenRecord.user_profile_id,
+      email: tokenRecord.email,
+      experimentId: tokenRecord.experiment_id,
+      variantId: tokenRecord.variant_id
+    };
+
+  } catch (err: unknown) {
+    console.error('[DB Ops] Exception in verifyTokenAndLogConversion:', err);
+    const message = err instanceof Error ? err.message : 'An unexpected server error occurred during verification.';
+    return { success: false, message, error: message };
+  }
+}
+
+// NEW FUNCTION: updateUserFirstName
+export async function updateUserFirstName(userId: string, firstName: string): Promise<SingleResult<UserProfile>> {
+  console.log(`[DB Ops] updateUserFirstName called for userId: ${userId}`);
+  if (!userId || !firstName) {
+    return { data: null, error: { message: 'User ID and first name are required.', details: '', hint: '', code: '400' } as PostgrestError };
+  }
+  if (typeof firstName !== 'string' || firstName.trim().length === 0) {
+    return { data: null, error: { message: 'First name cannot be empty.', details: '', hint: '', code: '400' } as PostgrestError };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .update({ first_name: firstName.trim(), updated_at: new Date().toISOString() })
+      .eq('id', userId)
+      .select()
+      .single();
+     
+    if (error) {
+      console.error(`[DB Ops] Error updating first name for user ${userId}:`, error);
+    } else {
+      console.log(`[DB Ops] Successfully updated first name for user ${userId}.`);
+    }
+    return { data: data as UserProfile | null, error };
+  } catch (err: unknown) {
+    console.error('[DB Ops] Exception in updateUserFirstName:', err);
+    const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
+    return { data: null, error: { message, details: '', hint: '', code: '500' } as PostgrestError };
   }
 }
 
@@ -631,5 +805,7 @@ export default {
   tableExists,
   findOrCreateUserForVerification,
   generateAndStoreVerificationToken,
+  verifyTokenAndLogConversion,
+  updateUserFirstName,
   logHeroImpression
 }; 
