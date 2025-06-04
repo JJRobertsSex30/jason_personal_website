@@ -498,17 +498,20 @@ export async function findOrCreateUserForVerification(email: string): Promise<Fi
         return { user: existingUser, isNewUser: false, isAlreadyVerified: true, error: null };
       }
       // User exists but is not verified
+      // Ensure insight_gems is populated if it wasn't selected or is missing, using a default if necessary
+      existingUser.insight_gems = existingUser.insight_gems ?? 100; // Default if null/undefined
       return { user: existingUser, isNewUser: false, isAlreadyVerified: false, error: null };
     }
 
     // 2. Create new user if not found
+    const newReferralCode = crypto.randomUUID();
     const { data: newUser, error: createError } = await supabase
       .from('user_profiles')
       .insert({ 
         email: email.toLowerCase().trim(), 
         is_email_verified: false,
-        // insight_gems should have a DB default. If not, specify it.
-        // Other fields like first_name, kit_subscriber_id are nullable.
+        referral_code: newReferralCode,
+        // insight_gems will use the DB default of 100
       })
       .select('*')
       .single();
@@ -518,6 +521,11 @@ export async function findOrCreateUserForVerification(email: string): Promise<Fi
       return { user: null, isNewUser: false, isAlreadyVerified: false, error: createError };
     }
     
+    // Ensure the newUser object has insight_gems, defaulting if somehow not returned by DB (though it should be)
+    if (newUser) {
+      (newUser as UserProfile).insight_gems = (newUser as UserProfile).insight_gems ?? 100;
+    }
+
     return { user: newUser as UserProfile, isNewUser: true, isAlreadyVerified: false, error: null };
 
   } catch (err) {

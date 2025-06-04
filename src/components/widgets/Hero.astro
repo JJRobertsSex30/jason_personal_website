@@ -154,55 +154,57 @@ console.log(`[Hero SSR] Destructured values: headline="${headline ? headline.sub
       if (submitButton) submitButton.disabled = true;
 
       try {
-        const formData = new FormData(form); // FormData will now pick up session_identifier
-        
-        // Add browser_identifier explicitly
-        const abUserIdentifier = localStorage.getItem('ab_user_identifier');
-        if (abUserIdentifier) {
-          formData.append('browser_identifier', abUserIdentifier);
-          console.log(`[Hero Client - Simplified] Appended browser_identifier (${abUserIdentifier}) to formData.`);
-        } else {
-          console.warn('[Hero Client - Simplified] No ab_user_identifier found in localStorage to append as browser_identifier.');
-        }
-        
-        // Add exposure_timestamp if available
-        if (clientExperimentIdUUIDFromProps && clientExperimentIdUUIDFromProps !== 'default_experiment_id_uuid_from_hero') {
-          const exposureTimestampKey = `ab_first_exposure_time_${clientExperimentIdUUIDFromProps}`;
-          const storedExposureTimestamp = localStorage.getItem(exposureTimestampKey);
-          if (storedExposureTimestamp) {
-            formData.append('original_exposure_timestamp', storedExposureTimestamp);
-            console.log(`[Hero Client - Simplified] Appended original_exposure_timestamp (${storedExposureTimestamp}) from localStorage for key: ${exposureTimestampKey}`);
-          } else {
-            console.warn(`[Hero Client - Simplified] No original_exposure_timestamp found in localStorage for key: ${exposureTimestampKey}. time_to_convert will likely be null.`);
-          }
-        } else {
-          console.warn('[Hero Client - Simplified] clientExperimentIdUUIDFromProps is not valid. Cannot retrieve original_exposure_timestamp. time_to_convert will likely be null.');
+        // Initialize a plain JavaScript object for the payload
+        const payloadObject = {};
+
+        // Get values from the form using FormData
+        const formData = new FormData(form);
+        formData.forEach((value, key) => {
+          payloadObject[key] = value.toString();
+        });
+
+        // Explicitly set/override fields required by the /api/subscribe endpoint
+        // Ensure correct names as expected by HeroSubscribeRequestBody
+        const emailInput = form.querySelector('input[name="email"]');
+        if (emailInput) {
+            payloadObject.email = emailInput.value;
         }
 
-        // Add page_url_at_submission
-        formData.append('page_url_at_submission', window.location.href);
+        payloadObject.experimentName = clientExperimentNameFromProps; 
+        payloadObject.experimentId = clientExperimentIdUUIDFromProps; // experimentId is UUID
+        payloadObject.variantId = clientVariantIdFromProps;    // variantId is UUID
+        
+        // Add userAgent (replaces browser_identifier from previous logic for this endpoint)
+        payloadObject.userAgent = navigator.userAgent;
+
+        // Add pageUrl (replaces page_url_at_submission for this endpoint)
+        payloadObject.pageUrl = window.location.href;
+
+        // Optional: original_exposure_timestamp (if available and needed by API)
+        // The API endpoint (from hero-subscribe) doesn't explicitly use original_exposure_timestamp in its main logic path,
+        // but it was being collected. If needed, it can be added here.
+        // For now, focusing on core fields of HeroSubscribeRequestBody.
+        // if (clientExperimentIdUUIDFromProps && clientExperimentIdUUIDFromProps !== 'default_experiment_id_uuid_from_hero') {
+        //   const exposureTimestampKey = `ab_first_exposure_time_${clientExperimentIdUUIDFromProps}`;
+        //   const storedExposureTimestamp = localStorage.getItem(exposureTimestampKey);
+        //   if (storedExposureTimestamp) {
+        //     payloadObject.original_exposure_timestamp = storedExposureTimestamp;
+        //   }
+        // }
+        
+        console.log('[Hero Client - Simplified] Payload object being sent:', payloadObject);
 
         const response = await fetch('/api/subscribe', {
           method: 'POST',
-          body: formData
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payloadObject) // Send as JSON string
         });
         const result = await response.json();
         if (response.ok && result.success) {
           messageElement.textContent = result.message || 'Thank you for subscribing! Please check your email to confirm.';
           messageElement.className = 'text-sm mt-4 text-green-600 dark:text-green-500 min-h-[1.25em]';
-
-          // Save A/B context to localStorage for the bridge page
-          if (result.abContextForStorage) {
-            localStorage.setItem('jasonWebsiteUserEmail', result.abContextForStorage.email);
-            localStorage.setItem('jasonWebsiteAbTestVariantId', result.abContextForStorage.abTestVariantId);
-            localStorage.setItem('jasonWebsiteBrowserIdentifier', result.abContextForStorage.browserIdentifier);
-            localStorage.setItem('jasonWebsiteSessionIdentifier', result.abContextForStorage.sessionIdentifier);
-            localStorage.setItem('jasonWebsiteOriginalExposureTimestamp', result.abContextForStorage.originalExposureTimestamp);
-            localStorage.setItem('jasonWebsitePageUrlAtSubmission', result.abContextForStorage.pageUrlAtSubmission);
-            console.log('[Hero Client] A/B context saved to localStorage for bridge page.', result.abContextForStorage);
-          } else {
-            console.warn('[Hero Client] Subscription API success, but abContextForStorage was missing in the response.');
-          }
 
         } else {
           messageElement.textContent = result.message || 'Subscription failed. Please try again.';

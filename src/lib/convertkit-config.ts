@@ -177,6 +177,9 @@ export async function submitToConvertKit(
     
     const convertKitApiUrl = `https://api.convertkit.com/v3/forms/${convertKitFormId}/subscribe`;
     
+    // Log the payload being sent to ConvertKit
+    console.log('[ConvertKit] Submitting to form ' + convertKitFormId + ' with payload:', JSON.stringify(payload, null, 2));
+    
     const response = await fetch(convertKitApiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
