@@ -1,0 +1,188 @@
+---
+// src/pages/confirm-bridge.astro
+// This page is hit after a user confirms their email.
+// It attempts to retrieve the user's email from local storage,
+// then fetches their details from ConvertKit via a backend API endpoint.
+
+import Layout from '~/layouts/PageLayout.astro'; // Assuming a general layout
+
+const pageTitle = "Confirmation Successful";
+---
+<Layout metadata={{ title: pageTitle }}>
+  <div class="container mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold text-center mb-6">{pageTitle}</h1>
+    
+    <div id="bridge-content" class="text-center">
+      <p id="loading-message">Loading your details...</p>
+      <p id="error-message" class="text-red-500 hidden"></p>
+      <div id="subscriber-details" class="hidden">
+        <p>Welcome, <span id="subscriber-name"></span>!</p>
+        <p>Your email has been successfully confirmed.</p>
+        <p id="referral-info" class="hidden">Your referral code is: <strong id="referral-code"></strong></p>
+        <p id="token-info" class="hidden">App Confirmation Token: <strong id="app-token"></strong></p>
+        <p id="additional-info"></p> 
+      </div>
+    </div>
+
+  </div>
+</Layout>
+
+<script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    const loadingMessage = document.getElementById('loading-message');
+    const errorMessageElement = document.getElementById('error-message');
+    const subscriberDetailsDiv = document.getElementById('subscriber-details');
+    const subscriberNameSpan = document.getElementById('subscriber-name');
+    const referralInfoP = document.getElementById('referral-info');
+    const referralCodeStrong = document.getElementById('referral-code');
+    const tokenInfoP = document.getElementById('token-info');
+    const appTokenStrong = document.getElementById('app-token');
+    // const additionalInfoP = document.getElementById('additional-info'); Commenting out as it's unused for now
+
+    // 1. Get email from local storage
+    const email = localStorage.getItem('jasonWebsiteUserEmail');
+    
+    // Retrieve A/B testing context from local storage
+    const abTestVariantId = localStorage.getItem('jasonWebsiteAbTestVariantId');
+    const browserIdentifier = localStorage.getItem('jasonWebsiteBrowserIdentifier');
+    const sessionIdentifier = localStorage.getItem('jasonWebsiteSessionIdentifier');
+    const originalExposureTimestamp = localStorage.getItem('jasonWebsiteOriginalExposureTimestamp');
+    const pageUrlAtSubmission = localStorage.getItem('jasonWebsitePageUrlAtSubmission');
+
+    // Log all retrieved context
+    console.log('Confirm Bridge - Email from LS:', email);
+    console.log('Confirm Bridge - A/B Variant ID from LS:', abTestVariantId);
+    console.log('Confirm Bridge - Browser ID from LS:', browserIdentifier);
+    console.log('Confirm Bridge - Session ID from LS:', sessionIdentifier);
+    console.log('Confirm Bridge - Exposure TS from LS:', originalExposureTimestamp);
+    console.log('Confirm Bridge - Page URL at Submission from LS:', pageUrlAtSubmission);
+
+    if (!email) {
+      if (loadingMessage) loadingMessage.classList.add('hidden');
+      if (errorMessageElement) {
+        errorMessageElement.textContent = 'Could not retrieve your email. Please ensure you have enabled local storage or try the confirmation process again.';
+        errorMessageElement.classList.remove('hidden');
+      }
+      return;
+    }
+
+    try {
+      // 2. Call the backend API to get subscriber details
+      const response = await fetch('/api/get-convertkit-subscriber', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      if (loadingMessage) loadingMessage.classList.add('hidden');
+
+      if (!response.ok) {
+        const errorResult = await response.json().catch(() => ({ message: 'Failed to process error response.' }));
+        throw new Error(errorResult.message || `Failed to fetch subscriber details. Status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        const subscriber = result.data;
+        if (subscriberDetailsDiv) subscriberDetailsDiv.classList.remove('hidden');
+        
+        if (subscriberNameSpan) {
+          subscriberNameSpan.textContent = subscriber.first_name || 'Valued Subscriber';
+        }
+
+        // Display referral code if available
+        const referralCode = subscriber.fields?.referral_code;
+        if (referralCode && referralInfoP && referralCodeStrong) {
+          referralCodeStrong.textContent = referralCode.toString();
+          referralInfoP.classList.remove('hidden');
+        }
+
+        // Display App Confirmation Token if available
+        const appConfirmationToken = subscriber.fields?.app_confirmation_token;
+        if (appConfirmationToken && tokenInfoP && appTokenStrong) {
+          appTokenStrong.textContent = appConfirmationToken.toString();
+          tokenInfoP.classList.remove('hidden');
+          console.log('Confirm Bridge - App Confirmation Token from CK:', appConfirmationToken);
+        } else {
+          console.warn('Confirm Bridge - App Confirmation Token NOT FOUND in CK fields');
+        }
+
+        // HERE: Call the A/B Conversion Tracking Endpoint
+        if (appConfirmationToken) {
+          console.log('Confirm Bridge - Preparing to call A/B conversion endpoint with:');
+          console.log('  Email:', email);
+          console.log('  App Confirmation Token:', appConfirmationToken);
+          console.log('  A/B Variant ID:', abTestVariantId);
+          console.log('  Browser Identifier:', browserIdentifier);
+          console.log('  Session Identifier:', sessionIdentifier);
+          console.log('  Original Exposure Timestamp:', originalExposureTimestamp);
+          console.log('  Page URL at Submission:', pageUrlAtSubmission);
+          // Example structure for the call:
+          
+          try {
+            const conversionResponse = await fetch('/api/record-ab-conversion', { // Replace with actual endpoint
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email,
+                app_confirmation_token: String(appConfirmationToken), // Ensure it's a string
+                ab_test_variant_id: abTestVariantId,
+                browser_identifier: browserIdentifier,
+                session_identifier: sessionIdentifier,
+                original_exposure_timestamp: originalExposureTimestamp,
+                page_url_at_submission: pageUrlAtSubmission, // This might be the page where the original form was, not the bridge page
+                conversion_type: 'email_confirmed',
+                conversion_metadata: {
+                  bridge_page_processed_at: new Date().toISOString(),
+                  source_page: 'confirm-bridge'
+                }
+              }),
+            });
+            if (conversionResponse.ok) {
+              const successResult = await conversionResponse.json();
+              console.log('Confirm Bridge - A/B conversion successfully recorded.', successResult);
+              // Optionally update UI further
+              const conversionStatusP = document.getElementById('additional-info'); // Using additional-info for status
+              if (conversionStatusP) {
+                conversionStatusP.textContent = 'A/B test conversion successfully recorded!';
+                conversionStatusP.classList.add('text-green-500');
+              }
+            } else {
+              const convErrorResult = await conversionResponse.json().catch(() => ({ message: conversionResponse.statusText }))
+              console.error('Confirm Bridge - Failed to record A/B conversion:', convErrorResult.message);
+              const conversionStatusP = document.getElementById('additional-info');
+              if (conversionStatusP) {
+                conversionStatusP.textContent = `Failed to record A/B conversion: ${convErrorResult.message}`;
+                conversionStatusP.classList.add('text-red-500');
+              }
+            }
+          } catch (convError) {
+            console.error('Confirm Bridge - Error calling A/B conversion endpoint:', convError);
+            const conversionStatusP = document.getElementById('additional-info');
+              if (conversionStatusP) {
+                conversionStatusP.textContent = 'An error occurred while sending A/B conversion data.';
+                conversionStatusP.classList.add('text-red-500');
+              }
+          }
+          
+        } else {
+          console.warn('Confirm Bridge - Cannot call A/B conversion endpoint because App Confirmation Token is missing.');
+        }
+
+      } else {
+        throw new Error(result.message || 'Could not retrieve your details.');
+      }
+
+    } catch (error) {
+      console.error('Error on confirm-bridge page:', error);
+      if (loadingMessage) loadingMessage.classList.add('hidden');
+      if (errorMessageElement) {
+        errorMessageElement.textContent = error instanceof Error ? error.message : 'An unexpected error occurred.';
+        errorMessageElement.classList.remove('hidden');
+      }
+    }
+  });
+</script> 

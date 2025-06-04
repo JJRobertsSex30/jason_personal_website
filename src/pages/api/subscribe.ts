@@ -35,12 +35,12 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
-    }
+    } 
     if (abTestVariantId && !browserIdentifier) {
       console.warn(`[API Subscribe ${requestTimestamp}] ab_test_variant_id provided but browser_identifier is missing. This may impact A/B tracking accuracy.`);
     }
     
-    const originalExposureTimestamp = originalExposureTimestampString ? new Date(originalExposureTimestampString).toISOString() : null;
+    const originalExposureTimestamp = originalExposureTimestampString ? new Date(Number(originalExposureTimestampString)).toISOString() : null;
 
     // --- User Profile Handling ---
     let userId: string | undefined;
@@ -193,7 +193,15 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     
     return new Response(JSON.stringify({ 
       success: true,
-      message: 'Subscription pending. Please check your email to confirm.' 
+      message: 'Subscription pending. Please check your email to confirm.',
+      abContextForStorage: {
+        email: email as string,
+        abTestVariantId: abTestVariantId,
+        browserIdentifier: browserIdentifier,
+        sessionIdentifier: sessionIdentifier,
+        originalExposureTimestamp: originalExposureTimestamp, // This is already an ISO string or null
+        pageUrlAtSubmission: pageUrlAtSubmission
+      }
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
