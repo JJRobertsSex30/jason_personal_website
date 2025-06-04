@@ -1096,3 +1096,31 @@ Your database now supports enterprise-grade quiz tracking with:
 - ✅ **Performance Optimized** (~100x faster queries with strategic indexing)
 - ✅ **ConvertKit Integration** (webhook support, automated verification)
 - ✅ **Developer Friendly** (rich functions, documentation, constraints)
+
+### `pending_email_confirmations`
+
+Stores email submissions awaiting user confirmation. This table facilitates a double opt-in process for A/B testing and general email subscriptions.
+
+- `id`: UUID (Primary Key, default: `gen_random_uuid()`) - Unique identifier for the pending confirmation record.
+- `email`: TEXT NOT NULL - The email address submitted by the user.
+- `confirmation_token`: TEXT NOT NULL (UNIQUE) - Unique, secure token sent to the user for verifying their email address.
+- `variant_id`: UUID (References `variants.id` ON DELETE SET NULL) - The specific A/B test variant the user was exposed to at the time of submission. Nullable if signup is not tied to an active A/B test.
+- `experiment_id`: UUID (References `experiments.id` ON DELETE SET NULL) - The A/B test experiment the user was part of. Nullable if signup is not tied to an active A/B test.
+- `browser_identifier`: TEXT - The client-side `localStorage` ID (e.g., `ab_user_identifier`) at the time of email submission. Used for A/B test eligibility checks.
+- `session_identifier`: TEXT - The client-side `sessionStorage` ID at the time of email submission.
+- `original_exposure_timestamp`: TIMESTAMPTZ - Timestamp of the user's first exposure to the relevant experiment variant, if applicable. Used for calculating `time_to_convert`.
+- `submission_details`: JSONB - Stores additional context captured at the moment of submission (e.g., page URL, UTM parameters, initial geolocation data, form source).
+- `created_at`: TIMESTAMPTZ (Default: `now()`) - Timestamp when the pending confirmation record was created.
+- `expires_at`: TIMESTAMPTZ NOT NULL - Timestamp when the confirmation token will expire (e.g., `now() + interval '24 hours'`).
+- `is_confirmed`: BOOLEAN (Default: `false`) - Flag indicating whether the email address has been confirmed by the user.
+- `confirmed_at`: TIMESTAMPTZ (Nullable) - Timestamp when the user confirmed their email address.
+
+**Indexes:**
+- `CREATE INDEX idx_pending_email_confirmations_token ON pending_email_confirmations(confirmation_token);`
+- `CREATE INDEX idx_pending_email_confirmations_email ON pending_email_confirmations(email);`
+- `CREATE INDEX idx_pending_email_confirmations_created_at ON pending_email_confirmations(created_at);`
+- `CREATE INDEX idx_pending_email_confirmations_expires_at ON pending_email_confirmations(expires_at);`
+
+
+## Enum Types
+// ... existing code ...

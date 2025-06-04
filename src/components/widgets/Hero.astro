@@ -161,14 +161,17 @@ console.log(`[Hero SSR] Destructured values: headline="${headline ? headline.sub
           const exposureTimestampKey = `ab_first_exposure_time_${clientExperimentIdUUIDFromProps}`;
           const storedExposureTimestamp = localStorage.getItem(exposureTimestampKey);
           if (storedExposureTimestamp) {
-            formData.append('exposure_timestamp', storedExposureTimestamp);
-            console.log(`[Hero Client - Simplified] Appended exposure_timestamp (${storedExposureTimestamp}) from localStorage for key: ${exposureTimestampKey}`);
+            formData.append('original_exposure_timestamp', storedExposureTimestamp);
+            console.log(`[Hero Client - Simplified] Appended original_exposure_timestamp (${storedExposureTimestamp}) from localStorage for key: ${exposureTimestampKey}`);
           } else {
-            console.warn(`[Hero Client - Simplified] No exposure_timestamp found in localStorage for key: ${exposureTimestampKey}. time_to_convert will likely be null.`);
+            console.warn(`[Hero Client - Simplified] No original_exposure_timestamp found in localStorage for key: ${exposureTimestampKey}. time_to_convert will likely be null.`);
           }
         } else {
-          console.warn('[Hero Client - Simplified] clientExperimentIdUUIDFromProps is not valid. Cannot retrieve exposure_timestamp. time_to_convert will likely be null.');
+          console.warn('[Hero Client - Simplified] clientExperimentIdUUIDFromProps is not valid. Cannot retrieve original_exposure_timestamp. time_to_convert will likely be null.');
         }
+
+        // Add page_url_at_submission
+        formData.append('page_url_at_submission', window.location.href);
 
         const response = await fetch('/api/subscribe', {
           method: 'POST',

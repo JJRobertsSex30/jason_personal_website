@@ -21,10 +21,26 @@
       }
       this.loading = true;
       try {
+        const payload = {
+          email: this.email,
+          page_url_at_submission: window.location.href,
+          signup_source: 'email-capture-modal' 
+        };
+
+        const browserIdentifier = localStorage.getItem('ab_user_identifier');
+        if (browserIdentifier) {
+          payload.browser_identifier = browserIdentifier;
+        }
+
+        const sessionIdentifier = sessionStorage.getItem('ab_session_identifier');
+        if (sessionIdentifier) {
+          payload.session_identifier = sessionIdentifier;
+        }
+        
         const res = await fetch('/api/subscribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ email: this.email })
+          body: new URLSearchParams(payload)
         });
         const data = await res.json();
         if (res.ok) {

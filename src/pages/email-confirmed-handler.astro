@@ -1,0 +1,83 @@
+---
+// src/pages/email-confirmed-handler.astro
+import Layout from '~/layouts/PageLayout.astro'; // Using a common layout
+import type { MetaData } from '~/types';
+
+const pageMetadata: MetaData = {
+  title: 'Email Confirmation',
+  description: 'Processing your email confirmation.',
+  robots: { index: false, follow: false },
+};
+---
+
+<Layout metadata={pageMetadata}>
+  <section class="px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+    <div class="max-w-xl mx-auto text-center">
+      <h1 class="text-4xl font-bold tracking-tight sm:text-5xl mb-8" id="status-heading">
+        Confirming Your Email...
+      </h1>
+      <div id="status-message" class="text-lg prose prose-lg mx-auto">
+        <p>Please wait while we process your email confirmation.</p>
+      </div>
+      <div id="action-button-container" class="mt-8"></div>
+    </div>
+  </section>
+</Layout>
+
+<script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    const statusHeading = document.getElementById('status-heading');
+    const statusMessage = document.getElementById('status-message');
+    const actionButtonContainer = document.getElementById('action-button-container');
+
+    if (!statusHeading || !statusMessage || !actionButtonContainer) {
+      console.error("Essential page elements not found for status updates.");
+      if (statusMessage) statusMessage.innerHTML = '<p class="text-red-600">A page error occurred. Please try again later.</p>';
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+
+    if (!token) {
+      statusHeading.textContent = 'Confirmation Failed';
+      statusMessage.innerHTML = '<p class="text-red-600">The confirmation link is invalid or missing a token. Please try the link from your email again, or contact support if the issue persists.</p>';
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/confirm-email?token=${encodeURIComponent(token)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        statusHeading.textContent = 'Email Confirmed!';
+        statusMessage.innerHTML = `<p class="text-green-600">${result.message || "Thank you for confirming your email address."}</p><p>You can now access all features and content available to subscribers.</p>`;
+        actionButtonContainer.innerHTML = '<a href="/" class="inline-block bg-primary-500 hover:bg-primary-600 text-white font-medium py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Go to Homepage</a>';
+      } else {
+        statusHeading.textContent = 'Confirmation Failed';
+        statusMessage.innerHTML = `<p class="text-red-600">${result.message || "An error occurred while confirming your email. Please try again or contact support."}</p>`;
+        if (response.status === 410) { // Token expired
+            statusMessage.innerHTML += '<p>It looks like your confirmation link has expired. Please try signing up again to receive a new confirmation email.</p>';
+            actionButtonContainer.innerHTML = '<a href="/#subscribe-form" class="inline-block bg-secondary-500 hover:bg-secondary-600 text-white font-medium py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Resubscribe</a>'; // Adjust link as needed
+        }
+      }
+    } catch (error) {
+      console.error('Error calling confirmation API:', error);
+      statusHeading.textContent = 'Confirmation Error';
+      statusMessage.innerHTML = '<p class="text-red-600">A network error occurred. Please check your connection and try again, or contact support if the issue persists.</p>';
+    }
+  });
+</script>
+
+<style>
+  /* Basic styling for messages, can be enhanced with Tailwind utility classes directly if PageLayout provides them */
+  /* Ensure these colors are defined in your Tailwind config or global styles if primary/secondary are not standard Tailwind */
+  .text-green-600 { color: #059669; } 
+  .text-red-600 { color: #dc2626; }   
+</style> 
