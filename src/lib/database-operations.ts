@@ -8,16 +8,55 @@ import type { PostgrestError } from '@supabase/supabase-js';
  * All functions include proper error handling and type safety.
  */
 
-export interface QueryResult<T = any> {
+export interface QueryResult<T = unknown> {
   data: T[] | null;
   error: PostgrestError | null;
   count?: number;
 }
 
-export interface SingleResult<T = any> {
+export interface SingleResult<T = unknown> {
   data: T | null;
   error: PostgrestError | null;
 }
+
+// NEW TYPE DEFINITIONS START
+export interface UserProfile {
+  id: string; // uuid
+  email: string;
+  first_name?: string | null;
+  is_email_verified: boolean;
+  email_verified_at?: string | null; // timestamptz
+  kit_subscriber_id?: string | null;
+  last_verification_email_sent_at?: string | null; // timestamptz
+  insight_gems: number; // Assuming this is NOT NULL based on schema
+  referral_code?: string | null;
+  created_at: string; // timestamptz
+  updated_at: string; // timestamptz
+}
+
+export interface ImpressionData {
+  experiment_id: string; // UUID
+  variant_id: string; // UUID
+  user_identifier: string; // This will be the user_profiles.id
+  page_url?: string;
+  metadata?: Record<string, unknown>;
+  // Add other fields from your 'impressions' table schema if they are required
+  // and not automatically handled by DB defaults or other processes.
+  // e.g., session_identifier, user_agent, etc.
+}
+
+export interface FindOrCreateUserResult {
+  user: UserProfile | null;
+  isNewUser: boolean;
+  isAlreadyVerified: boolean;
+  error: PostgrestError | string | null;
+}
+
+export interface GenerateTokenResult {
+  token: string | null;
+  error: PostgrestError | string | null;
+}
+// NEW TYPE DEFINITIONS END
 
 /**
  * Execute a raw SQL query (for complex operations)
@@ -93,7 +132,7 @@ export async function getRecords(
   tableName: string,
   options: {
     columns?: string;
-    filters?: Record<string, any>;
+    filters?: Record<string, unknown>;
     orderBy?: string;
     ascending?: boolean;
     limit?: number;
@@ -101,15 +140,12 @@ export async function getRecords(
   } = {}
 ): Promise<QueryResult> {
   try {
-    let query = supabase.from(tableName);
-
-    // Select specific columns or all
-    query = options.columns ? query.select(options.columns) : query.select('*');
+    let query = supabase.from(tableName).select(options.columns || '*');
 
     // Apply filters
     if (options.filters) {
       Object.entries(options.filters).forEach(([key, value]) => {
-        query = query.eq(key, value);
+        query = query.eq(key, value as string | number | boolean | null);
       });
     }
 
@@ -122,8 +158,10 @@ export async function getRecords(
     if (options.limit) {
       query = query.limit(options.limit);
     }
-    if (options.offset) {
-      query = query.range(options.offset, (options.offset + (options.limit || 10)) - 1);
+    if (options.offset && options.limit) {
+      query = query.range(options.offset, options.offset + options.limit - 1);
+    } else if (options.offset) {
+      query = query.range(options.offset, options.offset + 9);
     }
 
     const { data, error, count } = await query;
@@ -161,7 +199,7 @@ export async function getRecordById(
  */
 export async function insertRecord(
   tableName: string,
-  record: Record<string, any>
+  record: Record<string, unknown>
 ): Promise<SingleResult> {
   try {
     const { data, error } = await supabase
@@ -182,7 +220,7 @@ export async function insertRecord(
  */
 export async function insertRecords(
   tableName: string,
-  records: Record<string, any>[]
+  records: Record<string, unknown>[]
 ): Promise<QueryResult> {
   try {
     const { data, error } = await supabase
@@ -203,7 +241,7 @@ export async function insertRecords(
 export async function updateRecord(
   tableName: string,
   id: string | number,
-  updates: Record<string, any>,
+  updates: Record<string, unknown>,
   idColumn: string = 'id'
 ): Promise<SingleResult> {
   try {
@@ -226,8 +264,8 @@ export async function updateRecord(
  */
 export async function updateRecords(
   tableName: string,
-  updates: Record<string, any>,
-  filters: Record<string, any>
+  updates: Record<string, unknown>,
+  filters: Record<string, unknown>
 ): Promise<QueryResult> {
   try {
     let query = supabase.from(tableName).update(updates);
@@ -273,7 +311,7 @@ export async function deleteRecord(
  */
 export async function deleteRecords(
   tableName: string,
-  filters: Record<string, any>
+  filters: Record<string, unknown>
 ): Promise<QueryResult> {
   try {
     let query = supabase.from(tableName).delete();
@@ -322,7 +360,7 @@ export async function listTables(): Promise<QueryResult> {
  */
 export async function countRecords(
   tableName: string,
-  filters: Record<string, any> = {}
+  filters: Record<string, unknown> = {}
 ): Promise<{ count: number; error: PostgrestError | null }> {
   try {
     let query = supabase.from(tableName).select('*', { count: 'exact', head: true });
@@ -345,7 +383,7 @@ export async function countRecords(
  */
 export async function recordExists(
   tableName: string,
-  filters: Record<string, any>
+  filters: Record<string, unknown>
 ): Promise<{ exists: boolean; error: PostgrestError | null }> {
   try {
     const { count, error } = await countRecords(tableName, filters);
@@ -434,6 +472,136 @@ export async function tableExists(tableName: string): Promise<{ exists: boolean;
   }
 }
 
+// NEW FUNCTIONS START
+
+export async function findOrCreateUserForVerification(email: string): Promise<FindOrCreateUserResult> {
+  if (!email || !email.includes('@')) { // Basic email validation
+    return { user: null, isNewUser: false, isAlreadyVerified: false, error: 'Invalid email format provided.' };
+  }
+
+  try {
+    // 1. Check if user exists
+    const { data: existingUsers, error: findError } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('email', email.toLowerCase().trim())
+      .limit(1);
+
+    if (findError) {
+      console.error('Error finding user:', findError);
+      return { user: null, isNewUser: false, isAlreadyVerified: false, error: findError };
+    }
+
+    if (existingUsers && existingUsers.length > 0) {
+      const existingUser = existingUsers[0] as UserProfile;
+      if (existingUser.is_email_verified) {
+        return { user: existingUser, isNewUser: false, isAlreadyVerified: true, error: null };
+      }
+      // User exists but is not verified
+      return { user: existingUser, isNewUser: false, isAlreadyVerified: false, error: null };
+    }
+
+    // 2. Create new user if not found
+    const { data: newUser, error: createError } = await supabase
+      .from('user_profiles')
+      .insert({ 
+        email: email.toLowerCase().trim(), 
+        is_email_verified: false,
+        // insight_gems should have a DB default. If not, specify it.
+        // Other fields like first_name, kit_subscriber_id are nullable.
+      })
+      .select('*')
+      .single();
+
+    if (createError) {
+      console.error('Error creating user:', createError);
+      return { user: null, isNewUser: false, isAlreadyVerified: false, error: createError };
+    }
+    
+    return { user: newUser as UserProfile, isNewUser: true, isAlreadyVerified: false, error: null };
+
+  } catch (err) {
+    console.error('Error finding or creating user:', err);
+    return { user: null, isNewUser: false, isAlreadyVerified: false, error: (err as Error).message || 'Unexpected error occurred' };
+  }
+}
+
+export async function generateAndStoreVerificationToken(userId: string, email: string): Promise<GenerateTokenResult> {
+  if (!userId || !email) {
+    return { token: null, error: 'User ID and email are required to generate a token.'};
+  }
+  try {
+    const token = crypto.randomUUID(); 
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24); // Token valid for 24 hours
+
+    const { error: tokenInsertError } = await supabase
+      .from('email_verification_tokens')
+      .insert({
+        user_profile_id: userId,
+        token: token,
+        email: email.toLowerCase().trim(),
+        expires_at: expiresAt.toISOString(),
+      });
+
+    if (tokenInsertError) {
+      console.error('Error storing verification token:', tokenInsertError);
+      return { token: null, error: tokenInsertError };
+    }
+
+    const { error: userUpdateError } = await supabase
+      .from('user_profiles')
+      .update({ last_verification_email_sent_at: new Date().toISOString() })
+      .eq('id', userId);
+
+    if (userUpdateError) {
+      console.warn('Warning: Failed to update last_verification_email_sent_at for user:', userId, userUpdateError);
+    }
+
+    return { token, error: null };
+  } catch (err) {
+    console.error('Unexpected error in generateAndStoreVerificationToken:', err);
+    return { token: null, error: (err as Error).message || 'Unexpected error occurred generating token' };
+  }
+}
+
+export async function logHeroImpression(impressionData: ImpressionData): Promise<SingleResult> {
+    if (!impressionData.experiment_id || !impressionData.variant_id || !impressionData.user_identifier) {
+        // Ensure the error object structure matches PostgrestError if SingleResult expects it.
+        // A basic PostgrestError has message, details, hint, code. Adding name due to linter.
+        return { data: null, error: { name: 'ValidationError', message: 'Experiment ID, Variant ID, and User Identifier are required for impression logging.', details: 'Missing required fields for logHeroImpression', hint: 'Provide all required IDs.', code: '400' }};
+    }
+    try {
+        const payload: Record<string, unknown> = {
+            experiment_id: impressionData.experiment_id,
+            variant_id: impressionData.variant_id,
+            user_identifier: impressionData.user_identifier,
+            impression_at: new Date().toISOString(),
+            page_url: impressionData.page_url,
+            metadata: impressionData.metadata || {},
+            // Ensure all other NOT NULL columns from your 'impressions' table 
+            // without DB defaults are handled here or passed in impressionData.
+            // Based on your schema, 'user_eligibility_status', 'is_first_exposure', 'user_was_eligible'
+            // might need default values or to be passed.
+            // For now, assuming they have DB defaults or are nullable.
+        };
+        
+        Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+
+        const { data, error } = await supabase
+            .from('impressions')
+            .insert(payload)
+            .select()
+            .single(); // Assuming you expect one impression record back
+
+        return { data, error };
+    } catch (err) {
+        console.error('Error logging hero impression:', err);
+        return { data: null, error: err as PostgrestError };
+    }
+}
+// NEW FUNCTIONS END
+
 export default {
   executeQuery,
   getRecords,
@@ -452,5 +620,8 @@ export default {
   getImpressionsWithExperiments,
   getConversionsWithExperiments,
   runMigration,
-  tableExists
+  tableExists,
+  findOrCreateUserForVerification,
+  generateAndStoreVerificationToken,
+  logHeroImpression
 }; 

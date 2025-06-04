@@ -2,7 +2,7 @@
 *Lead Generation Platform & Relationship Expertise Business*
 
 **Version:** 2.0  
-**Last Updated:** January 2, 2025 (Task 1.3 COMPLETED - Enhanced Conversion Tracking, BT-06 ADDED - Email Validation & Quiz Tracking System)  
+**Last Updated:** July 26, 2024 (BT-07 ADDED - Email Verification Flow)  
 **Project Manager:** Jason Roberts  
 **Target Launch:** v1.0 within 12 weeks (3 months)
 
@@ -91,6 +91,14 @@ A focused v1.0 launch platform serving as a high-converting lead generation syst
 | 6.5 | Update hero/subscribe email validation | ✅ | 🟢 | 🔵 | 6.1 | **COMPLETED:** Integrated EmailValidationService into HeroCustomAB.astro component with comprehensive email validation, disposable domain detection, typo correction, and user-friendly error messaging. Includes fallback validation for graceful degradation. Ready to copy implementation to Hero.astro when needed. |
 | 6.6 | Create email feedback system | ⭐ | 🟢 | 🔵 | 6.4 | Implement user-friendly error messages and retry functionality for invalid emails |
 | 6.7 | Test email validation & quiz tracking | ⭐ | 🟢 | 🟠 | 6.3, 6.4, 6.5 | Comprehensive testing of email validation, quiz data storage, and verification workflow |
+| **BT-07** | **IMPLEMENT EMAIL VERIFICATION FLOW (HERO A/B TEST)** | ⭐ | 🟢 | 🔴 | BT-01, BT-06 | Implement email verification after hero form submission, including token generation, Kit tag updates, and A/B conversion tracking for verified emails. |
+| 7.1 | DB Schema: Define and Apply Verification Table/Fields | ✅ | 🟢 | 🟠 | - | Update database-schema.md with email_verification_tokens table and new user_profiles columns. Apply SQL migration. |
+| 7.2 | API: Create Email Submission & Token Generation Endpoint | 🚧 | 🟢 | 🟠 | 7.1 | Endpoint to handle initial email submission from hero, create user (if new), generate verification token, store token, and trigger verification email. |
+| 7.3 | API: Create Email Verification (Token Validation) Endpoint | ⭐ | 🟢 | 🟠 | 7.1 | Endpoint to validate token from verification link, update user as verified, log A/B conversion, and trigger Kit tag changes. |
+| 7.4 | Frontend: Verification Success Page & Name Capture Form | ⭐ | 🟢 | 🟠 | 7.3 | Create page shown after successful email verification, allowing user to submit their first name. |
+| 7.5 | Kit Integration: Update Tags for Verification Status | ⭐ | 🟢 | 🟠 | 7.3 | Implement Kit API calls to add/remove 'email not verified' and 'Email Verified' tags. |
+| 7.6 | A/B Logic: Track Impressions & Verified Email Conversions | ⭐ | 🟢 | 🟠 | 7.3 | Ensure A/B impressions are logged on initial email submission, and conversions are logged only upon successful email verification. |
+| 7.7 | Testing: Full Email Verification Flow E2E | ⭐ | 🟢 | 🔴 | 7.2, 7.3, 7.4, 7.5, 7.6 | End-to-end testing of the entire email submission, verification, name capture, and Kit update process. |
 
 ---
 

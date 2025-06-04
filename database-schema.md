@@ -1,5 +1,5 @@
 # 🗄️ Database Schema Documentation
-*Last Updated: June 1, 2025*
+*Last Updated: July 26, 2024*
 
 ## 🏗️ **Database Overview**
 This document contains the complete schema documentation for Jason's Personal Website Supabase database, including A/B testing infrastructure, user management, and gamification features.
@@ -18,6 +18,7 @@ This document contains the complete schema documentation for Jason's Personal We
 - `user_experiment_participation` - **NEW:** User-level participation tracking to prevent double-counting
 - `conversion_attribution` - **NEW:** Advanced conversion attribution and analytics
 - `user_engagement_tracking` - **NEW:** Engagement tracking for A/B testing ineligible users
+- `email_verification_tokens` - **NEW:** Stores tokens for email verification
 
 ### **👥 User Management Tables**
 - `user_profiles` - User account information and gem balances
@@ -124,11 +125,15 @@ Core user information and gamification data
 |--------|------|----------|---------|-------------|
 | `id` | uuid | NO | `uuid_generate_v4()` | Primary key |
 | `email` | text | NO | - | User's email address (unique) |
+| `first_name` | text | YES | - | User's first name |
+| `is_email_verified` | boolean | NO | `false` | **NEW:** Tracks if the user's email has been verified |
+| `email_verified_at` | timestamptz | YES | - | **NEW:** Timestamp of when the email was verified |
+| `kit_subscriber_id` | text | YES | - | **NEW:** ConvertKit subscriber ID |
+| `last_verification_email_sent_at` | timestamptz | YES | - | **NEW:** Timestamp of the last verification email sent |
 | `insight_gems` | integer | NO | `100` | User's gem balance |
 | `referral_code` | text | YES | - | User's unique referral code |
 | `created_at` | timestamptz | NO | `now()` | Account creation timestamp |
 | `updated_at` | timestamptz | NO | `now()` | Last update timestamp |
-| `first_name` | text | YES | - | User's first name |
 
 ### **🧪 experiments**
 A/B test experiment definitions with statistical tracking
@@ -344,6 +349,24 @@ User referral system
 | `referrer_id` | uuid | NO | - | FK to user_profiles (referrer) |
 | `new_user_id` | uuid | NO | - | FK to user_profiles (new user) |
 | `created_at` | timestamptz | NO | `now()` | Referral timestamp |
+
+### **🔑 email_verification_tokens** *(NEW)*
+Stores tokens for email verification links.
+| Column              | Type        | Nullable | Default               | Description                                      |
+|---------------------|-------------|----------|-----------------------|--------------------------------------------------|
+| `id`                | uuid        | NO       | `uuid_generate_v4()`  | Primary key                                      |
+| `user_profile_id`   | uuid        | NO       |                       | FK to `user_profiles.id`                         |
+| `token`             | text        | NO       |                       | Secure, unique verification token (indexed)      |
+| `email`             | text        | NO       |                       | Email address this token is for                  |
+| `expires_at`        | timestamptz | NO       |                       | When the token becomes invalid                   |
+| `is_used`           | boolean     | NO       | `false`               | Whether the token has been successfully used     |
+| `used_at`           | timestamptz | YES      |                       | Timestamp of when the token was used             |
+| `created_at`        | timestamptz | NO       | `now()`               | Token creation timestamp                         |
+
+**Indexes:**
+- `idx_email_verification_tokens_token` ON `email_verification_tokens` (`token`)
+- `idx_email_verification_tokens_user_profile_id` ON `email_verification_tokens` (`user_profile_id`)
+- `idx_email_verification_tokens_email` ON `email_verification_tokens` (`email`)
 
 ---
 
