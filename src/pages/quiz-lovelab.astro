@@ -706,6 +706,15 @@ const scoreRanges = [
                   quizPath: actualQuizPath, // Use the extracted path
                   quizName: actualQuizName   // Use the determined name
                 }));
+
+                // Add original_exposure_timestamp if experimentId is available
+                if (currentVariant.experimentId) {
+                  const exposureTimestampKey = `ab_first_exposure_time_${currentVariant.experimentId}`;
+                  const originalExposureTimestamp = localStorage.getItem(exposureTimestampKey);
+                  if (originalExposureTimestamp) {
+                    formData.append('original_exposure_timestamp', originalExposureTimestamp);
+                  }
+                }
               } else {
                 console.log('[LoveLab Quiz DEBUG] currentVariant is missing or invalid, not appending variantInfo.', JSON.stringify(currentVariant, null, 2));
               }
@@ -717,6 +726,15 @@ const scoreRanges = [
                 const sessionId = window.getClientSessionIdentifier();
                 if (sessionId) formData.append('session_identifier', sessionId);
               }
+
+              // Add browser_identifier
+              const browserIdentifier = localStorage.getItem('ab_user_identifier');
+              if (browserIdentifier) {
+                formData.append('browser_identifier', browserIdentifier);
+              }
+
+              // Add page_url_at_submission
+              formData.append('page_url_at_submission', window.location.href);
 
               console.log('[Quiz Page] Final form data for /api/quiz-submit:', Object.fromEntries(formData));
               
@@ -803,6 +821,15 @@ const scoreRanges = [
                   quizPath: actualQuizPath, // Use the extracted path
                   quizName: actualQuizName   // Use the determined name
                 }));
+
+                // Add original_exposure_timestamp if experimentId is available
+                if (currentVariant.experimentId) {
+                  const exposureTimestampKey = `ab_first_exposure_time_${currentVariant.experimentId}`;
+                  const originalExposureTimestamp = localStorage.getItem(exposureTimestampKey);
+                  if (originalExposureTimestamp) {
+                    formData.append('original_exposure_timestamp', originalExposureTimestamp);
+                  }
+                }
               }
               
               const storedReferrerId = localStorage.getItem('referrer_id');
@@ -812,6 +839,15 @@ const scoreRanges = [
                 const sessionId = window.getClientSessionIdentifier();
                 if (sessionId) formData.append('session_identifier', sessionId);
               }
+
+              // Add browser_identifier
+              const browserIdentifier = localStorage.getItem('ab_user_identifier');
+              if (browserIdentifier) {
+                formData.append('browser_identifier', browserIdentifier);
+              }
+
+              // Add page_url_at_submission
+              formData.append('page_url_at_submission', window.location.href);
 
               console.log('[Quiz Page] Final form data for /api/quiz-submit:', Object.fromEntries(formData));
               

@@ -18,7 +18,7 @@ export interface ConvertKitConfig {
   getEngagementTags: (data: EngagementData) => number[];
 }
 
-export type SubscriptionSource = 'hero' | 'quiz' | 'quiz-lovelab';
+export type SubscriptionSource = 'hero' | 'quiz' | 'quiz-lovelab' | 'quiz-v1' | 'subscribe-box' | 'general-signup' | 'footer-form' | 'contact-form' | 'webinar-signup' | 'resource-download';
 
 export interface EngagementData {
   score?: number;
@@ -198,5 +198,69 @@ export async function submitToConvertKit(
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error' 
     };
+  }
+}
+
+export interface ConvertKitSubscriber {
+  id: number;
+  first_name: string | null;
+  email_address: string;
+  state: string; // e.g., "active", "inactive"
+  created_at: string; // ISO date string
+  fields: { // Custom fields
+    [key: string]: string | number | boolean | null;
+  };
+  // Add other fields as needed based on ConvertKit API response
+}
+
+export async function getConvertKitSubscriberByEmail(email: string): Promise<{ success: boolean; data?: ConvertKitSubscriber; error?: string }> {
+  const apiKey = import.meta.env.CONVERTKIT_API_KEY || import.meta.env.SECRET;
+  const apiSecret = import.meta.env.CONVERTKIT_API_SECRET || apiKey; // Fallback to API_KEY if SECRET specifically for subscribers isn't set
+
+  if (!apiSecret) {
+    console.error('[ConvertKit] API Secret or API Key not found. Cannot fetch subscriber.');
+    return { success: false, error: 'API credentials not configured.' };
+  }
+
+  const url = `https://api.convertkit.com/v3/subscribers?api_secret=${apiSecret}&email_address=${encodeURIComponent(email)}`;
+
+  try {
+    console.log(`[ConvertKit] Fetching subscriber data for: ${email}`);
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+      },
+    });
+
+    const responseData = await response.json();
+
+    if (!response.ok) {
+      const errorMessage = responseData.error && responseData.message
+        ? `${responseData.error}: ${responseData.message}`
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        : responseData.error_message || `HTTP error ${response.status}`;
+      console.error(`[ConvertKit] Error fetching subscriber ${email}: ${errorMessage}`, responseData);
+      return { success: false, error: errorMessage, data: responseData };
+    }
+    
+    // The API returns an array of subscribers, even when querying by unique email.
+    // We expect at most one subscriber for a given email.
+    if (responseData.subscribers && responseData.subscribers.length > 0) {
+      console.log(`[ConvertKit] Successfully fetched subscriber data for: ${email}`);
+      return { success: true, data: responseData.subscribers[0] };
+    } else if (responseData.subscribers && responseData.subscribers.length === 0) {
+      console.log(`[ConvertKit] No subscriber found with email: ${email}`);
+      return { success: false, error: 'Subscriber not found.', data: responseData };
+    } else {
+      // Should not happen if API schema is consistent
+      console.warn(`[ConvertKit] Unexpected response structure for ${email}:`, responseData);
+      return { success: false, error: 'Unexpected response structure from ConvertKit API.', data: responseData };
+    }
+
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'An unknown error occurred';
+    console.error(`[ConvertKit] Exception fetching subscriber ${email}: ${message}`, error);
+    return { success: false, error: message };
   }
 } 

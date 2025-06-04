@@ -22,6 +22,7 @@ This document contains the complete schema documentation for Jason's Personal We
 
 ### **👥 User Management Tables**
 - `user_profiles` - User account information and gem balances
+- `pending_email_confirmations` - User email confirmation and token management
 
 ### **💎 Gamification Tables**
 - `gem_transactions` - User gem transaction history
@@ -134,6 +135,53 @@ Core user information and gamification data
 | `referral_code` | text | YES | - | User's unique referral code |
 | `created_at` | timestamptz | NO | `now()` | Account creation timestamp |
 | `updated_at` | timestamptz | NO | `now()` | Last update timestamp |
+
+### **📧 pending_email_confirmations**
+Manages pending email confirmations, storing tokens and linking to A/B tests if applicable.
+```sql
+CREATE TABLE pending_email_confirmations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT NOT NULL,
+    confirmation_token TEXT NOT NULL UNIQUE,
+    variant_id UUID REFERENCES variants(id) ON DELETE SET NULL,
+    experiment_id UUID REFERENCES experiments(id) ON DELETE SET NULL,
+    browser_identifier TEXT,
+    session_identifier TEXT,
+    original_exposure_timestamp TIMESTAMPTZ,
+    submission_details JSONB,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    is_confirmed BOOLEAN DEFAULT false,
+    confirmed_at TIMESTAMPTZ
+);
+
+-- Optional: Add comments on columns for better schema understanding in your DB
+COMMENT ON COLUMN pending_email_confirmations.id IS 'Unique identifier for the pending confirmation record.';
+COMMENT ON COLUMN pending_email_confirmations.email IS 'The email address submitted by the user.';
+COMMENT ON COLUMN pending_email_confirmations.confirmation_token IS 'Unique, secure token sent to the user for verifying their email address.';
+COMMENT ON COLUMN pending_email_confirmations.variant_id IS 'The specific A/B test variant the user was exposed to at the time of submission. Nullable if signup is not tied to an active A/B test.';
+COMMENT ON COLUMN pending_email_confirmations.experiment_id IS 'The A/B test experiment the user was part of. Nullable if signup is not tied to an active A/B test.';
+COMMENT ON COLUMN pending_email_confirmations.browser_identifier IS 'The client-side localStorage ID (e.g., ab_user_identifier) at the time of email submission. Used for A/B test eligibility checks.';
+COMMENT ON COLUMN pending_email_confirmations.session_identifier IS 'The client-side sessionStorage ID at the time of email submission.';
+COMMENT ON COLUMN pending_email_confirmations.original_exposure_timestamp IS 'Timestamp of the user\'s first exposure to the relevant experiment variant, if applicable. Used for calculating time_to_convert.';
+COMMENT ON COLUMN pending_email_confirmations.submission_details IS 'Stores additional context captured at the moment of submission (e.g., page URL, UTM parameters, initial geolocation data, form source).';
+COMMENT ON COLUMN pending_email_confirmations.created_at IS 'Timestamp when the pending confirmation record was created.';
+COMMENT ON COLUMN pending_email_confirmations.expires_at IS 'Timestamp when the confirmation token will expire (e.g., now() + interval \'\'24 hours\'\').';
+COMMENT ON COLUMN pending_email_confirmations.is_confirmed IS 'Flag indicating whether the email address has been confirmed by the user.';
+COMMENT ON COLUMN pending_email_confirmations.confirmed_at IS 'Timestamp when the user confirmed their email address.';
+
+-- Create Indexes
+CREATE INDEX idx_pending_email_confirmations_token ON pending_email_confirmations(confirmation_token);
+CREATE INDEX idx_pending_email_confirmations_email ON pending_email_confirmations(email);
+CREATE INDEX idx_pending_email_confirmations_created_at ON pending_email_confirmations(created_at);
+CREATE INDEX idx_pending_email_confirmations_expires_at ON pending_email_confirmations(expires_at);
+```
+
+#### **Key Features & Usage:**
+- **Secure Email Verification:** Ensures users own the email addresses they submit.
+- **Token Management:** Handles generation, storage, and expiry of confirmation tokens.
+- **A/B Test Integration:** Links email confirmations back to specific A/B test variants and experiments if a user signed up via an experiment. This is crucial for accurate conversion tracking.
+- **Contextual Data:** `submission_details` can store important context from the point of signup, like UTM parameters, form source, or initial geolocation.
 
 ### **🧪 experiments**
 A/B test experiment definitions with statistical tracking
@@ -1119,3 +1167,31 @@ Your database now supports enterprise-grade quiz tracking with:
 - ✅ **Performance Optimized** (~100x faster queries with strategic indexing)
 - ✅ **ConvertKit Integration** (webhook support, automated verification)
 - ✅ **Developer Friendly** (rich functions, documentation, constraints)
+
+### `pending_email_confirmations`
+
+Stores email submissions awaiting user confirmation. This table facilitates a double opt-in process for A/B testing and general email subscriptions.
+
+- `id`: UUID (Primary Key, default: `gen_random_uuid()`) - Unique identifier for the pending confirmation record.
+- `email`: TEXT NOT NULL - The email address submitted by the user.
+- `confirmation_token`: TEXT NOT NULL (UNIQUE) - Unique, secure token sent to the user for verifying their email address.
+- `variant_id`: UUID (References `variants.id` ON DELETE SET NULL) - The specific A/B test variant the user was exposed to at the time of submission. Nullable if signup is not tied to an active A/B test.
+- `experiment_id`: UUID (References `experiments.id` ON DELETE SET NULL) - The A/B test experiment the user was part of. Nullable if signup is not tied to an active A/B test.
+- `browser_identifier`: TEXT - The client-side `localStorage` ID (e.g., `ab_user_identifier`) at the time of email submission. Used for A/B test eligibility checks.
+- `session_identifier`: TEXT - The client-side `sessionStorage` ID at the time of email submission.
+- `original_exposure_timestamp`: TIMESTAMPTZ - Timestamp of the user's first exposure to the relevant experiment variant, if applicable. Used for calculating `time_to_convert`.
+- `submission_details`: JSONB - Stores additional context captured at the moment of submission (e.g., page URL, UTM parameters, initial geolocation data, form source).
+- `created_at`: TIMESTAMPTZ (Default: `now()`) - Timestamp when the pending confirmation record was created.
+- `expires_at`: TIMESTAMPTZ NOT NULL - Timestamp when the confirmation token will expire (e.g., `now() + interval '24 hours'`).
+- `is_confirmed`: BOOLEAN (Default: `false`) - Flag indicating whether the email address has been confirmed by the user.
+- `confirmed_at`: TIMESTAMPTZ (Nullable) - Timestamp when the user confirmed their email address.
+
+**Indexes:**
+- `CREATE INDEX idx_pending_email_confirmations_token ON pending_email_confirmations(confirmation_token);`
+- `CREATE INDEX idx_pending_email_confirmations_email ON pending_email_confirmations(email);`
+- `CREATE INDEX idx_pending_email_confirmations_created_at ON pending_email_confirmations(created_at);`
+- `CREATE INDEX idx_pending_email_confirmations_expires_at ON pending_email_confirmations(expires_at);`
+
+
+## Enum Types
+// ... existing code ...
