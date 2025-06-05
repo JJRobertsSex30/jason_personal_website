@@ -72,6 +72,68 @@ export interface VerifiedTokenData {
   error?: PostgrestError | string | null;
 }
 
+// START LINTER FIX INTERFACES
+export interface ImpressionRecord {
+  id: string; // uuid
+  variant_id: string; // uuid
+  experiment_id: string; // uuid
+  user_identifier: string; // uuid
+  session_identifier?: string | null; // uuid
+  impression_at: string; // timestamptz
+  page_url?: string | null;
+  user_agent?: string | null;
+  metadata?: Record<string, unknown> | null;
+  is_first_exposure?: boolean | null;
+  user_was_eligible?: boolean | null;
+  user_eligibility_status?: Record<string, unknown> | null;
+  user_context?: Record<string, unknown> | null;
+  country_code?: string | null; // varchar(2)
+  region?: string | null; // varchar(100)
+  city?: string | null; // varchar(100)
+  device_type?: string | null; // device_type_enum
+  screen_resolution?: string | null; // varchar(20)
+  viewport_size?: string | null; // varchar(20)
+  connection_type?: string | null; // connection_type_enum
+  language_code?: string | null; // varchar(10)
+  time_zone?: string | null; // varchar(50)
+  utm_source?: string | null; // varchar(100)
+  utm_medium?: string | null; // varchar(100)
+  utm_campaign?: string | null; // varchar(100)
+  time_on_page?: number | null; // integer
+  scroll_depth_percent?: number | null; // integer
+  page_load_time?: number | null; // integer
+  bounce?: boolean | null;
+  // Add any other fields selected from 'impressions' table
+  ip_address?: string | null; // From usage in conversionDetails
+}
+
+export interface ConversionInsertData {
+  user_identifier: string; // text in schema, but typically uuid from user_profiles.id
+  conversion_type: string;
+  experiment_id?: string | null; // uuid
+  variant_id?: string | null; // uuid
+  created_at: string; // timestamptz
+  session_identifier?: string | null; // uuid
+  details?: Record<string, unknown> | null;
+  conversion_value?: number | null; // decimal(10,2)
+  device_type?: string | null; // device_type_enum
+  time_to_convert?: number | null; // integer
+  conversion_context?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
+  // Fields from schema not explicitly in current object:
+  // is_first_conversion_for_experiment?: boolean | null;
+  // conversion_attribution_source?: string | null;
+  // conversion_window_days?: number | null;
+  // original_exposure_date?: string | null; // timestamptz
+  // conversion_eligibility_verified?: boolean | null;
+  // country_code?: string | null; // varchar(2)
+  // referrer_source?: string | null; // varchar(200)
+  // utm_source?: string | null; // varchar(100)
+  // utm_medium?: string | null; // varchar(100)
+  // utm_campaign?: string | null; // varchar(100)
+}
+// END LINTER FIX INTERFACES
+
 // NEW TYPE DEFINITIONS END
 
 /**
@@ -698,7 +760,7 @@ export async function verifyTokenAndLogConversion(tokenValue: string): Promise<V
     console.log(`[DB Ops] User profile ${tokenRecord.user_profile_id} marked as verified.`);
 
     // 6. Log conversion
-    let impressionRecord: Record<string, any> | null = null;
+    let impressionRecord: ImpressionRecord | null = null;
     const directImpressionId = tokenRecord.impression_id as string | undefined;
 
     if (directImpressionId) {
@@ -735,42 +797,38 @@ export async function verifyTokenAndLogConversion(tokenValue: string): Promise<V
 
     // Constructing the object for the 'conversions' table
     // Ensuring all keys match the snake_case column names from database-schema.md
-    const conversionData: Record<string, unknown> = {
-      user_identifier: tokenRecord.user_profile_id,    
+    const conversionData: ConversionInsertData = {
+      user_identifier: tokenRecord.user_profile_id,
       conversion_type: 'email_verified',
-      experiment_id: tokenRecord.experiment_id,      
-      variant_id: tokenRecord.variant_id,          
-      created_at: nowISO,                         
+      experiment_id: tokenRecord.experiment_id,
+      variant_id: tokenRecord.variant_id,
+      created_at: nowISO,
       session_identifier: impressionRecord?.session_identifier || null,
       details: conversionDetails,
-      conversion_value: 1,
+      conversion_value: 1, // Defaulting to 1 for 'email_verified' type
       device_type: impressionRecord?.device_type || null,
       time_to_convert: (impressionRecord && impressionRecord.impression_at)
-        ? Math.round((now.getTime() - new Date(impressionRecord.impression_at).getTime()) / 1000) 
+        ? Math.round((now.getTime() - new Date(impressionRecord.impression_at).getTime()) / 1000)
         : null,
       conversion_context: {
         source: 'email_verification_link_click',
         notes: impressionRecord ? 'Linked to original impression for context.' : 'Original impression not found or not linked.',
         token_id_used: tokenRecord.id // Storing token_id in context
       },
-      metadata: { 
+      metadata: {
           email_used_for_verification: tokenRecord.email,
           related_impression_id: directImpressionId || null // Storing related impression_id in metadata for audit
       }
     };
     
-    Object.keys(conversionData).forEach(key => {
-      if (conversionData[key] === undefined || conversionData[key] === null) {
-        // Only delete if we intend to rely on DB defaults for explicitly NULL-passed values.
-        // For nullable columns, passing null is usually fine. Deleting makes it as if the key was never provided.
-        // Let's be more precise: only delete if it's undefined. If it's explicitly null, pass it as null.
-        if (conversionData[key] === undefined) {
-            delete conversionData[key];
-        }
-      }
-    });
+    // Clean undefined properties before insert. Null properties are fine.
+    // Object.keys(conversionData).forEach(key => {
+    //   if (conversionData[key as keyof ConversionInsertData] === undefined) {
+    //     delete conversionData[key as keyof ConversionInsertData];
+    //   }
+    // });
 
-    const { error: conversionError } = await supabase.from('conversions').insert(conversionData as any); // Cast to any if type issues persist with Supabase insert
+    const { error: conversionError } = await supabase.from('conversions').insert(conversionData);
     
     if (conversionError) {
       console.warn(`[DB Ops] Failed to log 'email_verified' conversion for user ${tokenRecord.user_profile_id}, experiment ${tokenRecord.experiment_id || 'N/A'}:`, conversionError.message);
