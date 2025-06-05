@@ -3,7 +3,7 @@ import type { PostgrestError } from '@supabase/supabase-js';
 
 /**
  * Database Operations for Cursor AI
- * 
+ * handle_quiz_submission
  * This module provides CRUD operations that Cursor's AI can use to interact with the Supabase database.
  * All functions include proper error handling and type safety.
  */
@@ -965,27 +965,32 @@ export interface HandleQuizSubmissionResultData {
 export async function callHandleQuizSubmissionRpc(
   params: HandleQuizSubmissionParams
 ): Promise<SingleResult<HandleQuizSubmissionResultData>> {
-  console.log(`[DB Ops] Calling handle_quiz_submission RPC for user: ${params.userId}, email: ${params.emailAddress}`);
   try {
-    const rpcParams = {
+    console.log('[DB Ops] Calling handle_quiz_submission RPC for user:', params.userId, ', email:', params.emailAddress);
+
+    // Transform params to match expected p_snake_case from the database error log.
+    // Ensure all 15 parameters are always sent, mapping undefined to null.
+    const rpcPayload = {
       p_user_id: params.userId,
       p_email: params.emailAddress,
-      p_first_name: params.userFirstName ?? null,
+      p_first_name: params.userFirstName !== undefined ? params.userFirstName : null,
       p_score: params.quizScore,
       p_result_type: params.quizResultType,
       p_quiz_name: params.quizNameTaken,
-      p_experiment_id: params.experimentIdAssociated ?? null,
-      p_variant_id: params.variantIdAssociated ?? null,
-      p_impression_id: params.impressionIdToLink ?? null,
-      p_referral_code_used: params.referralCodeAttempted ?? null,
+      p_experiment_id: params.experimentIdAssociated !== undefined ? params.experimentIdAssociated : null,
+      p_variant_id: params.variantIdAssociated !== undefined ? params.variantIdAssociated : null,
+      p_impression_id: params.impressionIdToLink !== undefined ? params.impressionIdToLink : null,
+      p_referral_code_used: params.referralCodeAttempted !== undefined ? params.referralCodeAttempted : null,
       p_client_address: params.ipAddress,
-      p_browser_identifier: params.browserId ?? null,
-      p_session_identifier: params.sessionId ?? null,
-      p_device_type: params.clientDeviceType ?? null,
-      p_page_url: params.submissionPageUrl ?? null,
+      p_browser_identifier: params.browserId !== undefined ? params.browserId : null,
+      p_session_identifier: params.sessionId !== undefined ? params.sessionId : null,
+      p_device_type: params.clientDeviceType !== undefined ? params.clientDeviceType : null,
+      p_page_url: params.submissionPageUrl !== undefined ? params.submissionPageUrl : null,
     };
+    
+    console.log('[DB Ops] Payload for RPC call:', rpcPayload);
 
-    const { data, error } = await supabase.rpc('handle_quiz_submission', rpcParams);
+    const { data, error } = await supabase.rpc('handle_quiz_submission', rpcPayload);
 
     if (error) {
       console.error('[DB Ops] Error calling handle_quiz_submission RPC:', error);

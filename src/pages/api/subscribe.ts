@@ -6,7 +6,9 @@ import {
   logHeroImpression
 } from '~/lib/database-operations';
 import type {
-  ImpressionData
+  ImpressionData,
+  ImpressionRecord,
+  SingleResult
 } from '~/lib/database-operations'; // UserProfile removed as it's inferred
 
 // Define HeroSubscribeRequestBody here if not imported from a central types file
@@ -180,11 +182,14 @@ export const POST: APIRoute = async ({ request, site: _site }) => {
     console.log('[API /subscribe] Constructed impressionDetails for DB:', JSON.stringify(impressionDetails, null, 2));
     
     // Capture the result of logHeroImpression
-    const { data: impressionData, error: impressionError } = await logHeroImpression(impressionDetails);
+    const result: SingleResult<ImpressionRecord> = await logHeroImpression(impressionDetails);
+    const impressionData: ImpressionRecord | null = result.data;
+    const impressionError = result.error;
+
     if (impressionError) {
         console.warn(`[API /subscribe] Failed to log A/B impression for user ${userProfileId}:`, impressionError.message);
-    } else if (impressionData && typeof (impressionData as Record<string, any>)?.id === 'string') {
-        loggedImpressionId = (impressionData as Record<string, any>).id; // Store the impression ID
+    } else if (impressionData && typeof impressionData.id === 'string') {
+        loggedImpressionId = impressionData.id;
         console.log(`[API /subscribe] Impression logged successfully for user ${userProfileId}. Impression ID: ${loggedImpressionId}`);
     } else if (impressionData) {
         // Log if impressionData exists but id is missing or not a string, which would be unexpected

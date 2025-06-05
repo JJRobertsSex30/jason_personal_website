@@ -257,41 +257,45 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
     const quizResultTagId: number | null = null; // CHANGED to const
 
     // TODO: In the future, quiz result tag IDs (like `TAG_ID_QUIZ_RESULT_TYPE_A`) should be dynamically fetched or stored in a config
-    // For now, let's assume we have a mapping or a way to get them.
-    // Placeholder: if resultType is "type_a", tag is 12345, if "type_b", tag is 67890
-    // This part needs actual implementation for mapping resultType to specific Tag IDs in ConvertKit if they exist.
     if (quizResultTagName) {
       console.log(`[API Quiz Submit ${requestTimestamp}] Quiz result tag name determined as: ${quizResultTagName}. Actual ID needs to be mapped.`);
-      // Example mapping (replace with actual logic if available)
-      // if (quizResultTagName === 'quiz_result_relationship_transformer') quizResultTagId = KNOWN_TAG_ID_FOR_TRANSFORMER; 
     }
 
-    const insightGems = score; // Assuming score directly maps to insight_gems
+    const insightGems = score; // Assuming score (string from form) directly maps to insight_gems (string from form)
+    const actualSource: SubscriptionSource = parsedClientVariantData?.quizName ? `Quiz: ${parsedClientVariantData.quizName}` as SubscriptionSource : "Quiz: General" as SubscriptionSource;
+
+    // Base options for ConvertKit payload, parsed appropriately
+    const basePayloadOptions = {
+      firstName: firstName || undefined, // firstName from formData is string|undefined
+      resultType: resultType || undefined, // resultType from formData is string|undefined
+      score: score ? parseInt(score, 10) : undefined, // Parse score string to number
+      gems: insightGems ? parseInt(insightGems, 10) : undefined, // Parse gems string to number
+      // referralId: /* Get from formData if applicable, pass to options */,
+    };
 
     if (convertKitApiKey && convertKitFormId) {
       if (actionNeededForVerification) {
         console.log(`[API Quiz Submit ${requestTimestamp}] Action for verification TRUE. Subscribing ${email} to ConvertKit with verification token.`);
-        const payload: ConvertKitSubscribePayload = createConvertKitPayload({
-          apiKey: convertKitApiKey,
-          formId: convertKitFormId,
-          email,
-          firstName,
-          tags: [EMAIL_NOT_VERIFIED_TAG_ID], // Standard "not verified" tag
-          customFields: {
-            insight_gems: insightGems,
-            // referral_code: referralCodeUsedBySubmitter || userProfileForSubmittedEmail.referral_code || undefined, // Use generated one if submitter didn't use one
-            quiz_verification_token: verificationTokenForKit || undefined, // Send the new token
-            quiz_name: parsedClientVariantData?.quizName || 'general',
-            quiz_score: score,
-            quiz_result_type: resultType || undefined,
-          },
-          source: parsedClientVariantData?.quizName ? `Quiz: ${parsedClientVariantData.quizName}` as SubscriptionSource : "Quiz: General" as SubscriptionSource,
-        });
         
-        if (quizResultTagId) payload.tags?.push(quizResultTagId); // Add specific quiz result tag if available
+        const customFieldsForNew: Record<string, string> = {
+            quiz_name: parsedClientVariantData?.quizName || 'general',
+        };
+        if (verificationTokenForKit) { // verificationTokenForKit is from generateAndStoreVerificationToken
+            customFieldsForNew.app_confirmation_token = verificationTokenForKit; // Changed key to app_confirmation_token
+        }
+        const optionsForNewUser = {...basePayloadOptions, customFields: customFieldsForNew};
+        
+        const payload: ConvertKitSubscribePayload = createConvertKitPayload(
+          email,
+          actualSource,
+          optionsForNewUser
+        );
+        
+        if (!payload.tags) payload.tags = [];
+        payload.tags.push(EMAIL_NOT_VERIFIED_TAG_ID);
 
         try {
-          const ckResponse = await submitToConvertKit(payload, convertKitApiKey);
+          const ckResponse = await submitToConvertKit(payload, convertKitFormId);
           console.log(`[API Quiz Submit ${requestTimestamp}] ConvertKit submission response for new subscription of ${email}:`, ckResponse);
           if (ckResponse.success && (ckResponse as { subscription?: { subscriber?: { id?: number } } })?.subscription?.subscriber?.id) { 
             kitSubscriberId = (ckResponse as unknown as { subscription: { subscriber: { id: number } } }).subscription.subscriber.id; // REFINED TYPE ASSERTION to unknown first
@@ -327,7 +331,7 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
             
             for (const tagId of tagsToAdd) {
               try {
-                await addTagToSubscriber(String(kitSubscriberId), tagId, convertKitApiKey); // CORRECTED SUBSCRIBER ID TYPE
+                await addTagToSubscriber(String(kitSubscriberId), tagId, convertKitApiKey); // Revert to using convertKitApiKey
                 console.log(`[API Quiz Submit ${requestTimestamp}] Added tag ${tagId} to CK subscriber ${kitSubscriberId}`);
               } catch (tagError) {
                 console.error(`[API Quiz Submit ${requestTimestamp}] Error adding tag ${tagId} to CK subscriber ${kitSubscriberId}:`, tagError);
@@ -343,27 +347,20 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
 
             // Update custom fields by re-submitting (CK API v3 doesn't have a direct field update endpoint without re-subscribing)
              console.log(`[API Quiz Submit ${requestTimestamp}] Updating custom fields for existing subscriber ${email} (CK ID: ${kitSubscriberId})`);
-            const updatePayload: ConvertKitSubscribePayload = createConvertKitPayload({
-              apiKey: convertKitApiKey,
-              formId: convertKitFormId, // This might not be strictly necessary for field updates if user already on list, but CK handles it
-              email,
-              firstName,
-              // Tags are managed separately above for existing users, so an empty array or no tags field is fine here
-              // or send all current tags if that's the desired behavior
-              tags: [], 
-              customFields: {
-                insight_gems: insightGems,
-                // referral_code: userProfileForSubmittedEmail.referral_code || undefined, // Their existing referral code
-                // quiz_verification_token: null, // Clear any old quiz verification token as they are verified
+            
+            const customFieldsForUpdate: Record<string, string> = {
                 quiz_name: parsedClientVariantData?.quizName || 'general',
-                quiz_score: score,
-                quiz_result_type: resultType || undefined,
-              },
-              source: parsedClientVariantData?.quizName ? `Quiz Update: ${parsedClientVariantData.quizName}` as SubscriptionSource : "Quiz Update: General" as SubscriptionSource,
-            });
+            }; // No verification token for existing, verified users
+            const optionsForUpdate = {...basePayloadOptions, customFields: customFieldsForUpdate};
+
+            const updatePayload: ConvertKitSubscribePayload = createConvertKitPayload(
+              email,
+              actualSource, 
+              optionsForUpdate
+            );
 
             try {
-              const ckUpdateResponse = await submitToConvertKit(updatePayload, convertKitApiKey); // ADJUSTED ARGUMENTS
+              const ckUpdateResponse = await submitToConvertKit(updatePayload, convertKitFormId);
               console.log(`[API Quiz Submit ${requestTimestamp}] ConvertKit field update response for ${email}:`, ckUpdateResponse);
             } catch (error) {
               console.error(`[API Quiz Submit ${requestTimestamp}] Error updating custom fields for ${email} in ConvertKit:`, error);

@@ -98,15 +98,16 @@ console.log(`[Hero SSR] Destructured values: headline="${headline ? headline.sub
   clientExperimentNameFromProps: experimentName,
   clientExperimentIdUUIDFromProps: experimentIdUUID
 }}>
-  document.addEventListener('DOMContentLoaded', function() {
-    console.log('[Hero Client] DOMContentLoaded. Props:', { clientVariantIdFromProps, clientExperimentNameFromProps, clientExperimentIdUUIDFromProps });
+  document.addEventListener('astro:page-load', function() {
+    console.log('[Hero Client] astro:page-load fired.');
     const form = document.getElementById('hero-custom-ab-form');
     const messageElement = document.getElementById('hero-custom-ab-form-message');
 
     if (!form || !messageElement) {
-      console.error('[Hero Client] Form or message element not found.');
+      console.error('[Hero Client] Form or message element not found on astro:page-load.');
       return;
     }
+    console.log('[Hero Client] Form and message elements found. Attaching submit listener.');
     
     function ensureAbUserIdentifier() {
       let userId = localStorage.getItem('ab_user_identifier');
@@ -145,8 +146,9 @@ console.log(`[Hero SSR] Destructured values: headline="${headline ? headline.sub
     }
 
     form.addEventListener('submit', async function(event) {
+      console.log('[Hero Client] Submit event triggered on hero form!');
       event.preventDefault();
-      console.log('[Hero Client] Form submitted.');
+      console.log('[Hero Client] Form submitted (after preventDefault).');
       messageElement.textContent = 'Subscribing...';
       messageElement.className = 'text-sm mt-4 text-gray-700 dark:text-gray-300 min-h-[1.25em]';
       const submitButton = form.querySelector('button[type="submit"]');
