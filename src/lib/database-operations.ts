@@ -885,9 +885,18 @@ export async function updateUserFirstName(userId: string, firstName: string): Pr
   }
 }
 
-export async function logHeroImpression(impressionData: ImpressionData): Promise<SingleResult> {
+export async function logHeroImpression(impressionData: ImpressionData): Promise<SingleResult<ImpressionRecord>> {
     if (!impressionData.experiment_id || !impressionData.variant_id || !impressionData.user_identifier) {
-        return { data: null, error: { name: 'ValidationError', message: 'Experiment ID, Variant ID, and User Identifier are required for impression logging.', details: 'Missing required fields for logHeroImpression', hint: 'Provide all required IDs.', code: '400' }};
+        // Ensure the error object matches PostgrestError structure if possible, or a simple error object
+        return { 
+            data: null, 
+            error: { 
+                message: 'Experiment ID, Variant ID, and User Identifier are required for impression logging.', 
+                details: 'Missing required fields for logHeroImpression', 
+                hint: 'Provide all required IDs.', 
+                code: '400' 
+            } as PostgrestError // Cast to PostgrestError; be mindful if this structure isn't exact for custom errors
+        };
     }
     try {
         const payload: Record<string, unknown> = {
@@ -912,15 +921,105 @@ export async function logHeroImpression(impressionData: ImpressionData): Promise
             .from('impressions')
             .insert(payload)
             .select()
-            .single(); // Assuming you expect one impression record back
+            .single();
 
-        return { data, error };
+        return { data: data as ImpressionRecord | null, error }; // Cast data to ImpressionRecord
     } catch (err) {
         console.error('Error logging hero impression:', err);
         return { data: null, error: err as PostgrestError };
     }
 }
 // NEW FUNCTIONS END
+
+// Interface for the parameters of callHandleQuizSubmissionRpc
+export interface HandleQuizSubmissionParams {
+  userId: string;
+  emailAddress: string;
+  userFirstName?: string | null;
+  quizScore: number;
+  quizResultType: string;
+  quizNameTaken: string;
+  experimentIdAssociated?: string | null;
+  variantIdAssociated?: string | null;
+  impressionIdToLink?: string | null;
+  referralCodeAttempted?: string | null;
+  ipAddress: string;
+  browserId?: string | null;
+  sessionId?: string | null;
+  clientDeviceType?: string | null;
+  submissionPageUrl?: string | null;
+}
+
+// Interface for the data part of the RPC result
+export interface HandleQuizSubmissionResultData {
+  success: boolean;
+  message: string;
+  referral_code: string | null;
+  insight_gems: number | null;
+  // Add any other fields expected from the RPC's successful response
+}
+
+/**
+ * Calls the handle_quiz_submission RPC function in Supabase.
+ */
+export async function callHandleQuizSubmissionRpc(
+  params: HandleQuizSubmissionParams
+): Promise<SingleResult<HandleQuizSubmissionResultData>> {
+  console.log(`[DB Ops] Calling handle_quiz_submission RPC for user: ${params.userId}, email: ${params.emailAddress}`);
+  try {
+    const rpcParams = {
+      p_user_id: params.userId,
+      p_email: params.emailAddress,
+      p_first_name: params.userFirstName ?? null,
+      p_score: params.quizScore,
+      p_result_type: params.quizResultType,
+      p_quiz_name: params.quizNameTaken,
+      p_experiment_id: params.experimentIdAssociated ?? null,
+      p_variant_id: params.variantIdAssociated ?? null,
+      p_impression_id: params.impressionIdToLink ?? null,
+      p_referral_code_used: params.referralCodeAttempted ?? null,
+      p_client_address: params.ipAddress,
+      p_browser_identifier: params.browserId ?? null,
+      p_session_identifier: params.sessionId ?? null,
+      p_device_type: params.clientDeviceType ?? null,
+      p_page_url: params.submissionPageUrl ?? null,
+    };
+
+    const { data, error } = await supabase.rpc('handle_quiz_submission', rpcParams);
+
+    if (error) {
+      console.error('[DB Ops] Error calling handle_quiz_submission RPC:', error);
+      return { data: null, error };
+    }
+
+    // Assuming the RPC returns data directly in the structure of HandleQuizSubmissionResultData
+    // If not, this casting and handling might need adjustment based on actual RPC output.
+    console.log('[DB Ops] handle_quiz_submission RPC call successful, raw data:', data);
+    // It's possible the RPC returns a single object that matches HandleQuizSubmissionResultData,
+    // or it might be an array with one object, or just a status.
+    // Supabase `rpc` calls often return data directly as the expected type if the pg function returns a single row / record.
+    // If it returns a SETOF something, `data` would be an array.
+    // If the function does not return a table/record (e.g. returns void or a scalar type), then `data` might be null or the scalar.
+    // For a function designed to return {success, message, ...}, `data` should ideally be that object.
+    if (typeof data === 'object' && data !== null && 'success' in data && 'message' in data) {
+       return { data: data as HandleQuizSubmissionResultData, error: null };
+    } else if (data === null && !error) {
+      // This case might happen if the RPC is defined to return VOID but we expect structured data.
+      // Or if the RPC executed but semantically didn't "succeed" in a way that returns our expected structure.
+      console.warn('[DB Ops] handle_quiz_submission RPC returned null data without an error. This might indicate an issue with the RPC logic or return type.');
+      return { data: null, error: { message: 'RPC returned null data without error.', details: '', hint: '', code: '500'} as PostgrestError };
+    }
+     // If data is not null and not the expected object, it's an unexpected response type.
+    console.error('[DB Ops] Unexpected data structure from handle_quiz_submission RPC:', data);
+    return { data: null, error: { message: 'Unexpected data structure from RPC.', details: String(data), hint: '', code: '500'} as PostgrestError };
+
+
+  } catch (err: unknown) {
+    console.error('[DB Ops] Exception in callHandleQuizSubmissionRpc:', err);
+    const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
+    return { data: null, error: { message, details: '', hint: '', code: '500' } as PostgrestError };
+  }
+}
 
 export default {
   executeQuery,
@@ -945,5 +1044,6 @@ export default {
   generateAndStoreVerificationToken,
   verifyTokenAndLogConversion,
   updateUserFirstName,
-  logHeroImpression
+  logHeroImpression,
+  callHandleQuizSubmissionRpc
 }; 

@@ -327,6 +327,7 @@ const scoreRanges = [
   <script is:inline>
     // --- Global Variables for Quiz State ---
     let currentVariant = null; // For A/B test info, populated by initializeAbTestTracking
+    let clientSideImpressionId = null; // ADDED: To store impression ID from client-side logging
     let quizAnswers = {};      // To store answers { 'question-0': '1', ... }
     let currentPage = 1;
     window.quizTotalScore = 0; // To store calculated score before email gate
@@ -336,6 +337,14 @@ const scoreRanges = [
     function initializeAbTestTracking() {
       try {
         console.log('[Quiz Page] Initializing A/B test tracking...');
+
+        // ADDED: Check if user is already verified for quizzes
+        const isQuizUserVerified = localStorage.getItem('isEmailVerifiedQuizUser');
+        if (isQuizUserVerified === 'true') {
+          console.log('[Quiz Page] User is already verified for quizzes. Skipping client-side impression logging.');
+          currentVariant = null; // Nullify variant to prevent further A/B actions if needed
+          return; // Exit early, no impression needed for already verified quiz user
+        }
         
         const variantInfoString = localStorage.getItem('quizVariant');
         if (variantInfoString) {
@@ -371,6 +380,14 @@ const scoreRanges = [
             // The second argument to logClientImpression is experimentNameFromContext (textual name)
             console.log('[Quiz Page] Attempting to log impression via window.logClientImpression for variant:', variantForImpressionLogging, 'Experiment Name Context:', currentVariant.experiment);
             window.logClientImpression(variantForImpressionLogging, currentVariant.experiment)
+              .then(impressionId => {
+                if (impressionId) {
+                  clientSideImpressionId = impressionId; // Store the returned ID
+                  console.log('[Quiz Page] Impression logged successfully by client. Impression ID:', clientSideImpressionId);
+                } else {
+                  console.warn('[Quiz Page] Client-side impression logging did not return an ID.');
+                }
+              })
               .catch(error => {
                 console.error('[Quiz Page] Error calling window.logClientImpression:', error);
               });
@@ -722,6 +739,17 @@ const scoreRanges = [
               const storedReferrerId = localStorage.getItem('referrer_id');
               if (storedReferrerId) formData.append('referrer_id', storedReferrerId);
 
+              // ADDED: Append client_side_impression_id if available
+              if (clientSideImpressionId) {
+                formData.append('client_side_impression_id', clientSideImpressionId);
+                console.log('[Quiz Page] Appending client_side_impression_id to form data:', clientSideImpressionId);
+              }
+
+              // ADDED: Append device_type
+              const deviceType = (typeof window.getDeviceType === 'function') ? window.getDeviceType() : 'unknown';
+              formData.append('device_type', deviceType);
+              console.log('[Quiz Page] Appending device_type to form data:', deviceType);
+
               if (typeof window.getClientSessionIdentifier === 'function') {
                 const sessionId = window.getClientSessionIdentifier();
                 if (sessionId) formData.append('session_identifier', sessionId);
@@ -834,6 +862,17 @@ const scoreRanges = [
               
               const storedReferrerId = localStorage.getItem('referrer_id');
               if (storedReferrerId) formData.append('referrer_id', storedReferrerId);
+
+              // ADDED: Append client_side_impression_id if available (for fallback)
+              if (clientSideImpressionId) {
+                formData.append('client_side_impression_id', clientSideImpressionId);
+                console.log('[Quiz Page] [Fallback] Appending client_side_impression_id to form data:', clientSideImpressionId);
+              }
+
+              // ADDED: Append device_type (for fallback)
+              const deviceTypeFallback = (typeof window.getDeviceType === 'function') ? window.getDeviceType() : 'unknown';
+              formData.append('device_type', deviceTypeFallback);
+              console.log('[Quiz Page] [Fallback] Appending device_type to form data:', deviceTypeFallback);
 
               if (typeof window.getClientSessionIdentifier === 'function') {
                 const sessionId = window.getClientSessionIdentifier();

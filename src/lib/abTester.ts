@@ -489,18 +489,18 @@ export async function getVariant(experimentName: string): Promise<ABVariant> {
   return chosenVariant || activeVariants[0]; 
 }
 
-export async function logClientImpression(variant: ABVariant | null, experimentNameFromContext?: string) {
+export async function logClientImpression(variant: ABVariant | null, experimentNameFromContext?: string): Promise<string | null> {
   if (typeof window === 'undefined') {
-    return; 
+    return null;
   }
   if (!variant || variant.id === 'fallback_no_variants') {
     console.log("[abTester] Impression logging skipped: Invalid or fallback variant provided.");
-    return;
+    return null;
   }
   
   if (!variant.experiment_id || variant.experiment_id === 'unknown_experiment_id') {
       console.error(`[abTester] Cannot log impression: Missing valid experiment_id on variant object. Experiment context: "${experimentNameFromContext || 'N/A'}". Variant:`, variant);
-      return;
+      return null;
   }
 
   const userIdentifier = getClientUserIdentifier();
@@ -528,7 +528,7 @@ export async function logClientImpression(variant: ABVariant | null, experimentN
       'page_view'
     );
     
-    return; // Don't log impression or assign to experiment
+    return null; // Don't log impression or assign to experiment
   }
   
   console.log(`[abTester] ✅ IMPRESSION ELIGIBLE - proceeding with impression logging for user ${userIdentifier}`);
@@ -538,7 +538,7 @@ export async function logClientImpression(variant: ABVariant | null, experimentN
   
   if (sessionStorage.getItem(shortTermKey)) {
     console.log(`[abTester] Impression for variant "${variant.name}" (ID: ${variant.id}) already logged in the last 2 minutes. Skipping to prevent spam.`);
-    return;
+    return null;
   }
 
   console.log(`[abTester] Logging CLIENT IMPRESSION: Experiment ID: '${variant.experiment_id}', Variant ID: '${variant.id}', Name: '${variant.name}', User: '${userIdentifier}', Session: '${sessionIdentifier || 'N/A'}'`);
@@ -637,9 +637,11 @@ export async function logClientImpression(variant: ABVariant | null, experimentN
     }
   };
 
-  const { error: impressionError } = await supabase
+  const { data: insertedImpression, error: impressionError } = await supabase
     .from('impressions')
-    .insert(impressionData);
+    .insert(impressionData)
+    .select('id') // Select the ID of the inserted row
+    .single(); // Expect a single row back
 
   if (impressionError) {
     if (impressionError.message.includes('created_at') && impressionError.message.includes('column') && impressionError.message.includes('does not exist')) {
@@ -647,9 +649,11 @@ export async function logClientImpression(variant: ABVariant | null, experimentN
     } else {
         console.error('[abTester] Supabase error logging client impression:', impressionError.message, 'Details:', impressionError.details);
     }
+    return null; // Return null on error
   } else {
     sessionStorage.setItem(shortTermKey, 'true');
-    console.log('[abTester] Client impression logged successfully to Supabase with comprehensive analytics data.');
+    console.log('[abTester] Client impression logged successfully to Supabase with comprehensive analytics data. Impression ID:', insertedImpression?.id);
+    return insertedImpression?.id || null; // Return the impression ID
   }
 }
 
@@ -950,8 +954,10 @@ function debugABLocalStorage(): void {
 declare global {
   interface Window {
     trackConversion?: (variantId: string, userIdentifierString: string, conversionType?: string, details?: Record<string, unknown>) => Promise<{ status: 'SUCCESS' | 'DUPLICATE' | 'ERROR' | 'INVALID_INPUT'; message: string }>;
-    logClientImpression?: (variant: ABVariant | null, experimentNameFromContext?: string) => Promise<void>;
+    logClientImpression?: (variant: ABVariant | null, experimentNameFromContext?: string) => Promise<string | null>;
     getClientSessionIdentifier?: () => string | null;
+    getDeviceType?: () => 'desktop' | 'mobile' | 'tablet' | null;
+    debugABLocalStorage?: () => void;
   }
 }
 
@@ -961,10 +967,12 @@ if (typeof window !== 'undefined') {
   window.trackConversion = trackConversion;
   window.logClientImpression = logClientImpression; 
   window.getClientSessionIdentifier = getClientSessionIdentifier;
+  window.getDeviceType = getDeviceType;
   (window as unknown as Window & { debugABLocalStorage: typeof debugABLocalStorage }).debugABLocalStorage = debugABLocalStorage;
   console.log('[abTester.ts] window.trackConversion assigned:', !!window.trackConversion);
   console.log('[abTester.ts] window.logClientImpression assigned:', !!window.logClientImpression);
   console.log('[abTester.ts] window.getClientSessionIdentifier assigned:', !!window.getClientSessionIdentifier);
+  console.log('[abTester.ts] window.getDeviceType assigned:', !!window.getDeviceType);
   console.log('[abTester.ts] window.debugABLocalStorage assigned:', !!(window as unknown as Window & { debugABLocalStorage: typeof debugABLocalStorage }).debugABLocalStorage);
 }
 
