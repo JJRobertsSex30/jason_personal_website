@@ -40,6 +40,8 @@ export interface ImpressionData {
   user_identifier: string; // This will be the user_profiles.id
   page_url?: string;
   metadata?: Record<string, unknown>;
+  session_identifier?: string;
+  device_type?: string;
   // Add other fields from your 'impressions' table schema if they are required
   // and not automatically handled by DB defaults or other processes.
   // e.g., session_identifier, user_agent, etc.
@@ -63,8 +65,10 @@ export interface VerifiedTokenData {
   message: string;
   userProfileId?: string;
   email?: string;
-  experimentId?: string | null; // Can be null if not set on token
-  variantId?: string | null;   // Can be null if not set on token
+  firstName?: string | null;
+  kitSubscriberId?: string | null;
+  experimentId?: string | null;
+  variantId?: string | null;
   error?: PostgrestError | string | null;
 }
 
@@ -572,10 +576,11 @@ export async function findOrCreateUserForVerification(email: string): Promise<Fi
 export async function generateAndStoreVerificationToken(
   userId: string, 
   email: string,
-  experimentId?: string | null, // Optional experimentId
-  variantId?: string | null     // Optional variantId
+  experimentId?: string | null, // Optional experimentId, directly matches column
+  variantId?: string | null,    // Optional variantId, directly matches column
+  impressionId?: string | null // Optional impressionId, directly matches column
 ): Promise<GenerateTokenResult> {
-  console.log(`[DB Ops] generateAndStoreVerificationToken called for userId: ${userId}, email: ${email}, experimentId: ${experimentId}, variantId: ${variantId}`);
+  console.log(`[DB Ops] generateAndStoreVerificationToken called for userId: ${userId}, email: ${email}, experimentId: ${experimentId}, variantId: ${variantId}, impressionId: ${impressionId}`);
   if (!userId || !email) {
     return { token: null, error: 'User ID and email are required to generate a token.' };
   }
@@ -584,16 +589,20 @@ export async function generateAndStoreVerificationToken(
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // Token expires in 24 hours
 
   try {
+    // Direct mapping to columns as confirmed in the schema
+    const tokenDataToInsert = {
+      user_profile_id: userId,
+      token: token,
+      email: email,
+      expires_at: expiresAt.toISOString(),
+      experiment_id: experimentId, // Can be null
+      variant_id: variantId,     // Can be null
+      impression_id: impressionId  // Can be null
+    };
+
     const { error: insertError } = await supabase
       .from('email_verification_tokens')
-      .insert({
-        user_profile_id: userId,
-        token: token,
-        email: email,
-        expires_at: expiresAt.toISOString(),
-        experiment_id: experimentId, // Store experiment_id
-        variant_id: variantId,       // Store variant_id
-      });
+      .insert(tokenDataToInsert);
 
     if (insertError) {
       console.error(`[DB Ops] Error inserting verification token for user ${userId}:`, insertError);
@@ -628,10 +637,10 @@ export async function verifyTokenAndLogConversion(tokenValue: string): Promise<V
   }
 
   try {
-    // 1. Find the token
+    // 1. Find the token and fetch all necessary direct and related fields
     const { data: tokenRecord, error: findError } = await supabase
       .from('email_verification_tokens')
-      .select('*')
+      .select('*, user_profiles ( kit_subscriber_id ) ') // Select all from token, and kit_id from user
       .eq('token', tokenValue)
       .single();
 
@@ -640,10 +649,18 @@ export async function verifyTokenAndLogConversion(tokenValue: string): Promise<V
       return { success: false, message: 'Invalid or expired verification link. Please try again.', error: findError || 'Token not found' };
     }
 
-    // 2. Check if already used
-    if (tokenRecord.is_used) {
-      console.log(`[DB Ops] Verification token ${tokenValue} has already been used for user ${tokenRecord.user_profile_id}.`);
-      return { success: false, message: 'This verification link has already been used.', userProfileId: tokenRecord.user_profile_id, email: tokenRecord.email, error: 'Token already used' };
+    // 2. Check if already used (used_at is not null OR is_used is true - schema has both, used_at is preferred)
+    // The live schema shows `is_used boolean not null default false` and `used_at timestamptz null`.
+    // Checking `tokenRecord.used_at` is a good way to see if it has been processed.
+    if (tokenRecord.used_at || tokenRecord.is_used) { 
+      console.log(`[DB Ops] Verification token ${tokenValue} has already been used for user ${tokenRecord.user_profile_id}. Used_at: ${tokenRecord.used_at}, is_used: ${tokenRecord.is_used}`);
+      return { 
+        success: false, 
+        message: 'This verification link has already been used.', 
+        userProfileId: tokenRecord.user_profile_id, 
+        email: tokenRecord.email, 
+        error: 'Token already used' 
+      };
     }
 
     // 3. Check if expired
@@ -652,12 +669,13 @@ export async function verifyTokenAndLogConversion(tokenValue: string): Promise<V
       return { success: false, message: 'This verification link has expired. Please request a new one.', error: 'Token expired' };
     }
 
-    const now = new Date().toISOString();
+    const now = new Date();
+    const nowISO = now.toISOString();
 
-    // 4. Mark token as used
+    // 4. Mark token as used (set used_at and is_used to true)
     const { error: updateTokenError } = await supabase
       .from('email_verification_tokens')
-      .update({ is_used: true, used_at: now })
+      .update({ used_at: nowISO, is_used: true }) 
       .eq('id', tokenRecord.id);
 
     if (updateTokenError) {
@@ -666,45 +684,107 @@ export async function verifyTokenAndLogConversion(tokenValue: string): Promise<V
     }
 
     // 5. Update user_profiles table
-    const { error: updateUserError } = await supabase
+    const { data: updatedUserProfile, error: updateUserError } = await supabase
       .from('user_profiles')
-      .update({ is_email_verified: true, email_verified_at: now })
-      .eq('id', tokenRecord.user_profile_id);
+      .update({ is_email_verified: true, email_verified_at: nowISO })
+      .eq('id', tokenRecord.user_profile_id)
+      .select('first_name, email, kit_subscriber_id')
+      .single();
 
-    if (updateUserError) {
+    if (updateUserError || !updatedUserProfile) {
       console.error(`[DB Ops] Error updating user profile ${tokenRecord.user_profile_id} to verified:`, updateUserError);
-      // Potentially roll back token usage or log for manual intervention? For now, report error.
-      return { success: false, message: 'Error finalizing email verification. Please contact support.', error: updateUserError };
+      return { success: false, message: 'Error finalizing email verification. Please contact support.', error: updateUserError || 'Failed to retrieve updated user profile' };
     }
     console.log(`[DB Ops] User profile ${tokenRecord.user_profile_id} marked as verified.`);
 
-    // 6. Log conversion (if experiment_id and variant_id are present)
-    if (tokenRecord.experiment_id && tokenRecord.variant_id) {
-      const conversionData = {
-        experiment_id: tokenRecord.experiment_id,
-        variant_id: tokenRecord.variant_id,
-        user_identifier: tokenRecord.user_profile_id,
-        conversion_type: 'email_verified', // Standardized conversion type
-        metadata: { 
-          source: 'email_verification_link',
-          email: tokenRecord.email,
-          token_id: tokenRecord.id
-        }
-      };
-      const { error: conversionError } = await supabase.from('conversions').insert(conversionData);
-      if (conversionError) {
-        console.warn(`[DB Ops] Failed to log 'email_verified' conversion for user ${tokenRecord.user_profile_id}, experiment ${tokenRecord.experiment_id}:`, conversionError.message);
-        // Non-critical for the verification itself, so just log a warning.
+    // 6. Log conversion
+    let impressionRecord: Record<string, any> | null = null;
+    const directImpressionId = tokenRecord.impression_id as string | undefined;
+
+    if (directImpressionId) {
+      const { data: impData, error: impError } = await supabase
+        .from('impressions')
+        .select('*')
+        .eq('id', directImpressionId)
+        .single();
+      if (impError || !impData) {
+        console.warn(`[DB Ops] Could not fetch impression record ${directImpressionId} for token ${tokenValue}:`, impError?.message || 'Not found');
       } else {
-        console.log(`[DB Ops] 'email_verified' conversion logged for user ${tokenRecord.user_profile_id}, experiment ${tokenRecord.experiment_id}.`);
+        impressionRecord = impData;
       }
+    } else {
+        console.warn(`[DB Ops] No impression_id found on token record ${tokenRecord.id} for token value ${tokenValue}. Conversion will lack some details for calculation.`);
+    }
+    
+    const conversionDetails: Record<string, unknown> = {
+      verification_method: "email_link_click",
+      token_id: tokenRecord.id,
+      token_created_at: tokenRecord.created_at
+    };
+
+    if (impressionRecord) {
+        conversionDetails.original_impression_details = {
+            page_url: impressionRecord.page_url, 
+            user_agent: impressionRecord.user_agent,
+            ip_address: impressionRecord.ip_address, 
+            geo_country: impressionRecord.country_code,
+            geo_region: impressionRecord.region,
+            geo_city: impressionRecord.city
+        };
+    }
+
+    // Constructing the object for the 'conversions' table
+    // Ensuring all keys match the snake_case column names from database-schema.md
+    const conversionData: Record<string, unknown> = {
+      user_identifier: tokenRecord.user_profile_id,    
+      conversion_type: 'email_verified',
+      experiment_id: tokenRecord.experiment_id,      
+      variant_id: tokenRecord.variant_id,          
+      created_at: nowISO,                         
+      session_identifier: impressionRecord?.session_identifier || null,
+      details: conversionDetails,
+      conversion_value: 1,
+      device_type: impressionRecord?.device_type || null,
+      time_to_convert: (impressionRecord && impressionRecord.impression_at)
+        ? Math.round((now.getTime() - new Date(impressionRecord.impression_at).getTime()) / 1000) 
+        : null,
+      conversion_context: {
+        source: 'email_verification_link_click',
+        notes: impressionRecord ? 'Linked to original impression for context.' : 'Original impression not found or not linked.',
+        token_id_used: tokenRecord.id // Storing token_id in context
+      },
+      metadata: { 
+          email_used_for_verification: tokenRecord.email,
+          related_impression_id: directImpressionId || null // Storing related impression_id in metadata for audit
+      }
+    };
+    
+    Object.keys(conversionData).forEach(key => {
+      if (conversionData[key] === undefined || conversionData[key] === null) {
+        // Only delete if we intend to rely on DB defaults for explicitly NULL-passed values.
+        // For nullable columns, passing null is usually fine. Deleting makes it as if the key was never provided.
+        // Let's be more precise: only delete if it's undefined. If it's explicitly null, pass it as null.
+        if (conversionData[key] === undefined) {
+            delete conversionData[key];
+        }
+      }
+    });
+
+    const { error: conversionError } = await supabase.from('conversions').insert(conversionData as any); // Cast to any if type issues persist with Supabase insert
+    
+    if (conversionError) {
+      console.warn(`[DB Ops] Failed to log 'email_verified' conversion for user ${tokenRecord.user_profile_id}, experiment ${tokenRecord.experiment_id || 'N/A'}:`, conversionError.message);
+    } else {
+      console.log(`[DB Ops] 'email_verified' conversion logged for user ${tokenRecord.user_profile_id}, experiment ${tokenRecord.experiment_id || 'N/A'}.`);
     }
 
     return {
       success: true,
       message: 'Email successfully verified!',
       userProfileId: tokenRecord.user_profile_id,
-      email: tokenRecord.email,
+      email: updatedUserProfile.email,
+      firstName: updatedUserProfile.first_name,
+      kitSubscriberId: updatedUserProfile.kit_subscriber_id || tokenRecord.user_profiles?.kit_subscriber_id,
       experimentId: tokenRecord.experiment_id,
       variantId: tokenRecord.variant_id
     };
@@ -749,8 +829,6 @@ export async function updateUserFirstName(userId: string, firstName: string): Pr
 
 export async function logHeroImpression(impressionData: ImpressionData): Promise<SingleResult> {
     if (!impressionData.experiment_id || !impressionData.variant_id || !impressionData.user_identifier) {
-        // Ensure the error object structure matches PostgrestError if SingleResult expects it.
-        // A basic PostgrestError has message, details, hint, code. Adding name due to linter.
         return { data: null, error: { name: 'ValidationError', message: 'Experiment ID, Variant ID, and User Identifier are required for impression logging.', details: 'Missing required fields for logHeroImpression', hint: 'Provide all required IDs.', code: '400' }};
     }
     try {
@@ -760,6 +838,8 @@ export async function logHeroImpression(impressionData: ImpressionData): Promise
             user_identifier: impressionData.user_identifier,
             impression_at: new Date().toISOString(),
             page_url: impressionData.page_url,
+            session_identifier: impressionData.session_identifier,
+            device_type: impressionData.device_type,
             metadata: impressionData.metadata || {},
             // Ensure all other NOT NULL columns from your 'impressions' table 
             // without DB defaults are handled here or passed in impressionData.

@@ -403,13 +403,23 @@ Stores tokens for email verification links.
 | Column              | Type        | Nullable | Default               | Description                                      |
 |---------------------|-------------|----------|-----------------------|--------------------------------------------------|
 | `id`                | uuid        | NO       | `uuid_generate_v4()`  | Primary key                                      |
-| `user_profile_id`   | uuid        | NO       |                       | FK to `user_profiles.id`                         |
-| `token`             | text        | NO       |                       | Secure, unique verification token (indexed)      |
-| `email`             | text        | NO       |                       | Email address this token is for                  |
+| `user_profile_id`   | uuid        | NO       |                       | FK to `user_profiles.id` (CASCADE DELETE)        |
+| `token`             | text        | NO       |                       | Secure, unique verification token (indexed, UNIQUE)|
+| `email`             | text        | NO       |                       | Email address this token is for (indexed)        |
+| `impression_id`     | uuid        | YES      |                       | FK to `impressions.id` (link to original impression) |
+| `experiment_id`     | uuid        | YES      |                       | FK to `experiments.id` (ON DELETE SET NULL)      |
+| `variant_id`        | uuid        | YES      |                       | FK to `variants.id` (ON DELETE SET NULL)         |
 | `expires_at`        | timestamptz | NO       |                       | When the token becomes invalid                   |
 | `is_used`           | boolean     | NO       | `false`               | Whether the token has been successfully used     |
 | `used_at`           | timestamptz | YES      |                       | Timestamp of when the token was used             |
 | `created_at`        | timestamptz | NO       | `now()`               | Token creation timestamp                         |
+
+**Constraints:**
+- `email_verification_tokens_pkey` PRIMARY KEY (`id`)
+- `email_verification_tokens_token_key` UNIQUE (`token`)
+- `email_verification_tokens_experiment_id_fkey` FOREIGN KEY (`experiment_id`) REFERENCES `experiments` (`id`) ON DELETE SET NULL
+- `email_verification_tokens_user_profile_id_fkey` FOREIGN KEY (`user_profile_id`) REFERENCES `user_profiles` (`id`) ON DELETE CASCADE
+- `email_verification_tokens_variant_id_fkey` FOREIGN KEY (`variant_id`) REFERENCES `variants` (`id`) ON DELETE SET NULL
 
 **Indexes:**
 - `idx_email_verification_tokens_token` ON `email_verification_tokens` (`token`)

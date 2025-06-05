@@ -29,9 +29,9 @@ const {
 console.log(`[Hero SSR] Raw Astro.props.headline: "${Astro.props.headline}"`);
 console.log(`[Hero SSR] Raw Astro.props.experimentName: "${Astro.props.experimentName}"`);
 console.log(`[Hero SSR] Raw Astro.props.abTestVariantKey: "${Astro.props.abTestVariantKey}"`);
-console.log(`[Hero SSR] Raw Astro.props.experimentIdUUID: "${Astro.props.experimentIdUUID}"`); // <-- ADDED
+console.log(`[Hero SSR] Raw Astro.props.experimentIdUUID: "${Astro.props.experimentIdUUID}"`);
 
-console.log(`[Hero SSR] Destructured values: headline="${headline ? headline.substring(0,30) + '...' : 'N/A'}", experimentName="${experimentName}", abTestVariantKey (variantId)="${abTestVariantKey}", experimentIdUUID="${experimentIdUUID}"`); // <-- MODIFIED
+console.log(`[Hero SSR] Destructured values: headline="${headline ? headline.substring(0,30) + '...' : 'N/A'}", experimentName="${experimentName}", abTestVariantKey (variantId)="${abTestVariantKey}", experimentIdUUID="${experimentIdUUID}"`);
 // --- End Enhanced SSR Logging ---
 ---
 
@@ -95,129 +95,124 @@ console.log(`[Hero SSR] Destructured values: headline="${headline ? headline.sub
 
 <script define:vars={{ 
   clientVariantIdFromProps: abTestVariantKey, 
-  clientExperimentNameFromProps: experimentName, // This uses the destructured 'experimentName' from frontmatter
-  clientExperimentIdUUIDFromProps: experimentIdUUID // <-- ADDED
+  clientExperimentNameFromProps: experimentName,
+  clientExperimentIdUUIDFromProps: experimentIdUUID
 }}>
   document.addEventListener('DOMContentLoaded', function() {
-    console.log('[Hero Client - Simplified] DOMContentLoaded. Props:', { clientVariantIdFromProps, clientExperimentNameFromProps, clientExperimentIdUUIDFromProps });
+    console.log('[Hero Client] DOMContentLoaded. Props:', { clientVariantIdFromProps, clientExperimentNameFromProps, clientExperimentIdUUIDFromProps });
     const form = document.getElementById('hero-custom-ab-form');
     const messageElement = document.getElementById('hero-custom-ab-form-message');
 
     if (!form || !messageElement) {
-      console.error('[Hero Client - Simplified] Form or message element not found.');
+      console.error('[Hero Client] Form or message element not found.');
       return;
     }
     
-    // Ensure ab_user_identifier is set
     function ensureAbUserIdentifier() {
       let userId = localStorage.getItem('ab_user_identifier');
       if (!userId) {
         userId = crypto.randomUUID();
         localStorage.setItem('ab_user_identifier', userId);
-        console.log('[Hero Client - Simplified] New ab_user_identifier generated and stored:', userId);
+        console.log('[Hero Client] New ab_user_identifier generated and stored:', userId);
       }
       const hiddenInput = form.querySelector('input[name="ab_user_identifier"]');
       if (hiddenInput) {
         hiddenInput.value = userId;
-        console.log('[Hero Client - Simplified] ab_user_identifier set in form field:', userId);
       }
     }
     ensureAbUserIdentifier();
 
-    // Ensure session_identifier is set
     function ensureSessionIdentifier() {
-      let sessionId = sessionStorage.getItem('ab_session_identifier'); // Use sessionStorage for session-specific ID
+      let sessionId = sessionStorage.getItem('ab_session_identifier');
       if (!sessionId) {
         sessionId = crypto.randomUUID();
         sessionStorage.setItem('ab_session_identifier', sessionId);
-        console.log('[Hero Client - Simplified] New session_identifier generated and stored:', sessionId);
+        console.log('[Hero Client] New ab_session_identifier generated and stored in sessionStorage:', sessionId);
       }
-      // Add a hidden input for session_identifier if it doesn't exist, or update existing one
-      let sessionInput = form.querySelector('input[name="session_identifier"]');
-      if (!sessionInput) {
-        sessionInput = document.createElement('input');
-        sessionInput.type = 'hidden';
-        sessionInput.name = 'session_identifier';
-        form.appendChild(sessionInput);
-      }
-      sessionInput.value = sessionId;
-      console.log('[Hero Client - Simplified] session_identifier set in form field:', sessionId);
+      return sessionId;
     }
-    ensureSessionIdentifier();
+    ensureSessionIdentifier(); // Call to ensure it's generated on load if not present
+
+    function getDeviceType() {
+      const ua = navigator.userAgent;
+      if (/(tablet|ipad|playbook|silk)|(android(?!.*mobi))/i.test(ua)) {
+        return "tablet";
+      }
+      if (/Mobile|iP(hone|od)|Android|BlackBerry|IEMobile|Kindle|Silk-Accelerated|(hpw|web)OS|Opera M(obi|ini)/.test(ua)) {
+        return "mobile";
+      }
+      return "desktop";
+    }
 
     form.addEventListener('submit', async function(event) {
       event.preventDefault();
-      console.log('[Hero Client - Simplified] Form submitted.');
+      console.log('[Hero Client] Form submitted.');
       messageElement.textContent = 'Subscribing...';
       messageElement.className = 'text-sm mt-4 text-gray-700 dark:text-gray-300 min-h-[1.25em]';
       const submitButton = form.querySelector('button[type="submit"]');
       if (submitButton) submitButton.disabled = true;
 
       try {
-        // Initialize a plain JavaScript object for the payload
-        const payloadObject = {};
-
-        // Get values from the form using FormData
         const formData = new FormData(form);
+        const payloadObject = {};
         formData.forEach((value, key) => {
           payloadObject[key] = value.toString();
         });
 
-        // Explicitly set/override fields required by the /api/subscribe endpoint
-        // Ensure correct names as expected by HeroSubscribeRequestBody
+        // Get email explicitly as FormData might not pick up dynamically set values reliably or for type consistency
         const emailInput = form.querySelector('input[name="email"]');
         if (emailInput) {
             payloadObject.email = emailInput.value;
         }
-
-        payloadObject.experimentName = clientExperimentNameFromProps; 
-        payloadObject.experimentId = clientExperimentIdUUIDFromProps; // experimentId is UUID
-        payloadObject.variantId = clientVariantIdFromProps;    // variantId is UUID
         
-        // Add userAgent (replaces browser_identifier from previous logic for this endpoint)
+        // --- Explicitly set fields required by /api/subscribe with correct casing ---
+        payloadObject.experimentName = clientExperimentNameFromProps; 
+        payloadObject.experimentId = clientExperimentIdUUIDFromProps; 
+        payloadObject.variantId = clientVariantIdFromProps;    
         payloadObject.userAgent = navigator.userAgent;
-
-        // Add pageUrl (replaces page_url_at_submission for this endpoint)
         payloadObject.pageUrl = window.location.href;
 
-        // Optional: original_exposure_timestamp (if available and needed by API)
-        // The API endpoint (from hero-subscribe) doesn't explicitly use original_exposure_timestamp in its main logic path,
-        // but it was being collected. If needed, it can be added here.
-        // For now, focusing on core fields of HeroSubscribeRequestBody.
-        // if (clientExperimentIdUUIDFromProps && clientExperimentIdUUIDFromProps !== 'default_experiment_id_uuid_from_hero') {
-        //   const exposureTimestampKey = `ab_first_exposure_time_${clientExperimentIdUUIDFromProps}`;
-        //   const storedExposureTimestamp = localStorage.getItem(exposureTimestampKey);
-        //   if (storedExposureTimestamp) {
-        //     payloadObject.original_exposure_timestamp = storedExposureTimestamp;
-        //   }
-        // }
+        // Get and add sessionIdentifier (camelCase for API)
+        const sessionIdentifier = sessionStorage.getItem('ab_session_identifier');
+        if (sessionIdentifier) {
+            payloadObject.sessionIdentifier = sessionIdentifier;
+        } else {
+            // Fallback if somehow not set by ensureSessionIdentifier on load
+            const newSessionId = crypto.randomUUID();
+            sessionStorage.setItem('ab_session_identifier', newSessionId);
+            payloadObject.sessionIdentifier = newSessionId;
+            console.warn('[Hero Client] ab_session_identifier was not found in sessionStorage during submit, generated new one.');
+        }
+
+        // Get and add deviceType (camelCase for API)
+        payloadObject.deviceType = getDeviceType();
+        // --- End explicitly set fields ---
         
-        console.log('[Hero Client - Simplified] Payload object being sent:', payloadObject);
+        console.log('[Hero Client] Payload object being sent to /api/subscribe:', payloadObject);
 
         const response = await fetch('/api/subscribe', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(payloadObject) // Send as JSON string
+          body: JSON.stringify(payloadObject)
         });
         const result = await response.json();
+
         if (response.ok && result.success) {
           messageElement.textContent = result.message || 'Thank you for subscribing! Please check your email to confirm.';
           messageElement.className = 'text-sm mt-4 text-green-600 dark:text-green-500 min-h-[1.25em]';
-
         } else {
           messageElement.textContent = result.message || 'Subscription failed. Please try again.';
           messageElement.className = 'text-sm mt-4 text-red-600 dark:text-red-500 min-h-[1.25em]';
         }
       } catch (e) {
-        console.error('[Hero Client - Simplified] Error:', e);
+        console.error('[Hero Client] Error:', e);
         messageElement.textContent = 'An unexpected error occurred. Please try again.';
         messageElement.className = 'text-sm mt-4 text-red-600 dark:text-red-500 min-h-[1.25em]';
       } finally {
         if (submitButton) {
           submitButton.disabled = false;
-          submitButton.textContent = 'Get Started Now';
         }
       }
     });

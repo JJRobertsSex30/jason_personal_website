@@ -17,6 +17,8 @@ export interface HeroSubscribeRequestBody {
   variantId: string; // UUID
   pageUrl?: string; // Optional: URL of the page where submission happened
   userAgent?: string; // Optional: User agent for richer impression data
+  sessionIdentifier?: string; // ADDED: To receive session identifier from client
+  deviceType?: string;        // ADDED: To receive device type from client
   // Add any other client-side available data you want to pass for impression logging
 }
 
@@ -120,12 +122,25 @@ export const POST: APIRoute = async ({ request, site: _site }) => {
   let requestBody: HeroSubscribeRequestBody;
   try {
     requestBody = await request.json();
+    console.log('[API /subscribe] Received requestBody:', JSON.stringify(requestBody, null, 2));
   } catch (_e) {
-    console.warn('[API /subscribe] Error parsing JSON body:', _e); // Updated log prefix
+    console.warn('[API /subscribe] Error parsing JSON body:', _e);
     return new Response(JSON.stringify({ message: 'Invalid JSON body' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
-  const { email, experimentName, experimentId, variantId, pageUrl, userAgent } = requestBody;
+  const { 
+    email, 
+    experimentName, 
+    experimentId, 
+    variantId, 
+    pageUrl, 
+    userAgent,
+    sessionIdentifier,
+    deviceType
+  } = requestBody;
+
+  console.log('[API /subscribe] Destructured sessionIdentifier:', sessionIdentifier);
+  console.log('[API /subscribe] Destructured deviceType:', deviceType);
 
   if (!email || !experimentName || !experimentId || !variantId) {
     return new Response(JSON.stringify({ message: 'Missing required fields: email, experimentName, experimentId, variantId' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
@@ -146,6 +161,7 @@ export const POST: APIRoute = async ({ request, site: _site }) => {
   }
   
   const userProfileId = user.id;
+  let loggedImpressionId: string | null = null; // Variable to store the impression ID
 
   // 2. Log A/B Impression (only if not already verified or if it's a new interaction for an unverified user)
   if (!isAlreadyVerified) {
@@ -154,14 +170,25 @@ export const POST: APIRoute = async ({ request, site: _site }) => {
         variant_id: variantId,
         user_identifier: userProfileId,
         page_url: pageUrl || request.headers.get('referer') || undefined,
+        session_identifier: sessionIdentifier,
+        device_type: deviceType,
         metadata: { 
-            source: 'subscribe-api', // Updated source name
-            userAgent: userAgent || request.headers.get('user-agent') || undefined 
+            source: 'subscribe-api', 
+            userAgent: userAgent || request.headers.get('user-agent') || undefined,
         }
     };
-    const { error: impressionError } = await logHeroImpression(impressionDetails);
+    console.log('[API /subscribe] Constructed impressionDetails for DB:', JSON.stringify(impressionDetails, null, 2));
+    
+    // Capture the result of logHeroImpression
+    const { data: impressionData, error: impressionError } = await logHeroImpression(impressionDetails);
     if (impressionError) {
-        console.warn(`[API /subscribe] Failed to log A/B impression for user ${userProfileId}:`, impressionError.message); // Updated log prefix
+        console.warn(`[API /subscribe] Failed to log A/B impression for user ${userProfileId}:`, impressionError.message);
+    } else if (impressionData && typeof (impressionData as Record<string, any>)?.id === 'string') {
+        loggedImpressionId = (impressionData as Record<string, any>).id; // Store the impression ID
+        console.log(`[API /subscribe] Impression logged successfully for user ${userProfileId}. Impression ID: ${loggedImpressionId}`);
+    } else if (impressionData) {
+        // Log if impressionData exists but id is missing or not a string, which would be unexpected
+        console.warn(`[API /subscribe] Impression data received for user ${userProfileId}, but ID is missing or invalid:`, impressionData);
     }
   }
 
@@ -192,8 +219,9 @@ export const POST: APIRoute = async ({ request, site: _site }) => {
   const { token: verificationToken, error: tokenError } = await generateAndStoreVerificationToken(
     userProfileId, 
     email,
-    experimentId, // Pass experimentId from requestBody
-    variantId     // Pass variantId from requestBody
+    experimentId, 
+    variantId,
+    loggedImpressionId // Pass the loggedImpressionId here
   );
 
   if (tokenError || !verificationToken) {
