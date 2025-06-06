@@ -45,10 +45,15 @@ export const GET: APIRoute = async ({ request, redirect, site }) => {
         console.warn('[API /verify-email] CONVERTKIT_TAG_ID_VERIFIED is not configured. Skipping ConvertKit tag update.');
     }
 
-    // Redirect to a success page, optionally passing user info
-    const successRedirectUrl = new URL('/verification-success', site);
-    if (verificationResult.email) successRedirectUrl.searchParams.set('email', verificationResult.email);
-    if (verificationResult.firstName) successRedirectUrl.searchParams.set('name', verificationResult.firstName);
+    // Redirect to the new "email-confirmed" thank you page
+    const successRedirectUrl = new URL('/email-confirmed', site);
+    
+    // Pass the secure action_token to the thank you page for the download tracking
+    if (verificationResult.action_token) {
+      successRedirectUrl.searchParams.set('token', verificationResult.action_token);
+    } else {
+      console.warn(`[API /verify-email] User ${verificationResult.email} was verified, but no action_token was found to pass to the thank you page.`);
+    }
     
     console.log(`[API /verify-email] Redirecting to success page: ${successRedirectUrl.toString()}`);
     return redirect(successRedirectUrl.toString(), 302);

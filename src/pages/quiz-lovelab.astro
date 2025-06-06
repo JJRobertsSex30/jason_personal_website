@@ -489,8 +489,8 @@ const scoreRanges = [
     }
     
     function initializeQuizState() {
-      const form = document.getElementById('quiz-form');
-      if (form) form.reset(); 
+      // const form = document.getElementById('quiz-form');
+      // if (form) form.reset(); // REMOVED: This was clearing the default 'checked' state from SSR.
 
       const isPageRefresh = window.performance && window.performance.navigation && window.performance.navigation.type === 1;
       if (isPageRefresh) {

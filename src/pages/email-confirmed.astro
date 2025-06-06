@@ -1,0 +1,130 @@
+---
+import Layout from '~/layouts/PageLayout.astro';
+import { Icon } from 'astro-icon/components';
+
+// --- METADATA ---
+const metadata = {
+  title: 'Email Confirmed - Thank You! | JJ Roberts',
+  description: 'Thank you for confirming your email. Your journey into Sex 3.0 and a new understanding of relationships begins now.',
+};
+---
+
+<Layout metadata={metadata}>
+  <div class="relative bg-slate-50 dark:bg-slate-900 overflow-hidden">
+    <!-- Background Decorative Blobs -->
+    <div class="absolute top-0 left-0 w-full h-full" aria-hidden="true">
+      <div class="absolute top-1/4 left-[-200px] w-96 h-96 bg-orange-200/50 dark:bg-orange-500/10 rounded-full filter blur-3xl opacity-50 animate-pulse"></div>
+      <div class="absolute top-1/2 right-[-150px] w-80 h-80 bg-brand-green/20 dark:bg-brand-green/10 rounded-full filter blur-3xl opacity-40 animate-pulse animation-delay-4000"></div>
+    </div>
+
+    <div class="relative z-10">
+      <div class="container mx-auto px-4 py-16 md:py-24 text-center">
+        
+        <div class="max-w-3xl mx-auto">
+          
+          <!-- Illustration -->
+          <!-- <div class="mb-8 flex justify-center">
+            <svg class="w-64 h-auto" viewBox="0 0 541 364" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M482.479 237.545L437.362 237.452L437.442 313.454L383.676 270.817L346.33 300.56L420.33 363.818L494.33 300.56L457.143 270.817L482.479 237.545Z" fill="#FF8A65"></path><path d="M540.575 321.411C540.575 321.411 508.975 301.611 493.175 284.211C488.275 278.411 482.475 273.411 475.275 270.511C468.975 267.911 462.175 266.811 455.375 267.411C447.675 268.011 440.375 270.411 434.275 274.511C427.775 278.911 422.875 284.811 420.075 291.811" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M389.283 23.3614C389.283 23.3614 382.483 45.4614 379.883 51.5614" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M438.451 46.8838C442.251 47.7838 445.951 48.9838 449.551 50.4838" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M370.887 23.3614C370.887 23.3614 377.687 45.4614 380.287 51.5614" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M380.01 51.5838C379.91 53.6838 379.71 55.7838 379.41 57.8838" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M515.253 103.111L489.153 133.211L453.753 104.911L479.853 74.811C486.253 67.311 497.253 67.311 503.653 74.811L515.253 88.511C521.653 95.911 521.653 100.911 515.253 103.111Z" fill="#42A5F5"></path><path d="M453.753 104.911L489.153 133.211" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M515.253 103.111L489.153 133.211L453.753 104.911L479.853 74.811C486.253 67.311 497.253 67.311 503.653 74.811L515.253 88.511C521.653 95.911 521.653 100.911 515.253 103.111Z" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M474.341 125.684L467.441 119.984" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M482.441 117.584L475.541 111.884" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M501.041 98.9838L494.141 93.2838" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M125.65 198.818C162.15 198.818 191.95 169.018 191.95 132.518C191.95 96.0179 162.15 66.2179 125.65 66.2179C89.1501 66.2179 59.3501 96.0179 59.3501 132.518C59.3501 169.018 89.1501 198.818 125.65 198.818Z" fill="#F4F4F4"></path><path d="M125.65 198.818C162.15 198.818 191.95 169.018 191.95 132.518C191.95 96.0179 162.15 66.2179 125.65 66.2179C89.1501 66.2179 59.3501 96.0179 59.3501 132.518C59.3501 169.018 89.1501 198.818 125.65 198.818Z" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M125.65 66.2179C125.65 41.0179 105.25 20.6179 80.0501 20.6179" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M107.56 132.518C107.56 142.418 99.4602 150.518 89.5602 150.518C79.6602 150.518 71.5602 142.418 71.5602 132.518C71.5602 122.618 79.6602 114.518 89.5602 114.518" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M165.733 132.518C165.733 142.418 157.633 150.518 147.733 150.518C137.833 150.518 129.733 142.418 129.733 132.518C129.733 122.618 137.833 114.518 147.733 114.518" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M89.5602 114.518C94.0602 108.918 100.26 104.518 107.56 102.118" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M147.733 114.518C152.233 108.918 158.433 104.518 165.733 102.118" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M291.868 205.811L257.668 234.211L248.668 206.511L291.868 205.811Z" fill="#42A5F5"></path><path d="M248.668 206.511L257.668 234.211L291.868 205.811L248.668 206.511Z" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M285.918 209.16C289.418 209.66 292.818 210.56 296.018 211.66" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M260.852 230.901C256.752 232.001 252.652 232.701 248.552 232.901" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M479.528 203.245L459.728 220.045" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M208.232 249.231C208.232 249.231 228.332 238.431 248.632 232.931" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M1.05469 285.111H420.255" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M420.255 249.211H208.255" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M379.432 57.8546C378.832 101.555 352.532 173.355 296.032 211.655" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M259.619 248.169C259.619 248.169 265.819 252.169 269.819 255.469C281.219 264.869 290.119 278.469 294.519 293.969C298.619 308.569 298.119 324.069 292.919 338.469L289.419 346.569" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M260.755 248.111C260.755 248.111 251.555 258.111 237.955 258.111L67.6547 258.011C54.0547 258.011 44.8547 268.011 44.8547 278.511V285.111" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M289.419 346.569C289.419 346.569 281.319 348.369 276.119 347.169" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M0.854492 285.111V347.111" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M237.955 258.111C237.955 258.111 232.055 264.111 223.155 264.111H21.5547C9.55466 264.111 0.854692 273.711 0.854692 285.111" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M309.811 0.817993C309.811 0.817993 285.711 21.018 259.611 51.618C232.611 83.118 202.811 120.718 191.911 132.518" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M285.711 21.018L269.411 32.718" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M259.611 51.618L243.611 63.118" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M232.611 83.118L218.411 93.918" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path><path d="M202.811 120.718L191.911 132.518" stroke="#1D1D1D" stroke-width="2" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </div> -->
+
+          <!-- Icon & Main Heading -->
+          <div class="mb-8">
+            <div class="flex justify-center mb-4">
+              <Icon name="mdi:email-check" class="w-16 h-16 text-brand-green" />
+            </div>
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white leading-tight">
+              Thank You! You're Confirmed.
+            </h1>
+            <p class="mt-4 text-lg text-gray-700 dark:text-gray-300">Your journey into a new world of relationships starts now.</p>
+          </div>
+
+          <!-- Content Body -->
+          <div class="prose prose-lg dark:prose-invert mx-auto text-left space-y-6">
+            <p>
+              You've just taken the most important step: deciding to look beyond the outdated and often painful "rules" of traditional relationships. The path from Sex 2.0 to 3.0 isn't just about learning new techniques; it's about fundamentally upgrading your internal map of how connection, desire, and intimacy actually work. It's about trading confusion for clarity, jealousy for freedom, and obligation for genuine, mutual reward.
+            </p>
+            <p>
+              Moving forward, you can expect to receive powerful insights, practical guides, and exclusive content designed to support you on this path. We'll explore the hidden patterns that cause conflict, uncover the truths about human nature that society often ignores, and provide you with the tools to build relationships that are not only more passionate and fulfilling, but also more natural and free.
+            </p>
+            
+            <!-- Insight Gems Section -->
+            <div class="p-6 bg-orange-50 dark:bg-slate-800/90 rounded-lg border-l-4 border-orange-500 shadow-inner">
+              <h2 class="text-2xl font-bold !mt-0 !mb-3 text-gray-900 dark:text-white">A Gift to Start Your Journey!</h2>
+              <p class="!mt-0">
+                We believe that gaining knowledge should be a fun and rewarding experience. That's why we have **Insight Gems**. Think of them as your personal currency for wisdom. You'll earn them by engaging with content, completing challenges, and participating in our community. You can then use these gems to unlock exclusive premium content, advanced guides, and special courses.
+              </p>
+              <p>
+                To get you started, we've just sent **100 FREE Insight Gems** to your inbox. Keep an eye out for an email with instructions on how to claim them and officially begin building your treasure trove of relationship wisdom!
+              </p>
+            </div>
+
+            <p>
+              Your journey begins with understanding the core concepts. The free chapters of the Sex 3.0 book are the perfect foundation. Click the button below to download your copy now and take your first real step into a new paradigm.
+            </p>
+          </div>
+
+          <!-- Download CTA -->
+          <div class="mt-12">
+            <a
+              href="/assets/pdf/sex-3.0-free-chapters.pdf"
+              download="Sex-3.0-Free-Chapters-JJ-Roberts.pdf"
+              class="inline-flex items-center justify-center gap-2 px-8 py-4 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-full shadow-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-orange-300 dark:focus:ring-orange-800 whitespace-nowrap"
+              aria-label="Download your free book chapters"
+              id="download-chapters-link"
+            >
+              <Icon name="mdi:download-circle" class="w-6 h-6" />
+              Download Your Free Chapters
+            </a>
+            <p class="mt-4 text-sm text-gray-600 dark:text-gray-400">PDF Download (~5MB)</p>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</Layout>
+<style>
+  .animation-delay-4000 {
+    animation-delay: 4000ms;
+  }
+</style>
+
+<script>
+  document.addEventListener('astro:page-load', () => {
+    const downloadLink = document.getElementById('download-chapters-link');
+    const urlParams = new URLSearchParams(window.location.search);
+    const actionToken = urlParams.get('token');
+
+    if (downloadLink && actionToken) {
+      downloadLink.addEventListener('click', () => {
+        console.log('Download link clicked. Logging engagement event with token:', actionToken);
+        
+        // Fire and forget the tracking request
+        fetch('/api/track-engagement', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            eventType: 'DOWNLOADED_BOOK_CHAPTERS',
+            token: actionToken
+          }),
+          keepalive: true
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            console.log('Engagement tracked successfully:', data);
+          } else {
+            console.error('Failed to track engagement:', data.message);
+          }
+        })
+        .catch(error => {
+          console.error('Error sending engagement tracking request:', error);
+        });
+      });
+    } else if (!actionToken) {
+      console.warn('No action token found in URL. Gem reward for download will not be tracked.');
+    }
+  });
+</script> 

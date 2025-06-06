@@ -32,6 +32,7 @@ export interface UserProfile {
   referral_code?: string | null;
   created_at: string; // timestamptz
   updated_at: string; // timestamptz
+  action_token?: string | null; // For secure, session-less actions
 }
 
 export interface ImpressionData {
@@ -69,6 +70,7 @@ export interface VerifiedTokenData {
   kitSubscriberId?: string | null;
   experimentId?: string | null;
   variantId?: string | null;
+  action_token?: string | null;
   error?: PostgrestError | string | null;
 }
 
@@ -604,21 +606,16 @@ export async function findOrCreateUserForVerification(email: string): Promise<Fi
       return { user: existingUser, isNewUser: false, isAlreadyVerified: false, error: null };
     }
 
-    // 2. Create new user if not found
-    const newReferralCode = crypto.randomUUID();
+    // If user doesn't exist, create them.
+    console.log(`[DB Ops] User with email ${email} does not exist. Creating new profile.`);
     const { data: newUser, error: createError } = await supabase
       .from('user_profiles')
-      .insert({ 
-        email: email.toLowerCase().trim(), 
-        is_email_verified: false,
-        referral_code: newReferralCode,
-        // insight_gems will use the DB default of 100
-      })
-      .select('*')
+      .insert({ email: email })
+      .select('*, action_token') // Ensure we select the new action_token on creation
       .single();
 
-    if (createError) {
-      console.error('Error creating user:', createError);
+    if (createError || !newUser) {
+      console.error('[DB Ops] Error creating new user profile:', createError);
       return { user: null, isNewUser: false, isAlreadyVerified: false, error: createError };
     }
     
@@ -699,14 +696,14 @@ export async function verifyTokenAndLogConversion(tokenValue: string): Promise<V
   }
 
   try {
-    // 1. Find the token and fetch all necessary direct and related fields
+    // Find the token and associated user profile in one go
     const { data: tokenRecord, error: findError } = await supabase
       .from('email_verification_tokens')
-      .select('*, user_profiles ( kit_subscriber_id ) ') // Select all from token, and kit_id from user
+      .select('*, user_profiles(*)') // Fetch all from token, and all from user profile
       .eq('token', tokenValue)
       .single();
 
-    if (findError || !tokenRecord) {
+    if (findError || !tokenRecord || !tokenRecord.user_profiles) {
       console.warn(`[DB Ops] Verification token not found or error fetching: ${tokenValue}`, findError);
       return { success: false, message: 'Invalid or expired verification link. Please try again.', error: findError || 'Token not found' };
     }
@@ -719,8 +716,13 @@ export async function verifyTokenAndLogConversion(tokenValue: string): Promise<V
       return { 
         success: false, 
         message: 'This verification link has already been used.', 
-        userProfileId: tokenRecord.user_profile_id, 
-        email: tokenRecord.email, 
+        userProfileId: tokenRecord.user_profile_id,
+        email: tokenRecord.user_profiles.email,
+        firstName: tokenRecord.user_profiles.first_name,
+        kitSubscriberId: tokenRecord.user_profiles.kit_subscriber_id,
+        experimentId: tokenRecord.experiment_id,
+        variantId: tokenRecord.variant_id,
+        action_token: tokenRecord.user_profiles.action_token,
         error: 'Token already used' 
       };
     }
@@ -755,7 +757,7 @@ export async function verifyTokenAndLogConversion(tokenValue: string): Promise<V
 
     if (updateUserError || !updatedUserProfile) {
       console.error(`[DB Ops] Error updating user profile ${tokenRecord.user_profile_id} to verified:`, updateUserError);
-      return { success: false, message: 'Error finalizing email verification. Please contact support.', error: updateUserError || 'Failed to retrieve updated user profile' };
+      return { success: false, message: 'Error finalizing email verification. Please try again.', error: updateUserError || 'Failed to retrieve updated user profile' };
     }
     console.log(`[DB Ops] User profile ${tokenRecord.user_profile_id} marked as verified.`);
 
@@ -842,9 +844,11 @@ export async function verifyTokenAndLogConversion(tokenValue: string): Promise<V
       userProfileId: tokenRecord.user_profile_id,
       email: updatedUserProfile.email,
       firstName: updatedUserProfile.first_name,
-      kitSubscriberId: updatedUserProfile.kit_subscriber_id || tokenRecord.user_profiles?.kit_subscriber_id,
+      kitSubscriberId: updatedUserProfile.kit_subscriber_id,
       experimentId: tokenRecord.experiment_id,
-      variantId: tokenRecord.variant_id
+      variantId: tokenRecord.variant_id,
+      action_token: tokenRecord.user_profiles.action_token,
+      error: null,
     };
 
   } catch (err: unknown) {

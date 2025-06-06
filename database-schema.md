@@ -25,9 +25,10 @@ This document contains the complete schema documentation for Jason's Personal We
 - `email_verification_tokens` - **NEW:** Stores tokens for email verification
 
 ### **💎 Gamification Tables**
-- `gem_transactions` - User gem transaction history
-- `engagement_rewards` - User engagement reward tracking
-- `content_unlocks` - Premium content access tracking
+- `user_engagements` - **NEW:** A central log for all significant user actions.
+- `gem_transactions` - **NEW:** An immutable ledger of all gem credits and debits.
+- `engagement_rewards` - **DEPRECATED:** This logic is now handled by the `log_user_engagement` RPC function.
+- `content_unlocks` - **DEPRECATED:** This can be modeled within `user_engagements` with an event type like `UNLOCKED_CONTENT`.
 - `referrals` - User referral system
 
 ### **📋 Quiz Results Table**
@@ -378,6 +379,28 @@ Stores tokens for email verification links.
 - `idx_email_verification_tokens_token` ON `email_verification_tokens` (`token`)
 - `idx_email_verification_tokens_user_profile_id` ON `email_verification_tokens` (`user_profile_id`)
 - `idx_email_verification_tokens_email` ON `email_verification_tokens` (`email`)
+
+### **💎 user_engagements (NEW)**
+A central log of all significant user actions for gamification and analytics.
+| Column | Type | Nullable | Default | Description |
+|---|---|---|---|---|
+| `id` | uuid | NO | `uuid_generate_v4()` | Primary key |
+| `user_id` | uuid | NO | - | FK to user_profiles |
+| `event_type` | text | NO | - | The type of action (e.g., `DOWNLOADED_BOOK_CHAPTERS`) |
+| `event_metadata` | jsonb | YES | - | Additional data (e.g., quiz score) |
+| `created_at` | timestamptz | NO | `now()` | When the event occurred |
+
+### **💎 gem_transactions (NEW)**
+An immutable ledger of all gem credits and debits for a user.
+| Column | Type | Nullable | Default | Description |
+|---|---|---|---|---|
+| `id` | uuid | NO | `uuid_generate_v4()` | Primary key |
+| `user_id` | uuid | NO | - | FK to user_profiles |
+| `source_engagement_id` | uuid | YES | - | FK to the user_engagements record that triggered this transaction |
+| `transaction_type` | text | NO | - | `CREDIT` or `DEBIT` |
+| `amount` | integer | NO | - | The number of gems (always positive) |
+| `description` | text | YES | - | Human-readable reason for the transaction |
+| `created_at` | timestamptz | NO | `now()` | When the transaction occurred |
 
 ---
 

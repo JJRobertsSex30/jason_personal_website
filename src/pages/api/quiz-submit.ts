@@ -131,16 +131,8 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
         console.warn(`[API Quiz Submit ${requestTimestamp}] Missing actualExperimentUUID or actualVariantUUID from parsed client variant data. This will affect A/B linking. ExperimentID: ${actualExperimentUUID}, VariantID: ${actualVariantUUID}`);
     }
 
-    let score = 0;
-    if (scoreString) {
-        const parsedScore = parseInt(scoreString);
-        score = !isNaN(parsedScore) ? parsedScore : 0;
-        if (isNaN(parsedScore)) {
-            console.warn(`[API Quiz Submit ${requestTimestamp}] Score "${scoreString}" not parsable. Defaulting to 0.`);
-        }
-    } else {
-        console.log(`[API Quiz Submit ${requestTimestamp}] No score string in form data. Defaulting score to 0.`);
-    }
+    const actualSource: SubscriptionSource = parsedClientVariantData?.quizName ? `Quiz: ${parsedClientVariantData.quizName}` as SubscriptionSource : "Quiz: General" as SubscriptionSource;
+    const score = scoreString ? parseInt(scoreString, 10) : 0;
 
     console.log(`[API Quiz Submit ${requestTimestamp}] Processing email: ${email} with new user identification flow.`);
 
@@ -261,16 +253,12 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
       console.log(`[API Quiz Submit ${requestTimestamp}] Quiz result tag name determined as: ${quizResultTagName}. Actual ID needs to be mapped.`);
     }
 
-    const insightGems = score; // Assuming score (string from form) directly maps to insight_gems (string from form)
-    const actualSource: SubscriptionSource = parsedClientVariantData?.quizName ? `Quiz: ${parsedClientVariantData.quizName}` as SubscriptionSource : "Quiz: General" as SubscriptionSource;
-
-    // Base options for ConvertKit payload, parsed appropriately
+    // Base options for ConvertKit payload
     const basePayloadOptions = {
-      firstName: firstName || undefined, // firstName from formData is string|undefined
-      resultType: resultType || undefined, // resultType from formData is string|undefined
-      score: score ? parseInt(score, 10) : undefined, // Parse score string to number
-      gems: insightGems ? parseInt(insightGems, 10) : undefined, // Parse gems string to number
-      // referralId: /* Get from formData if applicable, pass to options */,
+      firstName: firstName || undefined,
+      score: score,
+      gems: score, // Gems are same as score
+      resultType: resultType,
     };
 
     if (convertKitApiKey && convertKitFormId) {
@@ -279,10 +267,10 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
         
         const customFieldsForNew: Record<string, string> = {
             quiz_name: parsedClientVariantData?.quizName || 'general',
+            ...(verificationTokenForKit && { app_confirmation_token: verificationTokenForKit }),
+            ...(userProfileForSubmittedEmail.action_token && { action_token: userProfileForSubmittedEmail.action_token }),
         };
-        if (verificationTokenForKit) { // verificationTokenForKit is from generateAndStoreVerificationToken
-            customFieldsForNew.app_confirmation_token = verificationTokenForKit; // Changed key to app_confirmation_token
-        }
+
         const optionsForNewUser = {...basePayloadOptions, customFields: customFieldsForNew};
         
         const payload: ConvertKitSubscribePayload = createConvertKitPayload(
@@ -348,9 +336,13 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
             // Update custom fields by re-submitting (CK API v3 doesn't have a direct field update endpoint without re-subscribing)
              console.log(`[API Quiz Submit ${requestTimestamp}] Updating custom fields for existing subscriber ${email} (CK ID: ${kitSubscriberId})`);
             
+            // Prepare custom fields for the update
             const customFieldsForUpdate: Record<string, string> = {
                 quiz_name: parsedClientVariantData?.quizName || 'general',
-            }; // No verification token for existing, verified users
+                ...(verificationTokenForKit && { app_confirmation_token: verificationTokenForKit }),
+                ...(userProfileForSubmittedEmail.action_token && { action_token: userProfileForSubmittedEmail.action_token }),
+            };
+
             const optionsForUpdate = {...basePayloadOptions, customFields: customFieldsForUpdate};
 
             const updatePayload: ConvertKitSubscribePayload = createConvertKitPayload(
@@ -383,16 +375,16 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
     console.log(`[API Quiz Submit ${requestTimestamp}] Preparing to call handle_quiz_submission RPC for user ${userProfileForSubmittedEmail.id}`);
     let rpcSuccess = false;
     let rpcMessage = "RPC call skipped or failed.";
-    let referral_code_generated: string | null = userProfileForSubmittedEmail.referral_code; // Default to existing or null
-    let insight_gems_updated: number | null = userProfileForSubmittedEmail.insight_gems; // Default to existing or null
+    let referral_code_generated: string | null = userProfileForSubmittedEmail.referral_code ?? null; // Default to existing or null
+    let insight_gems_updated: number | null = userProfileForSubmittedEmail.insight_gems ?? null; // Default to existing or null
 
     try {
       const rpcCallParams: HandleQuizSubmissionParams = {
         userId: userProfileForSubmittedEmail.id,
         emailAddress: email,
-        userFirstName: firstName,
+        userFirstName: firstName || null,
         quizScore: score,
-        quizResultType: resultType!, // resultType is validated to exist earlier
+        quizResultType: resultType, // resultType is validated to exist earlier
         quizNameTaken: parsedClientVariantData?.quizName || 'general',
         experimentIdAssociated: actualExperimentUUID,
         variantIdAssociated: actualVariantUUID,

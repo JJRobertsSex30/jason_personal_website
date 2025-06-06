@@ -207,6 +207,7 @@ function getResultSummary(score: number) {
                       class="h-4 w-4 text-orange-500 border-gray-300 focus:ring-orange-500 dark:bg-slate-700 dark:border-slate-600"
                       required
                       onclick="updateQuizProgress()"
+                      checked={optionIndex + 1 === 5}
                     />
                   </div>
                   <label for={`q${index}-opt${optionIndex + 1}`} class="mt-1 text-sm text-center text-gray-700 dark:text-gray-300">
@@ -422,8 +423,8 @@ function getResultSummary(score: number) {
     }
     
     function initializeQuizState() {
-      const form = document.getElementById('quiz-form');
-      if (form) form.reset(); 
+      // const form = document.getElementById('quiz-form');
+      // if (form) form.reset(); // REMOVED: This was clearing the default 'checked' state from SSR.
 
       const isPageRefresh = window.performance && window.performance.navigation && window.performance.navigation.type === 1;
       if (isPageRefresh) {
