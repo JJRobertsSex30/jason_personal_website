@@ -128,8 +128,9 @@ Core user information and gamification data
 | `id` | uuid | NO | `uuid_generate_v4()` | Primary key |
 | `email` | text | NO | - | User's email address (unique) |
 | `first_name` | text | YES | - | User's first name |
-| `is_email_verified` | boolean | NO | `false` | **NEW:** Tracks if the user's email has been verified |
-| `email_verified_at` | timestamptz | YES | - | **NEW:** Timestamp of when the email was verified |
+| `kit_state` | text | YES | `'unconfirmed'` | **NEW:** User's status from ConvertKit (e.g., active, cancelled, bounced). Serves as a cache for fast filtering. |
+| `is_email_verified` | boolean | NO | `false` | **DEPRECATED:** Tracks if the user's email has been verified. Use `kit_state` instead. |
+| `email_verified_at` | timestamptz | YES | - | **DEPRECATED:** Timestamp of when the email was verified. |
 | `kit_subscriber_id` | text | YES | - | **NEW:** ConvertKit subscriber ID |
 | `last_verification_email_sent_at` | timestamptz | YES | - | **NEW:** Timestamp of the last verification email sent |
 | `insight_gems` | integer | NO | `100` | User's gem balance |
@@ -212,7 +213,7 @@ A/B test conversion tracking with advanced attribution analytics and double-coun
 | `id` | uuid | NO | `uuid_generate_v4()` | Primary key |
 | `variant_id` | uuid | NO | - | FK to variants |
 | `experiment_id` | uuid | NO | - | FK to experiments |
-| `user_identifier` | text | YES | - | User session identifier |
+| `user_identifier` | uuid | YES | - | User session identifier |
 | `session_identifier` | uuid | YES | - | Browser session ID |
 | `conversion_type` | text | NO | - | Type of conversion (e.g., 'quiz_submission') |
 | `details` | jsonb | YES | - | Additional conversion data |

@@ -2,11 +2,7 @@
 *Lead Generation Platform & Relationship Expertise Business*
 
 **Version:** 2.0  
-<<<<<<< HEAD
-**Last Updated:** July 26, 2024 (BT-07 ADDED - Email Verification Flow)  
-=======
-**Last Updated:** July 18, 2024 (Task 1.3.1 In Progress - Email Confirmation Conversion Tracking via /confirm-bridge)  
->>>>>>> 3ef1a9878a61d069b6aa70a99580efcfdacd7972
+**Last Updated:** July 26, 2024 (BT-07 ADDED - Email Verification Flow)
 **Project Manager:** Jason Roberts  
 **Target Launch:** v1.0 within 12 weeks (3 months)
 
@@ -104,6 +100,18 @@ A focused v1.0 launch platform serving as a high-converting lead generation syst
 | 7.5 | Kit Integration: Update Tags for Verification Status | ⭐ | 🟢 | 🟠 | 7.3 | Implement Kit API calls to add/remove 'email not verified' and 'Email Verified' tags. |
 | 7.6 | A/B Logic: Track Impressions & Verified Email Conversions | ⭐ | 🟢 | 🟠 | 7.3 | Ensure A/B impressions are logged on initial email submission, and conversions are logged only upon successful email verification. |
 | 7.7 | Testing: Full Email Verification Flow E2E | ⭐ | 🟢 | 🔴 | 7.2, 7.3, 7.4, 7.5, 7.6 | End-to-end testing of the entire email submission, verification, name capture, and Kit update process. |
+| **BT-08** | **USER MANAGEMENT DASHBOARD FIXES & FEATURES** | ✅ | 🟢 | 🟠 | - | Fix critical bugs and add new features to the user management dashboard. |
+| 8.1 | Fix incorrect user verification status | ✅ Complete | 🟢 | 🔵 | - | Modified ConvertKit webhook and backfilled data to ensure "Verified" status appears correctly based on `kit_state`. | July 30, 2024 |
+| 8.2 | Fix empty user detail page | ✅ Complete | 🟢 | 🔵 | - | Restored missing UI content on the user detail page. | July 30, 2024 |
+| 8.3 | Fix "Back to users" navigation | ✅ Complete | 🟢 | 🔵 | - | Corrected client-side routing logic in the main dashboard to ensure the link returns to the "Users" tab. | July 29, 2024 |
+| 8.4 | Feature: Display Full ConvertKit Data | ✅ Complete | 🟢 | 🟠 | - | User detail page now fetches and displays all tags and custom fields directly from the ConvertKit API. Confirmed working. | July 30, 2024 |
+| 8.5 | Feature: Display User Referrals | ✅ Complete | 🟢 | 🟠 | - | Added a new section to the user detail page to display a list of users they have referred. Confirmed working. | July 30, 2024 |
+| 8.6 | Feature: Add 8-Category User Filter | ✅ Complete | 🟢 | 🟠 | - | Implemented a comprehensive user filter on the main list with 8 status categories from ConvertKit. Confirmed working. | July 30, 2024 |
+| **BT-09** | **DASHBOARD REGRESSION FIXES** | ✅ | 🟢 | 🟠 | - | Fixed a critical regression that broke several features on the user management dashboard after a previous deployment. |
+| 9.1 | Fix Broken User Filter | ✅ Complete | 🟢 | 🔵 | - | The user filter dropdown on the main list was unresponsive. Fixed by correcting the data query in `dashboard.astro` to include `kit_state`. | July 31, 2024 |
+| 9.2 | Fix "Unknown" User Status | ✅ Complete | 🟢 | 🔵 | - | User status was showing as "Unknown". Also fixed by correcting the `dashboard.astro` data query. | July 31, 2024 |
+| 9.3 | Fix Incorrect User Detail Data | ✅ Complete | 🟢 | 🔵 | - | User detail page showed "Pending Verification" and "N/A" for several fields. Fixed by correcting the API key usage in the `/api/get-user-details` endpoint. | July 31, 2024 |
+| 9.4 | Fix Missing ConvertKit Tags | ✅ Complete | 🟢 | 🔵 | - | User tags were not appearing on the detail page. Also fixed by correcting the API key usage in the `/api/get-user-details` endpoint. | July 31, 2024 |
 
 ---
 

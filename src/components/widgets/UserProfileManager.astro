@@ -1,101 +1,140 @@
 ---
-import type { UserProfile } from '~/pages/dashboard.astro'; // Adjust path if dashboard moves or UserProfile type is centralized
+import type { UserProfile } from '~/types';
 
 export interface Props {
-  userProfiles: UserProfile[] | null;
-  userProfilesError: string | null;
-  isUserLoggedIn: boolean;
-  // Astro.url is globally available, no need to pass as prop
+  userProfiles: UserProfile[];
 }
 
-const { userProfiles, userProfilesError, isUserLoggedIn } = Astro.props;
+const { userProfiles } = Astro.props;
+
+const summaryStats = {
+  totalUsers: userProfiles?.length || 0,
+  newToday: userProfiles?.filter(p => new Date(p.created_at).toDateString() === new Date().toDateString()).length || 0,
+  verified: userProfiles?.filter(p => p.kit_state === 'active').length || 0,
+};
+
+const statusMap: Record<string, { text: string; color: string }> = {
+  active: { text: 'Confirmed', color: 'bg-green-100 dark:bg-green-400/30 text-green-600 dark:text-green-300' },
+  unconfirmed: { text: 'Unconfirmed', color: 'bg-yellow-100 dark:bg-yellow-400/30 text-yellow-600 dark:text-yellow-300' },
+  cancelled: { text: 'Cancelled', color: 'bg-gray-100 dark:bg-gray-400/30 text-gray-500 dark:text-gray-300' },
+  complained: { text: 'Complained', color: 'bg-orange-100 dark:bg-orange-400/30 text-orange-600 dark:text-orange-300' },
+  bounced: { text: 'Bounced', color: 'bg-red-100 dark:bg-red-400/30 text-red-600 dark:text-red-300' },
+  blocked: { text: 'Blocked', color: 'bg-red-100 dark:bg-red-400/30 text-red-600 dark:text-red-300' },
+  cold: { text: 'Cold', color: 'bg-blue-100 dark:bg-blue-400/30 text-blue-600 dark:text-blue-300' },
+  unknown: { text: 'Unknown', color: 'bg-purple-100 dark:bg-purple-400/30 text-purple-600 dark:text-purple-300' },
+};
+
 ---
 <section class="my-8">
-  <h2 class="text-3xl font-semibold mb-8 text-slate-800 dark:text-white text-center">User Profiles & Admin Login</h2>
+  <h2 class="text-3xl font-semibold mb-8 text-slate-800 dark:text-white text-center">User Management</h2>
 
-  {userProfilesError && (
-    <div class="mb-6 p-4 bg-orange-50 dark:bg-orange-800/30 border border-orange-300 dark:border-orange-600 text-orange-700 dark:text-orange-300 rounded-lg shadow-sm" role="alert">
-      <p class="font-bold text-lg">User Profile Error:</p>
-      <p>{userProfilesError}</p>
+  <!-- Summary Cards -->
+  <div class="mb-10 grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="p-6 bg-white dark:bg-slate-800 shadow-xl rounded-lg text-center">
+      <p class="text-4xl font-bold text-blue-600 dark:text-blue-400">{summaryStats.totalUsers}</p>
+      <p class="text-sm font-medium text-slate-600 dark:text-slate-300">Total Users</p>
     </div>
-  )}
+    <div class="p-6 bg-white dark:bg-slate-800 shadow-xl rounded-lg text-center">
+      <p class="text-4xl font-bold text-green-600 dark:text-green-400">+{summaryStats.newToday}</p>
+      <p class="text-sm font-medium text-slate-600 dark:text-slate-300">New Today</p>
+    </div>
+    <div class="p-6 bg-white dark:bg-slate-800 shadow-xl rounded-lg text-center">
+      <p class="text-4xl font-bold text-indigo-600 dark:text-indigo-400">{summaryStats.verified}</p>
+      <p class="text-sm font-medium text-slate-600 dark:text-slate-300">Confirmed</p>
+    </div>
+  </div>
 
-  {isUserLoggedIn ? (
-    <div class="bg-white dark:bg-slate-800 shadow-xl rounded-lg p-6">
-      <h3 class="text-2xl font-semibold mb-6 text-slate-700 dark:text-slate-200">Registered User Profiles</h3>
-      {userProfiles && userProfiles.length > 0 ? (
-        <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">
-            <thead class="bg-slate-50 dark:bg-slate-700/50">
-              <tr>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">User ID</th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">Email</th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">Created At</th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">Updated At</th>
+  <div class="bg-white dark:bg-slate-800 shadow-xl rounded-lg p-6">
+    <div class="flex justify-between items-center mb-6">
+      <h3 class="text-2xl font-semibold text-slate-700 dark:text-slate-200">All Users</h3>
+      <div>
+        <label for="status-filter" class="block text-sm font-medium text-slate-700 dark:text-slate-300 sr-only">Filter users</label>
+        <select id="status-filter" name="status-filter" class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+          <option value="all">All Users</option>
+          <option value="active" selected>Confirmed</option>
+          <option value="unconfirmed">Unconfirmed</option>
+          <option value="cancelled">Cancelled</option>
+          <option value="complained">Complained</option>
+          <option value="bounced">Bounced</option>
+          <option value="blocked">Blocked</option>
+          <option value="cold">Cold</option>
+        </select>
+      </div>
+    </div>
+    {userProfiles && userProfiles.length > 0 ? (
+      <div class="overflow-x-auto">
+        <table id="users-table" class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+          <thead class="bg-slate-50 dark:bg-slate-700/50">
+            <tr>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">Email</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">Status</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">Created At</th>
+              <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="user-list" class="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
+            {userProfiles.map(profile => {
+              const statusKey = profile.kit_state || 'unknown';
+              const statusInfo = statusMap[statusKey] || statusMap['unknown'];
+              return (
+              <tr data-state={statusKey}>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900 dark:text-slate-100">{profile.email}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-300">
+                  <div class:list={["text-xs inline-flex font-medium rounded-full text-center px-2.5 py-1", statusInfo.color]}>
+                    {statusInfo.text}
+                  </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-300">{profile.created_at ? new Date(profile.created_at).toLocaleDateString() : 'N/A'}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <a href={`/dashboard/user/${profile.id}`} class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300">View</a>
+                  <a href="#" class="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-300 ml-4">Edit</a>
+                </td>
               </tr>
-            </thead>
-            <tbody class="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
-              {userProfiles.map(profile => (
-                <tr>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900 dark:text-slate-100">{profile.id}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-300">{profile.email}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-300">{profile.created_at ? new Date(profile.created_at as string).toLocaleString() : 'N/A'}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-300">{profile.updated_at ? new Date(profile.updated_at as string).toLocaleString() : 'N/A'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div class="text-center py-8 px-4 border border-dashed border-slate-300 dark:border-slate-600 rounded-lg">
-          <svg class="mx-auto h-10 w-10 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-            <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
-          </svg>
-          <h3 class="mt-2 text-md font-medium text-slate-700 dark:text-slate-200">No User Profiles Found</h3>
-          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">There are currently no user profiles in the database.</p>
-        </div>
-      )}
-    </div>
-  ) : (
-    <div class="max-w-md mx-auto mt-12 bg-white dark:bg-slate-800 shadow-xl rounded-lg p-8">
-      <h3 class="text-2xl font-semibold text-center text-slate-700 dark:text-slate-200 mb-6">Admin Login</h3>
-      <form method="POST" action={Astro.url.pathname + "#user-profiles-panel"} class="space-y-6">
-        <input type="hidden" name="_action" value="login" />
-        <div>
-          <label for="email" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Email Address</label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            autocomplete="email"
-            required
-            class="mt-1 block w-full shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md py-2.5 px-3 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400 dark:placeholder-slate-500"
-          />
-        </div>
-        <div>
-          <label for="password" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            autocomplete="current-password"
-            required
-            class="mt-1 block w-full shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md py-2.5 px-3 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400 dark:placeholder-slate-500"
-          />
-        </div>
-        <button
-          type="submit"
-          class="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-900 focus:ring-blue-500 transition duration-150 ease-in-out"
-        >
-          Sign In
-        </button>
-      </form>
-    </div>
-  )}
+            )})}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <div class="text-center py-8 px-4 border border-dashed border-slate-300 dark:border-slate-600 rounded-lg">
+        <svg class="mx-auto h-10 w-10 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+        </svg>
+        <h3 class="mt-2 text-md font-medium text-slate-700 dark:text-slate-200">No User Profiles Found</h3>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">There are currently no user profiles in the database.</p>
+      </div>
+    )}
+  </div>
 </section>
 
 <script>
-  // No specific client-side scripts for UserProfileManager other than what might be handled globally by dashboard.astro (like tab switching)
-  // If there were, they would be initialized here, perhaps using astro:page-load if needed.
-  // console.log("UserProfileManager component script loaded and executed");
-</script> 
+  document.addEventListener('astro:page-load', () => {
+    const filter = document.getElementById('status-filter') as HTMLSelectElement;
+    const tableBody = document.getElementById('user-list');
+
+    if (!filter || !tableBody) {
+      console.error("Filter or table body not found for UserProfileManager. Aborting script.");
+      return;
+    }
+
+    const allRows = Array.from(tableBody.querySelectorAll('tr'));
+
+    function applyFilter() {
+      const selectedStatus = filter.value;
+      
+      allRows.forEach(row => {
+        const userState = row.dataset.state;
+        
+        if (selectedStatus === 'all' || userState === selectedStatus) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+    }
+
+    filter.addEventListener('change', applyFilter);
+
+    // Initial filter application on page load
+    applyFilter();
+  });
+</script>

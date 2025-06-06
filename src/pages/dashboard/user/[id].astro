@@ -1,0 +1,320 @@
+---
+import Layout from '~/layouts/PageLayout.astro';
+import { supabase } from '~/lib/supabaseClient';
+import type { UserProfile, GemTransaction, UserEngagement } from '~/types';
+
+interface KitSubscriber {
+    id: number;
+    first_name: string | null;
+    email_address: string;
+    state: 'active' | 'inactive' | 'cancelled';
+    created_at: string;
+    fields: { [key: string]: string | number | boolean | null };
+}
+
+interface KitTag {
+    id: number;
+    name: string;
+    created_at: string;
+}
+
+interface Referral {
+    id: string;
+    created_at: string;
+    referee: UserProfile;
+}
+
+interface UserDetails {
+    profile: UserProfile;
+    referrals: Referral[];
+    kit: {
+        subscriber: KitSubscriber | null;
+        tags: KitTag[];
+    };
+    gem_transactions: GemTransaction[];
+    user_engagements: UserEngagement[];
+}
+
+const statusMap: Record<string, { text: string; color: string }> = {
+  active: { text: 'Confirmed', color: 'bg-green-100 dark:bg-green-400/30 text-green-600 dark:text-green-300' },
+  unconfirmed: { text: 'Unconfirmed', color: 'bg-yellow-100 dark:bg-yellow-400/30 text-yellow-600 dark:text-yellow-300' },
+  cancelled: { text: 'Cancelled', color: 'bg-gray-100 dark:bg-gray-400/30 text-gray-500 dark:text-gray-300' },
+  complained: { text: 'Complained', color: 'bg-orange-100 dark:bg-orange-400/30 text-orange-600 dark:text-orange-300' },
+  bounced: { text: 'Bounced', color: 'bg-red-100 dark:bg-red-400/30 text-red-600 dark:text-red-300' },
+  blocked: { text: 'Blocked', color: 'bg-red-100 dark:bg-red-400/30 text-red-600 dark:text-red-300' },
+  cold: { text: 'Cold', color: 'bg-blue-100 dark:bg-blue-400/30 text-blue-600 dark:text-blue-300' },
+  unknown: { text: 'Pending Verification', color: 'bg-purple-100 dark:bg-purple-400/30 text-purple-600 dark:text-purple-300' },
+};
+
+const { id } = Astro.params;
+let userDetails: UserDetails | null = null;
+let pageError: string | null = null;
+let successMessage: string | null = null;
+
+if (Astro.request.method === 'POST') {
+    const formData = await Astro.request.formData();
+    const action = formData.get('_action')?.toString();
+
+    if (action === 'update_user') {
+        const userId = formData.get('user_id')?.toString();
+        const firstName = formData.get('first_name')?.toString();
+
+        if (userId) {
+            try {
+                const { error } = await supabase
+                    .from('user_profiles')
+                    .update({ first_name: firstName, updated_at: new Date().toISOString() })
+                    .eq('id', userId);
+                
+                if (error) throw error;
+                successMessage = "User profile updated successfully!";
+            } catch (e) {
+                if (e instanceof Error) {
+                    pageError = `Failed to update profile: ${e.message}`;
+                }
+            }
+        }
+    }
+}
+
+if (id) {
+    try {
+        const response = await fetch(`${Astro.url.origin}/api/get-user-details?id=${id}`);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || `API request failed with status ${response.status}`);
+        }
+        const data = await response.json();
+
+        const engResponse = await fetch(`${Astro.url.origin}/api/user-journey?userId=${id}`);
+        const engData = await engResponse.json();
+
+        userDetails = {
+            ...data,
+            user_engagements: engData.engagements || [],
+            gem_transactions: [] // Placeholder
+        };
+
+    } catch (e) {
+        if (e instanceof Error) {
+            pageError = e.message;
+        }
+        console.error('Error fetching user details:', e);
+    }
+} else {
+    pageError = "No user ID provided.";
+}
+
+const metadata = {
+	title: userDetails ? `User Details: ${userDetails.profile.first_name || userDetails.profile.email}` : 'User Details',
+};
+---
+
+<Layout {metadata}>
+	<div class="px-4 sm:px-6 lg:px-8 py-8 w-full max-w-9xl mx-auto">
+		<!-- Page header -->
+        <div class="sm:flex sm:justify-between sm:items-center mb-8">
+            <!-- Left: Title -->
+            <div class="mb-4 sm:mb-0">
+                <h1 class="text-2xl md:text-3xl text-slate-800 dark:text-slate-100 font-bold">
+                    {userDetails ? `${userDetails.profile.first_name || 'User'} Details` : 'Loading...'}
+                </h1>
+            </div>
+
+            <!-- Right: Actions -->
+            <div class="grid grid-flow-col sm:auto-cols-max justify-start sm:justify-end gap-2">
+                <a href="/dashboard#users-panel" class="btn bg-indigo-500 hover:bg-indigo-600 text-white">
+                    &larr; Back to Users
+                </a>
+            </div>
+        </div>
+
+        {pageError && <div class="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800" role="alert">{pageError}</div>}
+        {successMessage && <div class="p-4 mb-4 text-sm text-green-700 bg-green-100 rounded-lg dark:bg-green-200 dark:text-green-800" role="alert">{successMessage}</div>}
+
+        {userDetails && userDetails.profile && (
+            <div class="space-y-8">
+                <!-- User Profile Card -->
+                <div class="p-6 bg-white dark:bg-slate-800 shadow-xl rounded-lg">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold text-slate-800 dark:text-white">{userDetails.profile.first_name || userDetails.profile.email}</h2>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">User ID: {userDetails.profile.id}</p>
+                            {(() => {
+                                const kitState = userDetails.kit.subscriber?.state;
+                                const dbState = userDetails.profile.kit_state;
+                                const statusKey = kitState || dbState || 'unknown';
+                                const statusInfo = statusMap[statusKey] || statusMap['unknown'];
+                                
+                                return (
+                                    <div class={`mt-2 px-3 py-1 text-xs font-medium rounded-full inline-block ${statusInfo.color}`}>
+                                        {statusInfo.text}
+                                    </div>
+                                )
+                            })()}
+                        </div>
+                        <div class="flex space-x-2 mt-4 md:mt-0">
+                            <button id="edit-user-btn" class="btn bg-blue-500 hover:bg-blue-600 text-white">Edit User</button>
+                            <button class="btn bg-yellow-500 hover:bg-yellow-600 text-white">Soft Delete</button>
+                            <button class="btn bg-red-600 hover:bg-red-700 text-white">Hard Delete</button>
+                        </div>
+                    </div>
+                    <dl class="space-y-2 text-sm border-t border-slate-200 dark:border-slate-700 pt-6">
+                        <div class="flex justify-between"><dt class="text-slate-500">Email:</dt><dd class="text-slate-800 dark:text-slate-200 font-medium">{userDetails.profile.email}</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-500">Kit ID:</dt><dd class="text-slate-800 dark:text-slate-200 font-medium">{userDetails.profile.kit_subscriber_id || 'N/A'}</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-500">Referral Code:</dt><dd class="text-slate-800 dark:text-slate-200 font-medium">{userDetails.profile.referral_code || 'N/A'}</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-500">Joined:</dt><dd class="text-slate-800 dark:text-slate-200 font-medium">{new Date(userDetails.profile.created_at).toLocaleString()}</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-500">Last Updated:</dt><dd class="text-slate-800 dark:text-slate-200 font-medium">{new Date(userDetails.profile.updated_at).toLocaleString()}</dd></div>
+                    </dl>
+                </div>
+
+                <!-- Key Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="p-6 bg-white dark:bg-slate-800 shadow-xl rounded-lg text-center">
+                        <p class="text-4xl font-bold text-blue-600 dark:text-blue-400">{userDetails.profile.insight_gems}</p>
+                        <p class="text-sm font-medium text-slate-600 dark:text-slate-300">Insight Gems</p>
+                    </div>
+                    <div class="p-6 bg-white dark:bg-slate-800 shadow-xl rounded-lg text-center">
+                        <p class="text-4xl font-bold text-green-600 dark:text-green-400">{userDetails.user_engagements.length}</p>
+                        <p class="text-sm font-medium text-slate-600 dark:text-slate-300">Total Engagements</p>
+                    </div>
+                    <div class="p-6 bg-white dark:bg-slate-800 shadow-xl rounded-lg text-center">
+                        <p class="text-4xl font-bold text-indigo-600 dark:text-indigo-400">{userDetails.gem_transactions.length}</p>
+                        <p class="text-sm font-medium text-slate-600 dark:text-slate-300">Gem Transactions</p>
+                    </div>
+                </div>
+
+                <!-- NEW: ConvertKit Details -->
+                <div class="p-6 bg-white dark:bg-slate-800 shadow-xl rounded-lg">
+                    <h2 class="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-4">ConvertKit Details</h2>
+                    {userDetails.kit.subscriber ? (
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <div><strong>CK ID:</strong> {userDetails.kit.subscriber.id}</div>
+                            <div><strong>State:</strong> <span class:list={[{
+                                'bg-green-100 text-green-800': userDetails.kit.subscriber.state === 'active',
+                                'bg-yellow-100 text-yellow-800': userDetails.kit.subscriber.state === 'inactive',
+                                'bg-red-100 text-red-800': userDetails.kit.subscriber.state === 'cancelled',
+                            }, "text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full"]}>{userDetails.kit.subscriber.state}</span></div>
+                            <div class="md:col-span-2"><strong>Subscribed At:</strong> {new Date(userDetails.kit.subscriber.created_at).toLocaleString()}</div>
+                            
+                            <div class="mt-4 md:col-span-2">
+                                <h3 class="font-semibold mb-2">Tags:</h3>
+                                {userDetails.kit.tags.length > 0 ? (
+                                    <div class="flex flex-wrap gap-2">
+                                        {userDetails.kit.tags.map(tag => <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">{tag.name}</span>)}
+                                    </div>
+                                ) : <p class="text-slate-500">No tags.</p>}
+                            </div>
+
+                            <div class="mt-4 md:col-span-2">
+                                <h3 class="font-semibold mb-2">Custom Fields:</h3>
+                                {Object.keys(userDetails.kit.subscriber.fields).length > 0 ? (
+                                    <ul class="list-disc list-inside space-y-1">
+                                        {Object.entries(userDetails.kit.subscriber.fields).map(([key, value]) => (
+                                            <li><strong>{key}:</strong> {String(value)}</li>
+                                        ))}
+                                    </ul>
+                                ) : <p class="text-slate-500">No custom fields.</p>}
+                            </div>
+                        </div>
+                    ) : <p class="text-slate-500 dark:text-slate-400">User not found in ConvertKit.</p>}
+                </div>
+
+                <!-- NEW: Referrals Section -->
+                <div class="p-6 bg-white dark:bg-slate-800 shadow-xl rounded-lg">
+                    <h2 class="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-4">Referrals ({userDetails.referrals.length})</h2>
+                    <div class="max-h-96 overflow-y-auto">
+                        {userDetails.referrals.length > 0 ? (
+                            <table class="min-w-full">
+                                <thead>
+                                    <tr class="text-left text-xs font-semibold text-slate-500 uppercase">
+                                        <th class="py-2">User</th>
+                                        <th class="py-2">Email</th>
+                                        <th class="py-2">Referred At</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {userDetails.referrals.map(ref => (
+                                        <tr class="border-b border-slate-200 dark:border-slate-700">
+                                            <td class="py-2 pr-2 text-sm font-medium text-slate-800 dark:text-slate-200">{ref.referee.first_name || 'N/A'}</td>
+                                            <td class="py-2 px-2 text-sm text-slate-600 dark:text-slate-300">{ref.referee.email}</td>
+                                            <td class="py-2 pl-2 text-sm text-slate-500 dark:text-slate-400">{new Date(ref.created_at).toLocaleDateString()}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        ) : <p class="text-slate-500 dark:text-slate-400">This user has not referred anyone.</p>}
+                    </div>
+                </div>
+
+                <!-- Existing Sections (User Journey etc.) -->
+                <div class="p-6 bg-white dark:bg-slate-800 shadow-xl rounded-lg">
+                    <h2 class="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-4">User Journey (Engagements)</h2>
+                    <div class="max-h-96 overflow-y-auto">
+                        <table class="min-w-full">
+                            <tbody>
+                                {userDetails.user_engagements && userDetails.user_engagements.length > 0 ? userDetails.user_engagements.map(e => (
+                                    <tr class="border-b border-slate-200 dark:border-slate-700">
+                                        <td class="py-2 pr-2 text-sm text-slate-500 dark:text-slate-400">{new Date(e.created_at).toLocaleString()}</td>
+                                        <td class="py-2 px-2 text-sm font-medium text-slate-800 dark:text-slate-200">{e.engagement_type}</td>
+                                        <td class="py-2 pl-2 text-sm text-slate-600 dark:text-slate-300">{e.metadata ? JSON.stringify(e.metadata) : ''}</td>
+                                    </tr>
+                                )) : (
+                                    <tr><td class="py-4 text-center text-sm text-slate-500">No engagement data recorded.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        )}
+	</div>
+
+    <!-- Edit User Modal -->
+    <div id="edit-user-modal" class="fixed inset-0 bg-slate-900 bg-opacity-30 z-50 hidden" aria-hidden="true">
+        <div class="fixed inset-0 w-full h-full flex items-center justify-center">
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-2xl p-6 w-full max-w-md" @click.outside="document.getElementById('edit-user-modal').classList.add('hidden')">
+                <h3 class="text-xl font-bold text-slate-800 dark:text-white mb-4">Edit User</h3>
+                <form method="POST">
+                    <input type="hidden" name="_action" value="update_user">
+                    <input type="hidden" name="user_id" value={id}>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300" for="first_name">First Name</label>
+                            <input id="first_name" name="first_name" class="form-input w-full dark:bg-slate-700 dark:text-white" type="text" value={userDetails?.profile.first_name || ''} />
+                        </div>
+                    </div>
+                    <div class="mt-6 flex justify-end space-x-3">
+                        <button type="button" id="cancel-edit-btn" class="btn bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200">Cancel</button>
+                        <button type="submit" class="btn bg-blue-500 hover:bg-blue-600 text-white">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</Layout>
+
+<script>
+    document.addEventListener('astro:page-load', () => {
+        const modal = document.getElementById('edit-user-modal');
+        const openBtn = document.getElementById('edit-user-btn');
+        const cancelBtn = document.getElementById('cancel-edit-btn');
+
+        if (modal && openBtn && cancelBtn) {
+            openBtn.addEventListener('click', () => {
+                modal.classList.remove('hidden');
+            });
+
+            cancelBtn.addEventListener('click', () => {
+                modal.classList.add('hidden');
+            });
+
+            // Optional: Close modal on escape key
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+                    modal.classList.add('hidden');
+                }
+            });
+        }
+    });
+</script>
