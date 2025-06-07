@@ -2,13 +2,28 @@
 import type { UserProfile } from '~/types';
 
 export interface Props {
-  userProfiles: UserProfile[] | null;
-  userProfilesError: string | null;
-  isUserLoggedIn: boolean;
-  // Astro.url is globally available, no need to pass as prop
+  userProfiles: UserProfile[];
 }
 
-const { userProfiles, userProfilesError, isUserLoggedIn } = Astro.props;
+const { userProfiles } = Astro.props;
+
+const summaryStats = {
+  totalUsers: userProfiles?.length || 0,
+  newToday: userProfiles?.filter(p => new Date(p.created_at).toDateString() === new Date().toDateString()).length || 0,
+  verified: userProfiles?.filter(p => p.kit_state === 'active').length || 0,
+};
+
+const statusMap: Record<string, { text: string; color: string }> = {
+  active: { text: 'Confirmed', color: 'bg-green-100 dark:bg-green-400/30 text-green-600 dark:text-green-300' },
+  unconfirmed: { text: 'Unconfirmed', color: 'bg-yellow-100 dark:bg-yellow-400/30 text-yellow-600 dark:text-yellow-300' },
+  cancelled: { text: 'Cancelled', color: 'bg-gray-100 dark:bg-gray-400/30 text-gray-500 dark:text-gray-300' },
+  complained: { text: 'Complained', color: 'bg-orange-100 dark:bg-orange-400/30 text-orange-600 dark:text-orange-300' },
+  bounced: { text: 'Bounced', color: 'bg-red-100 dark:bg-red-400/30 text-red-600 dark:text-red-300' },
+  blocked: { text: 'Blocked', color: 'bg-red-100 dark:bg-red-400/30 text-red-600 dark:text-red-300' },
+  cold: { text: 'Cold', color: 'bg-blue-100 dark:bg-blue-400/30 text-blue-600 dark:text-blue-300' },
+  unknown: { text: 'Unknown', color: 'bg-purple-100 dark:bg-purple-400/30 text-purple-600 dark:text-purple-300' },
+};
+
 ---
 <section class="my-8">
   <h2 class="text-3xl font-semibold mb-8 text-slate-800 dark:text-white text-center">User Management</h2>
