@@ -12,6 +12,7 @@ interface ConvertKitSubscriber {
 
 // This interface is a bit redundant with UserProfile but helps keep API-specific logic separate.
 interface CombinedUser {
+  id: string | null;
   email: string;
   kit_status: string;
   kit_status_color: string;
@@ -75,6 +76,7 @@ export const GET: APIRoute = async () => {
     // Process DB users first
     for (const dbUser of dbUsers) {
       combinedUsers.set(String(dbUser.email).toLowerCase(), {
+        id: dbUser.id,
         email: String(dbUser.email),
         kit_status: 'not_in_kit',
         kit_status_color: getStatusColor('not_in_kit'),
@@ -96,6 +98,7 @@ export const GET: APIRoute = async () => {
         existingUser.kit_status_color = getStatusColor(kit_status);
       } else {
         combinedUsers.set(email, {
+          id: null,
           email: ckUser.email_address,
           kit_status: kit_status,
           kit_status_color: getStatusColor(kit_status),
