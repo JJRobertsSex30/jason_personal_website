@@ -3,6 +3,7 @@ import Layout from '~/layouts/PageLayout.astro';
 import { supabase } from '~/lib/supabaseClient';
 import type { Session } from '@supabase/supabase-js';
 import ABTestManager from '~/components/widgets/ABTestManager.astro';
+import ConfirmationModal from '~/components/widgets/ConfirmationModal.astro';
 import type { UserProfile, Experiment, Variant, VariantConfig } from '~/types';
 
 const metadata = {
@@ -215,6 +216,21 @@ if (Astro.request.method === 'POST') {
           const { error: deleteVarError } = await supabase.from('variants').delete().eq('id', variantId);
           if (deleteVarError) throw deleteVarError;
           return Astro.redirect(Astro.url.pathname + `?openExperiment=${experimentId}#ab-testing-panel`, 303);
+        }
+        else if (action === 'delete_user') {
+            const userId = formData.get('user_id')?.toString();
+            if (!userId) throw new Error('User ID is required for deletion.');
+            
+            // It's good practice to ensure cascades are set up in the DB
+            // or handle related data manually if needed.
+            const { error: deleteUserError } = await supabase.from('user_profiles').delete().eq('id', userId);
+            
+            if (deleteUserError) {
+                console.error('Error deleting user:', deleteUserError);
+                throw new Error(`Failed to delete user: ${deleteUserError.message}`);
+            }
+            
+            return Astro.redirect(Astro.url.pathname + '#users-panel', 303);
         }
       } catch (e: unknown) {
         if (e instanceof Error) {
@@ -1093,6 +1109,18 @@ if (Astro.request.method === 'GET') {
 
 </Layout>
 
+<ConfirmationModal
+  id="delete-user-modal"
+  title="Delete User"
+  message="Are you sure you want to delete this user? All of their associated data will be removed. This action is permanent and cannot be undone."
+  confirmButtonText="Yes, Delete User"
+/>
+
+<form method="POST" action="#users-panel" id="delete-user-form" class="hidden">
+  <input type="hidden" name="_action" value="delete_user" />
+  <input type="hidden" name="user_id" id="user-id-to-delete" value="" />
+</form>
+
 <style>
   .tab-button {
     @apply border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500;
@@ -1516,6 +1544,8 @@ if (Astro.request.method === 'GET') {
         });
     }
 
+    initializeDeleteUserModal(); // Initialize modal logic
+
     // Load campaign performance when campaign performance tab is clicked
     const campaignPerformanceTab = document.getElementById('campaign-performance-tab');
     if (campaignPerformanceTab) {
@@ -1855,7 +1885,10 @@ if (Astro.request.method === 'GET') {
     }
 
     tableBody.innerHTML = filteredUsers.map(user => `
-      <tr class="border-b border-slate-100 dark:border-slate-700">
+      <tr 
+        class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer"
+        data-user-id="${user.id}"
+      >
         <td class="py-2 px-2 text-slate-800 dark:text-white">${user.email}</td>
         <td class="py-2 px-2 text-slate-600 dark:text-slate-400">
             <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.kit_status_color || 'bg-gray-100 text-gray-800'}">
@@ -1870,7 +1903,13 @@ if (Astro.request.method === 'GET') {
         <td class="py-2 px-2 text-slate-600 dark:text-slate-400">${user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</td>
         <td class="py-2 px-2 text-slate-600 dark:text-slate-400">${user.last_seen ? new Date(user.last_seen).toLocaleDateString() : 'N/A'}</td>
         <td class="py-2 px-2 text-right">
-          ${user.id ? `<a href="/dashboard/user/${user.id}" class="text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300">View</a>` : ''}
+          ${user.id ? `
+              <button type="button" class="p-1 text-red-600 hover:text-red-800 dark:text-red-500 dark:hover:text-red-400 focus:outline-none delete-user-btn" data-user-id="${user.id}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+          ` : ''}
         </td>
       </tr>
     `).join('');
@@ -1946,6 +1985,63 @@ if (Astro.request.method === 'GET') {
       errorEl.classList.remove('hidden');
       errorMessageEl.textContent = error.message || 'Failed to load user data';
     }
+  }
+
+  function initializeDeleteUserModal() {
+    const modal = document.getElementById('delete-user-modal');
+    const confirmBtn = document.getElementById('delete-user-modal-confirm-btn');
+    const cancelBtn = document.getElementById('delete-user-modal-cancel-btn');
+    const backdrop = document.getElementById('delete-user-modal-backdrop');
+    const deleteForm = document.getElementById('delete-user-form') as HTMLFormElement;
+    const userIdInput = document.getElementById('user-id-to-delete') as HTMLInputElement;
+    const usersTableBody = document.getElementById('users-table-body');
+
+    if (!modal || !confirmBtn || !cancelBtn || !deleteForm || !userIdInput || !usersTableBody) {
+      console.error('Delete modal elements not found. Aborting initialization.');
+      return;
+    }
+
+    let userIdToDelete: string | null = null;
+
+    const showModal = (show: boolean) => {
+      if (show) {
+        modal?.classList.remove('hidden');
+      } else {
+        modal?.classList.add('hidden');
+      }
+    };
+
+    // Use event delegation for delete buttons
+    usersTableBody.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement;
+      const deleteButton = target.closest('.delete-user-btn');
+      
+      if (deleteButton) {
+        // Handle delete button click
+        event.preventDefault();
+        userIdToDelete = deleteButton.getAttribute('data-user-id');
+        if (userIdToDelete) {
+          showModal(true);
+        }
+      } else {
+        // Handle row click for navigation
+        const row = target.closest('tr');
+        if (row && row.dataset.userId) {
+          window.location.href = `/dashboard/user/${row.dataset.userId}`;
+        }
+      }
+    });
+
+    confirmBtn.addEventListener('click', () => {
+      if (userIdToDelete && userIdInput && deleteForm) {
+        userIdInput.value = userIdToDelete;
+        deleteForm.submit();
+      }
+      showModal(false);
+    });
+
+    cancelBtn.addEventListener('click', () => showModal(false));
+    backdrop?.addEventListener('click', () => showModal(false));
   }
 
 </script> 
