@@ -3,20 +3,20 @@ import type { Experiment } from '~/pages/dashboard.astro'; // Adjust path if das
 
 export interface Props {
   experiments: Experiment[] | null;
-  error: string | null;
+  abTestError: string | null;
   // We don't need to pass Astro.url, it's globally available in .astro files
 }
 
-const { experiments, error } = Astro.props;
+const { experiments, abTestError } = Astro.props;
 ---
 <section class="my-8">
   <h2 class="text-3xl font-semibold mb-8 text-slate-800 dark:text-white text-center">A/B Test Management</h2>
 
   {/* A/B Test Specific Error Display */}
-  {error && (
+  {abTestError && (
     <div class="mb-6 p-4 bg-orange-50 dark:bg-orange-800/30 border border-orange-300 dark:border-orange-600 text-orange-700 dark:text-orange-300 rounded-lg shadow-sm" role="alert">
       <p class="font-bold text-lg">A/B Test Error:</p>
-      <p>{error}</p>
+      <p>{abTestError}</p>
     </div>
   )}
 
@@ -343,7 +343,7 @@ const { experiments, error } = Astro.props;
       ))}
     </div>
   ) : (
-    (!error && experiments && experiments.length === 0) && ( 
+    (!abTestError && experiments && experiments.length === 0) && ( 
         <div class="text-center py-8 px-4 bg-white dark:bg-slate-800 rounded-lg shadow-md">
         <svg class="mx-auto h-10 w-10 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
@@ -587,8 +587,8 @@ const { experiments, error } = Astro.props;
           value = analytics.totalConversions?.toLocaleString() || '0';
           break;
         case 'overall-rate':
-          value = analytics.overallRate ? `${analytics.overallRate.toFixed(1)}%` : '0%';
-          className = analytics.overallRate > 5 ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-slate-200';
+          value = analytics.overallRate ? `${(analytics.overallRate ?? 0).toFixed(1)}%` : '0%';
+          className = (analytics.overallRate ?? 0) > 5 ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-slate-200';
           break;
         case 'avg-time-on-page':
           value = analytics.avgTimeOnPage ? `${Math.round(analytics.avgTimeOnPage)}s` : 'N/A';
@@ -615,8 +615,8 @@ const { experiments, error } = Astro.props;
           value = analytics.avgScroll ? `${analytics.avgScroll.toFixed(1)}%` : 'N/A';
           break;
         case 'bounce-rate':
-          value = analytics.bounceRate ? `${analytics.bounceRate.toFixed(1)}%` : 'N/A';
-          className = analytics.bounceRate > 70 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400';
+          value = `${(analytics.bounceRate ?? 0).toFixed(1)}%`;
+          className = (analytics.bounceRate ?? 0) > 70 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400';
           break;
         case 'return-visitors':
           value = analytics.returnVisitors?.toLocaleString() || '0';
