@@ -8,18 +8,13 @@
 import { 
   findOrCreateUserForVerification,
   generateAndStoreVerificationToken,
-  logHeroImpression, // Assuming we use this, or a new logQuizImpression if more specific metadata needed
-  updateRecord, // ADDED for updating kit_subscriber_id
-  getRecordById, // Import if needed for Rule 5, or ensure it's part of the dynamic import resolution
+  updateRecord,
   callHandleQuizSubmissionRpc // IMPORTED for actual RPC call
 } from '~/lib/database-operations';
 import type { 
   FindOrCreateUserResult, 
-  GenerateTokenResult, 
-  ImpressionData, // For logHeroImpression
-  UserProfile,
+  GenerateTokenResult,
   HandleQuizSubmissionParams // IMPORTED for type safety
-  // SingleResult // REMOVED UNUSED IMPORT
 } from '~/lib/database-operations';
 
 import { 
@@ -151,7 +146,7 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
     console.log(`[API Quiz Submit ${requestTimestamp}] User profile data for ${email}: ID=${userProfileForSubmittedEmail.id}, NewUser=${isNewUserForSubmittedEmail}, Verified=${isAlreadyVerifiedForSubmittedEmail}`);
 
     // --- Impression & Token Logic --- 
-    let impressionIdForTokenGeneration: string | null = clientSideImpressionId; // Default to client-side one if present
+    const impressionIdForTokenGeneration: string | null = clientSideImpressionId; // Default to client-side one if present
     let actionNeededForVerification = !isAlreadyVerifiedForSubmittedEmail; // If already verified, less action needed
 
     // Rule 4: If this email is already verified, no new token/verification needed.
@@ -164,53 +159,13 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
       // We will still proceed to save quiz results via RPC and update ConvertKit tags if necessary.
     }
 
-    // Rule 5: Returning user (known browserIdentifier) submitting a NEW email address.
-    // This requires a NEW server-side impression linked to the NEW email's user profile.
-    if (actionNeededForVerification && browserIdentifier && browserIdentifier !== userProfileForSubmittedEmail.id) {
-      // Fetch the user profile associated with the browserIdentifier (their *previous* identity)
-      // This dynamic import is a workaround if getRecordById is not directly available or causes circular deps
-      // Ideally, getRecordById would be imported directly if database-operations.ts is structured for it.
-      // const { getRecordById } = await import('~/lib/database-operations');  // REMOVED DYNAMIC IMPORT
-      const { data: profileForBrowserId, error: fetchError } = await getRecordById('user_profiles', browserIdentifier);
-
-      if (fetchError) {
-        console.warn(`[API Quiz Submit ${requestTimestamp}] Error fetching profile for browserIdentifier ${browserIdentifier}:`, fetchError.message);
-      }
-      
-      if (profileForBrowserId && (profileForBrowserId as UserProfile).email !== email) {
-        console.log(`[API Quiz Submit ${requestTimestamp}] Rule 5: Detected returning user (browserId: ${browserIdentifier}, their old email: ${(profileForBrowserId as UserProfile).email}) submitting a new email: ${email}.`);
-        
-        if (!actualExperimentUUID || !actualVariantUUID) {
-            console.warn(`[API Quiz Submit ${requestTimestamp}] Cannot log server-side impression for Rule 5 due to missing experiment/variant UUIDs.`);
-        } else {
-            const impressionDetailsForRule5: ImpressionData = {
-                experiment_id: actualExperimentUUID,
-                variant_id: actualVariantUUID,
-                user_identifier: userProfileForSubmittedEmail.id, // CRITICAL: Link to the NEW email's user profile ID
-                page_url: pageUrlAtSubmission || undefined,
-                session_identifier: sessionIdentifier || undefined,
-                device_type: deviceType !== 'unknown' ? deviceType : undefined,
-                metadata: {
-                    source: 'quiz_submit_new_email_for_known_user',
-                    original_browser_identifier: browserIdentifier,
-                    client_side_impression_id_attempt: clientSideImpressionId, // Log if client tried to send one
-                    quiz_name: parsedClientVariantData?.quizName || 'general'
-                }
-            };
-            console.log(`[API Quiz Submit ${requestTimestamp}] Logging server-side impression for Rule 5:`, impressionDetailsForRule5);
-            const {data: newImpression, error: impError } = await logHeroImpression(impressionDetailsForRule5);
-            if (impError || !newImpression?.id) {
-                console.warn(`[API Quiz Submit ${requestTimestamp}] Failed to log server-side impression for Rule 5:`, impError?.message || 'No ID returned');
-            } else {
-                console.log(`[API Quiz Submit ${requestTimestamp}] Server-side impression logged for Rule 5. New Impression ID: ${newImpression.id}`);
-                impressionIdForTokenGeneration = newImpression.id; // This new impression ID takes precedence
-            }
-        }
-      }
-    }
+    // Rule 5 is now deprecated. The client-side impression is the single source of truth.
+    // The logic to handle a returning user with a new email is handled by findOrCreateUser,
+    // and the client-side impression_id is what links the action back to the A/B test correctly.
+    // Removing the block that attempted to create a second, server-side impression.
 
     if (actionNeededForVerification && !impressionIdForTokenGeneration) {
-        console.warn(`[API Quiz Submit ${requestTimestamp}] No impression ID available for token generation (client-side was null/not provided, and server-side not logged for Rule 5). A/B conversion attribution might be incomplete for user ${userProfileForSubmittedEmail.id}.`);
+        console.warn(`[API Quiz Submit ${requestTimestamp}] No impression ID available for token generation (client-side was null/not provided). A/B conversion attribution might be incomplete for user ${userProfileForSubmittedEmail.id}.`);
     }
 
     console.log(`[API Quiz Submit ${requestTimestamp}] Impression ID for token generation: ${impressionIdForTokenGeneration}, Action for verification: ${actionNeededForVerification}`);

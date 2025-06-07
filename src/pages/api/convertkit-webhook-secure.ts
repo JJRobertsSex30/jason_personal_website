@@ -59,6 +59,7 @@ export const POST: APIRoute = async ({ request }) => {
     // Extract subscriber information
     const eventType = payload.type;
     const subscriberData = payload.subscriber;
+    const subscriberState = subscriberData?.state || null;
 
     if (!subscriberData || !subscriberData.email_address) {
       console.error(`[ConvertKit Webhook Secure ${requestTimestamp}] Missing subscriber email in payload`);
@@ -72,108 +73,75 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     const email = subscriberData.email_address.toLowerCase().trim();
-    console.log(`[ConvertKit Webhook Secure ${requestTimestamp}] Processing event: ${eventType} for email: ${email}`);
+    console.log(`[ConvertKit Webhook Secure ${requestTimestamp}] Processing event: ${eventType} for email: ${email} with state: ${subscriberState}`);
 
-    // Handle subscription confirmation events
-    if (eventType === 'subscriber.subscriber_activate' || 
-        eventType === 'subscriber.form_subscribe' ||
-        eventType === 'subscriber.course_subscribe' ||
-        eventType === 'subscriber.tag_add') {
+    // A mapping of webhook events to our internal kit_state
+    const eventToStateMap = {
+        'subscriber.subscriber_activate': 'active',
+        'subscriber.form_subscribe': 'active', // Assuming form subscribe implies active confirmation
+        'subscriber.course_subscribe': 'active',
+        'subscriber.tag_add': null, // Tag additions don't change the core state
+        'subscriber.subscriber_unsubscribe': 'cancelled',
+        'subscriber.subscriber_bounce': 'bounced',
+        'subscriber.subscriber_complain': 'complained',
+    };
+
+    const newState = eventToStateMap[eventType];
+
+    // If the event maps to a state update, process it.
+    if (newState) {
+      console.log(`[ConvertKit Webhook Secure ${requestTimestamp}] Updating kit_state to '${newState}' for: ${email}`);
       
-      console.log(`[ConvertKit Webhook Secure ${requestTimestamp}] Processing email verification for: ${email}`);
+      const { data: profileUpdateResult, error: profileUpdateError } = await supabase
+        .from('user_profiles')
+        .update({
+          kit_state: newState,
+          is_email_verified: newState === 'active', // Keep this boolean in sync for now
+          email_verified_at: newState === 'active' ? new Date().toISOString() : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('email', email)
+        .select('id');
 
-      // Use the database function we created for verification
-      const { data: functionResult, error: functionError } = await supabase
-        .rpc('verify_quiz_email', { 
-          email_to_verify: email,
-          quiz_type_filter: null  // Verify across all quiz types
-        });
-
-      if (functionError) {
-        console.error(`[ConvertKit Webhook Secure ${requestTimestamp}] Error calling verify_quiz_email function:`, functionError);
-        return new Response(JSON.stringify({ 
-          success: false, 
-          message: 'Database verification function failed' 
-        }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        });
+      if (profileUpdateError) {
+        console.error(`[ConvertKit Webhook Secure ${requestTimestamp}] Error updating user_profiles table for state '${newState}':`, profileUpdateError);
+        // We will still return 200 to CK, but log the error.
+      } else if (profileUpdateResult && profileUpdateResult.length > 0) {
+        console.log(`[ConvertKit Webhook Secure ${requestTimestamp}] Successfully updated kit_state for user: ${email}. User ID: ${profileUpdateResult[0].id}`);
+      } else {
+        console.warn(`[ConvertKit Webhook Secure ${requestTimestamp}] No user_profiles record found for: ${email} during state update.`);
       }
 
-      const recordsUpdated = functionResult || 0;
-      console.log(`[ConvertKit Webhook Secure ${requestTimestamp}] Successfully verified ${recordsUpdated} quiz records for ${email}`);
-
-      // Enhanced verification logging with analytics
-      try {
-        const verificationLogData = {
-          email: email,
-          verification_source: 'convertkit_webhook_secure',
-          event_type: eventType,
-          verified_at: new Date().toISOString(),
-          records_updated: recordsUpdated,
-          subscriber_data: {
-            id: subscriberData.id || null,
-            state: subscriberData.state || null,
-            created_at: subscriberData.created_at || null,
-            fields: subscriberData.fields || null
-          },
-          webhook_metadata: {
-            signature_verified: !!signature,
-            user_agent: request.headers.get('user-agent'),
-            origin: request.headers.get('origin'),
-            timestamp: requestTimestamp
-          }
-        };
-
-        console.log(`[ConvertKit Webhook Secure ${requestTimestamp}] Enhanced verification logged:`, verificationLogData);
-        
-        // Store verification event for analytics (optional)
-        // Could insert into a webhook_events table for tracking
-
-      } catch (logError) {
-        console.warn(`[ConvertKit Webhook Secure ${requestTimestamp}] Failed to log verification event:`, logError);
-      }
-
-      return new Response(JSON.stringify({ 
-        success: true, 
-        message: `Email verification processed for ${email}`,
-        records_updated: recordsUpdated,
-        verification_timestamp: requestTimestamp
-      }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-    } else if (eventType === 'subscriber.unsubscribe') {
-      // Handle unsubscribe events - optionally mark as unverified
-      console.log(`[ConvertKit Webhook Secure ${requestTimestamp}] Processing unsubscribe for: ${email}`);
-      
-      // Optionally mark as unverified when user unsubscribes
-      const { data: unsubscribeResult, error: unsubscribeError } = await supabase
+      // Also update the legacy quiz_results table for consistency
+      const { error: quizResultsError } = await supabase
         .from('quiz_results')
         .update({ 
-          is_email_verified: false,
-          verification_timestamp: null 
+          is_email_verified: newState === 'active',
+          verification_timestamp: newState === 'active' ? new Date().toISOString() : null,
+          // You might want a state column here too in the future
         })
         .eq('email', email);
-
-      if (unsubscribeError) {
-        console.error(`[ConvertKit Webhook Secure ${requestTimestamp}] Error processing unsubscribe:`, unsubscribeError);
-      } else {
-        console.log(`[ConvertKit Webhook Secure ${requestTimestamp}] Processed unsubscribe for ${email}`);
+        
+      if (quizResultsError) {
+          console.error(`[ConvertKit Webhook Secure ${requestTimestamp}] Error updating quiz_results for state '${newState}':`, quizResultsError);
       }
-
+      
       return new Response(JSON.stringify({ 
         success: true, 
-        message: `Unsubscribe processed for ${email}` 
+        message: `State update to '${newState}' processed for ${email}` 
       }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
       });
 
+    } else if (eventType === 'subscriber.tag_add') {
+      // Handle tag additions separately if needed in the future, but for now, no state change.
+      console.log(`[ConvertKit Webhook Secure ${requestTimestamp}] Ignoring state update for event type: ${eventType} for ${email}`);
+      return new Response(JSON.stringify({ success: true, message: `Event type ${eventType} ignored for state change` }), { status: 200 });
+    
     } else {
       // Log and ignore other event types
-      console.log(`[ConvertKit Webhook Secure ${requestTimestamp}] Ignoring event type: ${eventType} for ${email}`);
+      console.log(`[ConvertKit Webhook Secure ${requestTimestamp}] Ignoring unhandled event type: ${eventType} for ${email}`);
       
       return new Response(JSON.stringify({ 
         success: true, 
