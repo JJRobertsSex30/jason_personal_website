@@ -66,4 +66,10 @@ export interface KitSubscriber {
   state: 'active' | 'inactive' | 'cancelled' | 'complained' | 'bounced';
   created_at: string | null;
   fields: Record<string, unknown>;
+}
+
+export interface MetaData {
+    title?: string;
+    description?: string;
+    // Add other meta properties as needed
 } 

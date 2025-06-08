@@ -5,6 +5,22 @@ import type { Session } from '@supabase/supabase-js';
 import ABTestManager from '~/components/widgets/ABTestManager.astro';
 import ConfirmationModal from '~/components/widgets/ConfirmationModal.astro';
 import type { UserProfile, Experiment, Variant, VariantConfig } from '~/types';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import DbVisualizer from '~/components/widgets/DbVisualizer.tsx';
+import DbVisualizerClient from '~/components/widgets/DbVisualizerClient.tsx';
+
+// Determine the active tab on the server to prevent content flashing
+const { hash } = Astro.url;
+let activeTab = 'analytics'; // Default tab
+
+const validTabs = ['analytics', 'campaign-performance', 'ab-testing', 'users', 'user-journey', 'db'];
+if (hash) {
+  const tabFromHash = hash.substring(1).replace('-panel', '');
+  if (validTabs.includes(tabFromHash)) {
+    activeTab = tabFromHash;
+  }
+}
+console.log(`Initial active tab determined on server: ${activeTab}`);
 
 const metadata = {
   title: 'Admin Dashboard', // Updated title
@@ -335,6 +351,7 @@ if (Astro.request.method === 'GET') {
             <option selected>A/B Testing</option>
             <option>Users</option>
             <option>User Journey</option>
+            <option>DB</option>
           </select>
         </div>
         <div class="hidden sm:block">
@@ -369,6 +386,13 @@ if (Astro.request.method === 'GET') {
                  aria-current="false">
                 <svg class="-ml-0.5 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clip-rule="evenodd" /></svg>
                 <span>User Journey</span>
+              </a>
+              <a href="#db-panel" id="db-tab" class="tab-button group whitespace-nowrap py-3 px-3 border-b-2 font-medium text-sm flex items-center" aria-current="false">
+                  <svg class="-ml-0.5 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path d="M3 4.25A2.25 2.25 0 015.25 2h9.5A2.25 2.25 0 0117 4.25v2.5A2.25 2.25 0 0114.75 9h-9.5A2.25 2.25 0 013 6.75v-2.5z" />
+                      <path d="M3 10.75A2.25 2.25 0 015.25 8.5h9.5A2.25 2.25 0 0117 10.75v2.5A2.25 2.25 0 0114.75 16h-9.5A2.25 2.25 0 013 13.25v-2.5z" />
+                  </svg>
+                  <span>DB</span>
               </a>
             </nav>
           </div>
@@ -745,7 +769,7 @@ if (Astro.request.method === 'GET') {
           <ABTestManager experiments={experiments} abTestError={abTestError} />
         </div>
 
-        <div id="users-panel" role="tabpanel" class="tab-panel pt-6 hidden">
+        <div id="users-panel" role="tabpanel" aria-labelledby="users-tab" class="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md mt-4 hidden">
           <div class="mb-6">
             <h2 class="text-2xl font-bold text-slate-800 dark:text-white mb-2">User Management</h2>
             <p class="text-slate-600 dark:text-slate-400">View user data from the database and ConvertKit.</p>
@@ -860,6 +884,8 @@ if (Astro.request.method === 'GET') {
             </button>
           </div>
         </div>
+
+
 
         <div id="user-journey-panel" role="tabpanel" class="tab-panel pt-6 hidden">
           <div class="mb-6">
@@ -1102,6 +1128,20 @@ if (Astro.request.method === 'GET') {
             </button>
           </div>
         </div>
+
+        <!-- DB Visualizer Panel -->
+        <div id="db-panel" class="tab-panel pt-6 hidden" role="tabpanel">
+            <h3 class="text-2xl font-bold text-gray-800 dark:text-white mb-4">Database Schema Visualizer</h3>
+            <div id="db-visualizer-controls" class="flex items-center gap-4 mb-4">
+            <button id="scan-db-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-5 rounded-md shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition duration-150 ease-in-out">
+                Scan Database
+            </button>
+            <p id="db-scan-status" class="text-gray-600 dark:text-gray-400"></p>
+            </div>
+            <div id="db-visualizer-container" class="w-full h-[70vh] border rounded-lg bg-gray-50 dark:bg-gray-900 relative">
+                <DbVisualizerClient client:load />
+            </div>
+        </div>
       </>
     )}
     
@@ -1168,7 +1208,7 @@ if (Astro.request.method === 'GET') {
         initialTabId = '#ab-testing-panel';
     }
     // Priority 3: Use URL hash if it's a valid tab
-    else if (initialTabId && (initialTabId === '#analytics-panel' || initialTabId === '#campaign-performance-panel' || initialTabId === '#ab-testing-panel' || initialTabId === '#users-panel' || initialTabId === '#user-journey-panel')) {
+    else if (initialTabId && (initialTabId === '#analytics-panel' || initialTabId === '#campaign-performance-panel' || initialTabId === '#ab-testing-panel' || initialTabId === '#users-panel' || initialTabId === '#user-journey-panel' || initialTabId === '#db-panel')) {
         console.log(`Using URL hash tab: ${initialTabId}`);
         // Keep the initialTabId as is
     }
@@ -1509,6 +1549,9 @@ if (Astro.request.method === 'GET') {
     } else if (currentHash === '#user-journey-panel') {
       console.log('Loading user journey...');
       loadUserJourney();
+    } else if (currentHash === '#db-panel') {
+      console.log('Loading DB visualizer...');
+      initializeDbTab();
     } else {
       // Fallback: if no hash or unknown hash, and we default to analytics, load it
       console.log('No specific hash found, checking if analytics tab is active...');
@@ -1577,6 +1620,14 @@ if (Astro.request.method === 'GET') {
             setTimeout(loadUsers, 100);
         });
     }
+
+    // Load DB visualizer when DB tab is clicked
+    const dbTab = document.getElementById('db-tab');
+    if (dbTab) {
+      dbTab.addEventListener('click', () => {
+        setTimeout(initializeDbTab, 100); // Small delay to ensure tab switch completes
+      });
+    }
   });
 
   // Handle popstate for browser back/forward for tabs
@@ -1589,7 +1640,7 @@ if (Astro.request.method === 'GET') {
     }
     
     let hash = window.location.hash;
-    if (!hash || (hash !== '#analytics-panel' && hash !== '#campaign-performance-panel' && hash !== '#ab-testing-panel' && hash !== '#users-panel' && hash !== '#user-journey-panel')) {
+    if (!hash || (hash !== '#analytics-panel' && hash !== '#campaign-performance-panel' && hash !== '#ab-testing-panel' && hash !== '#users-panel' && hash !== '#user-journey-panel' && hash !== '#db-panel')) {
       hash = '#analytics-panel'; // Default to Analytics tab
     }
     // initializeTabs() already contains setActiveTab which reads the hash.
@@ -1614,6 +1665,11 @@ if (Astro.request.method === 'GET') {
     // Load users if users tab becomes active
     if (hash === '#users-panel') {
         loadUsers();
+    }
+
+    // Load DB visualizer if DB tab becomes active
+    if (hash === '#db-panel') {
+      initializeDbTab();
     }
   });
 
@@ -2044,4 +2100,69 @@ if (Astro.request.method === 'GET') {
     backdrop?.addEventListener('click', () => showModal(false));
   }
 
+  // --- DB VISUALIZER LOGIC ---
+
+  // Attaches the click listener to the scan button.
+  function setupScanButtonListener() {
+      const scanButton = document.getElementById('scan-db-btn');
+      if (scanButton && scanButton.dataset.listenerAttached !== 'true') {
+          scanButton.addEventListener('click', async () => {
+              const scanBtn = document.getElementById('scan-db-btn') as HTMLButtonElement;
+              const scanStatus = document.getElementById('db-scan-status');
+              
+              if (!scanBtn || !scanStatus) return;
+
+              scanStatus.textContent = 'Scanning database...';
+              scanBtn.disabled = true;
+              scanBtn.classList.add('opacity-50');
+
+              try {
+                  const response = await fetch('/api/db/scan', { method: 'POST' });
+                  const result = await response.json();
+                  if (!response.ok) throw new Error(result.message || 'Scan failed');
+                  
+                  scanStatus.textContent = 'Scan successful! Loading schema...';
+                  await new Promise(resolve => setTimeout(resolve, 500)); 
+                  await initializeDbTab();
+
+              } catch (error) {
+                  scanStatus.textContent = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+              } finally {
+                  scanBtn.disabled = false;
+                  scanBtn.classList.remove('opacity-50');
+              }
+          });
+          scanButton.dataset.listenerAttached = 'true';
+      }
+  }
+
+  // Initializes the DB Visualizer tab.
+  async function initializeDbTab() {
+      const scanBtn = document.getElementById('scan-db-btn') as HTMLButtonElement;
+      const scanStatus = document.getElementById('db-scan-status');
+      
+      if (!scanBtn || !scanStatus) return;
+
+      setupScanButtonListener();
+
+      scanStatus.textContent = 'Checking for existing schema...';
+      scanBtn.style.display = 'none';
+
+      try {
+          const res = await fetch('/db-schema.json?t=' + new Date().getTime());
+          if (!res.ok) throw new Error('Schema file not found.');
+          
+          const schema = await res.json();
+          
+          // Dispatch an event with the schema data for the client component to receive
+          document.dispatchEvent(new CustomEvent('db-schema-loaded', { detail: schema }));
+          
+          scanStatus.textContent = 'Schema loaded successfully.';
+          scanBtn.style.display = 'block'; // Show scan button to allow re-scanning
+          
+      } catch (error) {
+          scanStatus.textContent = `Ready to scan. ${error instanceof Error ? error.message : ''}`;
+          scanBtn.style.display = 'block';
+      }
+  }
 </script> 

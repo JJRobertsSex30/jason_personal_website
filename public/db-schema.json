@@ -1,0 +1,1559 @@
+{
+  "tables": [
+    {
+      "name": "ab_test_analytics",
+      "columns": [
+        {
+          "name": "experiment_id",
+          "type": "uuid",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "experiment_name",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "variant_id",
+          "type": "uuid",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "variant_name",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "eligible_participants",
+          "type": "bigint",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "eligible_conversions",
+          "type": "bigint",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "conversion_rate_percent",
+          "type": "numeric",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "avg_time_to_conversion_hours",
+          "type": "numeric",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "total_attributed_value",
+          "type": "numeric",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "conversion_attribution",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": "gen_random_uuid()",
+          "is_primary_key": true
+        },
+        {
+          "name": "conversion_id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "user_identifier",
+          "type": "text",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "experiment_id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "variant_id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "attribution_method",
+          "type": "text",
+          "is_nullable": false,
+          "default_value": "'first_exposure'::text",
+          "is_primary_key": false
+        },
+        {
+          "name": "attribution_confidence",
+          "type": "numeric",
+          "is_nullable": true,
+          "default_value": "1.00",
+          "is_primary_key": false
+        },
+        {
+          "name": "time_to_conversion_hours",
+          "type": "integer",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "conversion_value_attributed",
+          "type": "numeric",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "is_nullable": true,
+          "default_value": "timezone('utc'::text, now())",
+          "is_primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "conversions",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": "extensions.uuid_generate_v4()",
+          "is_primary_key": true
+        },
+        {
+          "name": "variant_id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "experiment_id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "user_identifier",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "session_identifier",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "conversion_type",
+          "type": "text",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "details",
+          "type": "jsonb",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": "timezone('utc'::text, now())",
+          "is_primary_key": false
+        },
+        {
+          "name": "country_code",
+          "type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "device_type",
+          "type": "USER-DEFINED",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "referrer_source",
+          "type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "utm_source",
+          "type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "utm_medium",
+          "type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "utm_campaign",
+          "type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "conversion_value",
+          "type": "numeric",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "time_to_convert",
+          "type": "integer",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "metadata",
+          "type": "jsonb",
+          "is_nullable": true,
+          "default_value": "'{}'::jsonb",
+          "is_primary_key": false
+        },
+        {
+          "name": "is_first_conversion_for_experiment",
+          "type": "boolean",
+          "is_nullable": true,
+          "default_value": "true",
+          "is_primary_key": false
+        },
+        {
+          "name": "conversion_attribution_source",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": "'direct'::text",
+          "is_primary_key": false
+        },
+        {
+          "name": "conversion_window_days",
+          "type": "integer",
+          "is_nullable": true,
+          "default_value": "30",
+          "is_primary_key": false
+        },
+        {
+          "name": "original_exposure_date",
+          "type": "timestamp with time zone",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "conversion_eligibility_verified",
+          "type": "boolean",
+          "is_nullable": true,
+          "default_value": "false",
+          "is_primary_key": false
+        },
+        {
+          "name": "conversion_context",
+          "type": "jsonb",
+          "is_nullable": true,
+          "default_value": "'{}'::jsonb",
+          "is_primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "email_verification_tokens",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": "extensions.uuid_generate_v4()",
+          "is_primary_key": true
+        },
+        {
+          "name": "user_profile_id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "token",
+          "type": "text",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "is_used",
+          "type": "boolean",
+          "is_nullable": false,
+          "default_value": "false",
+          "is_primary_key": false
+        },
+        {
+          "name": "used_at",
+          "type": "timestamp with time zone",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": "now()",
+          "is_primary_key": false
+        },
+        {
+          "name": "experiment_id",
+          "type": "uuid",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "variant_id",
+          "type": "uuid",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "impression_id",
+          "type": "uuid",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "experiments",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": "extensions.uuid_generate_v4()",
+          "is_primary_key": true
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": "timezone('utc'::text, now())",
+          "is_primary_key": false
+        },
+        {
+          "name": "is_active",
+          "type": "boolean",
+          "is_nullable": true,
+          "default_value": "true",
+          "is_primary_key": false
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "is_nullable": true,
+          "default_value": "now()",
+          "is_primary_key": false
+        },
+        {
+          "name": "target_sample_size",
+          "type": "integer",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "confidence_level",
+          "type": "numeric",
+          "is_nullable": true,
+          "default_value": "0.95",
+          "is_primary_key": false
+        },
+        {
+          "name": "minimum_detectable_effect",
+          "type": "numeric",
+          "is_nullable": true,
+          "default_value": "0.05",
+          "is_primary_key": false
+        },
+        {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "ended_at",
+          "type": "timestamp with time zone",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "status",
+          "type": "USER-DEFINED",
+          "is_nullable": true,
+          "default_value": "'draft'::experiment_status_enum",
+          "is_primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "gem_transactions",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": "extensions.uuid_generate_v4()",
+          "is_primary_key": true
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "source_engagement_id",
+          "type": "uuid",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "transaction_type",
+          "type": "text",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "amount",
+          "type": "integer",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": "now()",
+          "is_primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "impressions",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": "extensions.uuid_generate_v4()",
+          "is_primary_key": true
+        },
+        {
+          "name": "variant_id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "user_identifier",
+          "type": "text",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "session_identifier",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "impression_at",
+          "type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": "now()",
+          "is_primary_key": false
+        },
+        {
+          "name": "experiment_id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "page_url",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "user_agent",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "country_code",
+          "type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "region",
+          "type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "city",
+          "type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "device_type",
+          "type": "USER-DEFINED",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "screen_resolution",
+          "type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "viewport_size",
+          "type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "connection_type",
+          "type": "USER-DEFINED",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "language_code",
+          "type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "time_zone",
+          "type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "utm_source",
+          "type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "utm_medium",
+          "type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "utm_campaign",
+          "type": "character varying",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "time_on_page",
+          "type": "integer",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "scroll_depth_percent",
+          "type": "integer",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "page_load_time",
+          "type": "integer",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "bounce",
+          "type": "boolean",
+          "is_nullable": true,
+          "default_value": "false",
+          "is_primary_key": false
+        },
+        {
+          "name": "is_first_exposure",
+          "type": "boolean",
+          "is_nullable": true,
+          "default_value": "false",
+          "is_primary_key": false
+        },
+        {
+          "name": "user_was_eligible",
+          "type": "boolean",
+          "is_nullable": true,
+          "default_value": "true",
+          "is_primary_key": false
+        },
+        {
+          "name": "metadata",
+          "type": "jsonb",
+          "is_nullable": true,
+          "default_value": "'{}'::jsonb",
+          "is_primary_key": false
+        },
+        {
+          "name": "user_eligibility_status",
+          "type": "jsonb",
+          "is_nullable": true,
+          "default_value": "'{}'::jsonb",
+          "is_primary_key": false
+        },
+        {
+          "name": "user_context",
+          "type": "jsonb",
+          "is_nullable": true,
+          "default_value": "'{}'::jsonb",
+          "is_primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "quiz_analytics_summary",
+      "columns": [
+        {
+          "name": "quiz_type",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "total_submissions",
+          "type": "bigint",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "unique_users",
+          "type": "bigint",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "verified_submissions",
+          "type": "bigint",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "verification_rate_percent",
+          "type": "numeric",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "avg_numeric_score",
+          "type": "numeric",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "most_common_result",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "countries_reached",
+          "type": "bigint",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "attributed_submissions",
+          "type": "bigint",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "submission_date",
+          "type": "timestamp without time zone",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "quiz_results",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": "extensions.uuid_generate_v4()",
+          "is_primary_key": true
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "attempt_timestamp",
+          "type": "timestamp without time zone",
+          "is_nullable": true,
+          "default_value": "now()",
+          "is_primary_key": false
+        },
+        {
+          "name": "quiz_type",
+          "type": "text",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "quiz_version",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": "'1.0'::text",
+          "is_primary_key": false
+        },
+        {
+          "name": "scores",
+          "type": "jsonb",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "result_type",
+          "type": "text",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "result_details",
+          "type": "jsonb",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "questions_and_answers",
+          "type": "jsonb",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "quiz_metadata",
+          "type": "jsonb",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "first_name",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "user_agent",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "ip_address",
+          "type": "inet",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "referrer",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "utm_source",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "utm_medium",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "utm_campaign",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "country_code",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "device_type",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "is_email_verified",
+          "type": "boolean",
+          "is_nullable": true,
+          "default_value": "false",
+          "is_primary_key": false
+        },
+        {
+          "name": "verification_timestamp",
+          "type": "timestamp without time zone",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "session_identifier",
+          "type": "uuid",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "experiment_data",
+          "type": "jsonb",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp without time zone",
+          "is_nullable": true,
+          "default_value": "now()",
+          "is_primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "referrals",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": "extensions.uuid_generate_v4()",
+          "is_primary_key": true
+        },
+        {
+          "name": "referrer_id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "new_user_id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "new_user_email",
+          "type": "text",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": "now()",
+          "is_primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "unverified_quiz_emails",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "first_name",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "quiz_type",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "result_type",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "attempt_timestamp",
+          "type": "timestamp without time zone",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "utm_source",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "utm_campaign",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "hours_since_attempt",
+          "type": "numeric",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "user_engagement_tracking",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": "gen_random_uuid()",
+          "is_primary_key": true
+        },
+        {
+          "name": "user_identifier",
+          "type": "text",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "engagement_type",
+          "type": "text",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "experiment_context",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "variant_context",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "page_url",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "metadata",
+          "type": "jsonb",
+          "is_nullable": true,
+          "default_value": "'{}'::jsonb",
+          "is_primary_key": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "is_nullable": true,
+          "default_value": "timezone('utc'::text, now())",
+          "is_primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "user_engagements",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": "extensions.uuid_generate_v4()",
+          "is_primary_key": true
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "event_type",
+          "type": "text",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "event_metadata",
+          "type": "jsonb",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": "now()",
+          "is_primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "user_experiment_participation",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": "gen_random_uuid()",
+          "is_primary_key": true
+        },
+        {
+          "name": "user_identifier",
+          "type": "text",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "experiment_id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "variant_id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "first_exposure_date",
+          "type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": "now()",
+          "is_primary_key": false
+        },
+        {
+          "name": "was_eligible_at_exposure",
+          "type": "boolean",
+          "is_nullable": false,
+          "default_value": "true",
+          "is_primary_key": false
+        },
+        {
+          "name": "eligibility_criteria",
+          "type": "jsonb",
+          "is_nullable": true,
+          "default_value": "'{}'::jsonb",
+          "is_primary_key": false
+        },
+        {
+          "name": "total_impressions",
+          "type": "integer",
+          "is_nullable": true,
+          "default_value": "1",
+          "is_primary_key": false
+        },
+        {
+          "name": "has_converted",
+          "type": "boolean",
+          "is_nullable": true,
+          "default_value": "false",
+          "is_primary_key": false
+        },
+        {
+          "name": "first_conversion_date",
+          "type": "timestamp with time zone",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "conversion_within_window",
+          "type": "boolean",
+          "is_nullable": true,
+          "default_value": "false",
+          "is_primary_key": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "is_nullable": true,
+          "default_value": "timezone('utc'::text, now())",
+          "is_primary_key": false
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "is_nullable": true,
+          "default_value": "now()",
+          "is_primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "user_profiles",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": "extensions.uuid_generate_v4()",
+          "is_primary_key": true
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "insight_gems",
+          "type": "integer",
+          "is_nullable": false,
+          "default_value": "100",
+          "is_primary_key": false
+        },
+        {
+          "name": "referral_code",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": "now()",
+          "is_primary_key": false
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": "now()",
+          "is_primary_key": false
+        },
+        {
+          "name": "first_name",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "is_email_verified",
+          "type": "boolean",
+          "is_nullable": false,
+          "default_value": "false",
+          "is_primary_key": false
+        },
+        {
+          "name": "email_verified_at",
+          "type": "timestamp with time zone",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "kit_subscriber_id",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "last_verification_email_sent_at",
+          "type": "timestamp with time zone",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "action_token",
+          "type": "uuid",
+          "is_nullable": true,
+          "default_value": "extensions.uuid_generate_v4()",
+          "is_primary_key": false
+        },
+        {
+          "name": "kit_state",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": "'unconfirmed'::text",
+          "is_primary_key": false
+        }
+      ]
+    },
+    {
+      "name": "variants",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": "extensions.uuid_generate_v4()",
+          "is_primary_key": true
+        },
+        {
+          "name": "experiment_id",
+          "type": "uuid",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "is_nullable": false,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "config_json",
+          "type": "jsonb",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "is_nullable": false,
+          "default_value": "timezone('utc'::text, now())",
+          "is_primary_key": false
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "is_nullable": true,
+          "default_value": null,
+          "is_primary_key": false
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "is_nullable": true,
+          "default_value": "now()",
+          "is_primary_key": false
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "source_table": "referrals",
+      "target_table": "user_profiles",
+      "source_column": "referrer_id",
+      "target_column": "id"
+    },
+    {
+      "source_table": "referrals",
+      "target_table": "user_profiles",
+      "source_column": "new_user_id",
+      "target_column": "id"
+    },
+    {
+      "source_table": "conversions",
+      "target_table": "experiments",
+      "source_column": "experiment_id",
+      "target_column": "id"
+    },
+    {
+      "source_table": "impressions",
+      "target_table": "experiments",
+      "source_column": "experiment_id",
+      "target_column": "id"
+    },
+    {
+      "source_table": "impressions",
+      "target_table": "experiments",
+      "source_column": "experiment_id",
+      "target_column": "id"
+    },
+    {
+      "source_table": "impressions",
+      "target_table": "variants",
+      "source_column": "variant_id",
+      "target_column": "id"
+    },
+    {
+      "source_table": "variants",
+      "target_table": "experiments",
+      "source_column": "experiment_id",
+      "target_column": "id"
+    },
+    {
+      "source_table": "impressions",
+      "target_table": "variants",
+      "source_column": "variant_id",
+      "target_column": "id"
+    },
+    {
+      "source_table": "conversions",
+      "target_table": "variants",
+      "source_column": "variant_id",
+      "target_column": "id"
+    },
+    {
+      "source_table": "user_experiment_participation",
+      "target_table": "experiments",
+      "source_column": "experiment_id",
+      "target_column": "id"
+    },
+    {
+      "source_table": "user_experiment_participation",
+      "target_table": "variants",
+      "source_column": "variant_id",
+      "target_column": "id"
+    },
+    {
+      "source_table": "conversion_attribution",
+      "target_table": "conversions",
+      "source_column": "conversion_id",
+      "target_column": "id"
+    },
+    {
+      "source_table": "conversion_attribution",
+      "target_table": "experiments",
+      "source_column": "experiment_id",
+      "target_column": "id"
+    },
+    {
+      "source_table": "conversion_attribution",
+      "target_table": "variants",
+      "source_column": "variant_id",
+      "target_column": "id"
+    },
+    {
+      "source_table": "email_verification_tokens",
+      "target_table": "user_profiles",
+      "source_column": "user_profile_id",
+      "target_column": "id"
+    },
+    {
+      "source_table": "email_verification_tokens",
+      "target_table": "experiments",
+      "source_column": "experiment_id",
+      "target_column": "id"
+    },
+    {
+      "source_table": "email_verification_tokens",
+      "target_table": "variants",
+      "source_column": "variant_id",
+      "target_column": "id"
+    },
+    {
+      "source_table": "gem_transactions",
+      "target_table": "user_profiles",
+      "source_column": "user_id",
+      "target_column": "id"
+    }
+  ]
+}

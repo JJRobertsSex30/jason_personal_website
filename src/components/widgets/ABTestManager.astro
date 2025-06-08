@@ -5,6 +5,7 @@ export interface Props {
   experiments: Experiment[] | null;
   abTestError: string | null;
   // We don't need to pass Astro.url, it's globally available in .astro files
+  // Adding a comment to try and resolve a potential tooling issue.
 }
 
 const { experiments, abTestError } = Astro.props;

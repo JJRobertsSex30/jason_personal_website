@@ -3,6 +3,7 @@ import vercel from '@astrojs/vercel/serverless';
 import tailwind from "@astrojs/tailwind";
 import astrowindIntegration from './vendor/integration/index.ts';
 import icon from "astro-icon";
+import react from "@astrojs/react";
 
 // https://astro.build/config
 export default defineConfig({
@@ -15,7 +16,8 @@ export default defineConfig({
   integrations: [
     astrowindIntegration(),
     tailwind(),
-    icon()
+    icon(),
+    react()
   ],
   site: 'https://www.jasonroberts.coach', // Replace with your actual domain
   vite: {
