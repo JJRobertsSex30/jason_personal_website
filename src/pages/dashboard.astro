@@ -1130,17 +1130,20 @@ if (Astro.request.method === 'GET') {
         </div>
 
         <!-- DB Visualizer Panel -->
-        <div id="db-panel" class="tab-panel pt-6 hidden" role="tabpanel">
-            <h3 class="text-2xl font-bold text-gray-800 dark:text-white mb-4">Database Schema Visualizer</h3>
-            <div id="db-visualizer-controls" class="flex items-center gap-4 mb-4">
-            <button id="scan-db-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-5 rounded-md shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition duration-150 ease-in-out">
-                Scan Database
+        <div id="db-panel" class="hidden tab-panel p-4 rounded-lg bg-gray-50 dark:bg-gray-800" role="tabpanel" aria-labelledby="db-tab">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white">Database Schema Visualizer</h2>
+            <button id="scan-db-btn" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 dark:bg-blue-500 dark:hover:bg-blue-600 focus:outline-none dark:focus:ring-blue-800">
+              Scan DB
             </button>
-            <p id="db-scan-status" class="text-gray-600 dark:text-gray-400"></p>
-            </div>
-            <div id="db-visualizer-container" class="w-full h-[70vh] border rounded-lg bg-gray-50 dark:bg-gray-900 relative">
-                <DbVisualizerClient client:load />
-            </div>
+          </div>
+          <div id="db-visualizer-container" class="relative border border-gray-200 dark:border-gray-700 rounded-lg" style="height: 800px;">
+            <DbVisualizerClient client:load />
+          </div>
+        </div>
+        <!-- Settings Panel -->
+        <div id="settings-panel" class="hidden tab-panel p-4" role="tabpanel" aria-labelledby="settings-tab">
+          <!-- Add your settings content here -->
         </div>
       </>
     )}
@@ -2164,5 +2167,36 @@ if (Astro.request.method === 'GET') {
           scanStatus.textContent = `Ready to scan. ${error instanceof Error ? error.message : ''}`;
           scanBtn.style.display = 'block';
       }
+  }
+
+  const scanDbBtn = document.getElementById('scan-db-btn');
+
+  if (scanDbBtn) {
+    scanDbBtn.addEventListener('click', async () => {
+      const statusEl = document.createElement('span');
+      statusEl.textContent = 'Scanning...';
+      scanDbBtn.parentElement?.appendChild(statusEl);
+      scanDbBtn.setAttribute('disabled', 'true');
+
+      try {
+        const response = await fetch('/api/db/scan', { method: 'POST' });
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.message || 'Failed to scan.');
+        }
+
+        // Notify the client component to reload the schema
+        document.dispatchEvent(new CustomEvent('db-schema-loaded'));
+        statusEl.textContent = 'Scan complete!';
+
+      } catch (error) {
+        console.error('Scan failed:', error);
+        statusEl.textContent = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      } finally {
+        scanDbBtn.removeAttribute('disabled');
+        setTimeout(() => statusEl.remove(), 3000);
+      }
+    });
   }
 </script> 

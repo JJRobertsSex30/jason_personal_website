@@ -21,8 +21,18 @@ export default defineConfig({
   ],
   site: 'https://www.jasonroberts.coach', // Replace with your actual domain
   vite: {
+    optimizeDeps: {
+      esbuildOptions: {
+        external: ['web-worker']
+      }
+    },
     ssr: {
-      external: ['@libsql/client']
+      external: ['@libsql/client', 'web-worker']
+    },
+    build: {
+      rollupOptions: {
+        external: ['web-worker']
+      }
     }
   }
 }); 

@@ -6,9 +6,9 @@ import ReactFlow, {
   applyNodeChanges,
   applyEdgeChanges,
   addEdge,
-  useReactFlow,
   Handle,
   Position,
+  ReactFlowProvider,
 } from 'reactflow';
 import type {
   Node,
@@ -16,9 +16,10 @@ import type {
   NodeChange,
   EdgeChange,
   Connection,
-  Viewport,
   NodeProps,
 } from 'reactflow';
+import ELK from 'elkjs';
+import type { ElkNode } from 'elkjs';
 import 'reactflow/dist/style.css';
 
 // --- TYPE DEFINITIONS ---
@@ -48,28 +49,52 @@ interface DbVisualizerProps {
   schema: DbSchema;
 }
 
-// --- LOCAL STORAGE ---
-const LOCAL_STORAGE_KEY = 'rf-db-visualizer-state';
-interface StoredState {
-    nodes: Node[];
-    edges: Edge[];
-    viewport: Viewport;
-}
-const saveStateToLocalStorage = (state: StoredState) => {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
+const elkOptions = {
+  'elk.algorithm': 'layered',
+  'elk.layered.spacing.nodeNodeBetweenLayers': '100',
+  'elk.spacing.nodeNode': '80',
 };
-const loadStateFromLocalStorage = (): StoredState | null => {
-    const stateJson = localStorage.getItem(LOCAL_STORAGE_KEY);
-    return stateJson ? JSON.parse(stateJson) : null;
+
+const getLayoutedElements = async (nodes: Node[], edges: Edge[]): Promise<{ nodes: Node[], edges: Edge[] }> => {
+  const elk = new ELK();
+  const graph: ElkNode = {
+    id: 'root',
+    layoutOptions: elkOptions,
+    children: nodes.map(node => ({
+      ...node,
+      width: 250,
+      height: 150,
+    })),
+    edges: edges.map(edge => ({
+      id: edge.id,
+      sources: [edge.source],
+      targets: [edge.target]
+    })),
+  };
+
+  const layoutedGraph = await elk.layout(graph);
+  
+  const layoutedNodes = layoutedGraph.children!.map((node: ElkNode) => {
+    const originalNode = nodes.find(n => n.id === node.id);
+    return {
+      ...originalNode!,
+      position: { x: node.x!, y: node.y! },
+    };
+  });
+
+  return {
+    nodes: layoutedNodes,
+    edges: edges,
+  };
 };
 
 // --- CUSTOM TABLE NODE ---
 const TableNode: FC<NodeProps<{ label: string; columns: DbColumn[] }>> = memo(({ data }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
 
   return (
     <div className="bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-lg shadow-lg" style={{minWidth: 250}}>
-      <Handle type="target" position={Position.Top} className="!bg-blue-500" />
+      <Handle type="target" position={Position.Left} className="!bg-blue-500" />
       <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-t-md">
         <strong className="text-lg text-gray-800 dark:text-gray-100">{data.label}</strong>
         <button onClick={() => setIsCollapsed(!isCollapsed)} className="float-right text-xs bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 py-1 px-2 rounded">
@@ -88,7 +113,7 @@ const TableNode: FC<NodeProps<{ label: string; columns: DbColumn[] }>> = memo(({
           ))}
         </div>
       )}
-      <Handle type="source" position={Position.Bottom} className="!bg-blue-500" />
+      <Handle type="source" position={Position.Right} className="!bg-blue-500" />
     </div>
   );
 });
@@ -98,23 +123,16 @@ const nodeTypes = {
 };
 
 // --- MAIN FLOW COMPONENT ---
-const DbVisualizer: React.FC<DbVisualizerProps> = ({ schema }) => {
+const Flow: React.FC<DbVisualizerProps> = ({ schema }) => {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
-  const { setViewport, getViewport } = useReactFlow();
 
   useEffect(() => {
-    const storedState = loadStateFromLocalStorage();
-
-    if (storedState && storedState.nodes.length > 0) {
-        setNodes(storedState.nodes);
-        setEdges(storedState.edges);
-        setViewport(storedState.viewport);
-    } else if (schema?.tables) {
-        const initialNodes: Node[] = schema.tables.map((table, i) => ({
+    if (schema?.tables) {
+        const initialNodes: Node[] = schema.tables.map((table) => ({
             id: table.name,
             type: 'table',
-            position: { x: (i % 5) * 350, y: Math.floor(i / 5) * 250 },
+            position: { x: 0, y: 0 },
             data: { label: table.name, columns: table.columns },
         }));
 
@@ -124,13 +142,14 @@ const DbVisualizer: React.FC<DbVisualizerProps> = ({ schema }) => {
             target: rel.target_table,
             type: 'smoothstep',
             animated: true,
-            label: `${rel.source_column} → ${rel.target_column}`,
         }));
         
-        setNodes(initialNodes);
-        setEdges(initialEdges);
+        getLayoutedElements(initialNodes, initialEdges).then(({ nodes: layoutedNodes, edges: layoutedEdges }) => {
+            setNodes(layoutedNodes);
+            setEdges(layoutedEdges);
+        });
     }
-  }, [schema, setViewport]);
+  }, [schema]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
       setNodes((nds) => applyNodeChanges(changes, nds));
@@ -144,12 +163,9 @@ const DbVisualizer: React.FC<DbVisualizerProps> = ({ schema }) => {
     setEdges((eds) => addEdge(connection, eds));
   }, [setEdges]);
 
-  const onMoveEnd = useCallback(() => {
-    const viewport = getViewport();
-    if (nodes.length > 0) {
-        saveStateToLocalStorage({ nodes, edges, viewport });
-    }
-  }, [nodes, edges, getViewport]);
+  if (!schema) {
+      return <div>Loading schema...</div>;
+  }
 
   return (
     <div style={{ width: '100%', height: '100%' }}>
@@ -159,9 +175,9 @@ const DbVisualizer: React.FC<DbVisualizerProps> = ({ schema }) => {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
-        onMoveEnd={onMoveEnd}
         nodeTypes={nodeTypes}
         fitView
+        minZoom={0.1}
       >
         <Controls />
         <Background />
@@ -169,5 +185,13 @@ const DbVisualizer: React.FC<DbVisualizerProps> = ({ schema }) => {
     </div>
   );
 };
+
+// --- WRAPPER COMPONENT ---
+// We wrap the Flow in a provider so we can use React Flow hooks if needed later.
+const DbVisualizer: React.FC<DbVisualizerProps> = ({ schema }) => (
+    <ReactFlowProvider>
+        <Flow schema={schema} />
+    </ReactFlowProvider>
+);
 
 export default DbVisualizer; 
