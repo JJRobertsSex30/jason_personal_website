@@ -62,21 +62,23 @@ export const GET: APIRoute = async ({ request: _request }) => {
   try {
     console.log('Campaign Performance API: Starting comprehensive analysis...');
 
-    // Get all impressions with full metadata
-    const { data: allImpressions } = await supabase
-      .from('impressions')
-      .select('utm_source, utm_medium, utm_campaign, time_on_page, scroll_depth_percent, user_identifier, impression_at, user_agent, device_type, country_code')
-      .order('impression_at', { ascending: true });
+    // --- Parallel Data Fetching ---
+    const [impressionsResult, conversionsResult] = await Promise.all([
+      supabase
+        .from('impressions')
+        .select('utm_source, utm_medium, utm_campaign, time_on_page, scroll_depth_percent, user_identifier, impression_at, user_agent, device_type, country_code')
+        .order('impression_at', { ascending: true }),
+      supabase
+        .from('conversions')
+        .select('utm_source, utm_medium, utm_campaign, user_identifier, created_at, conversion_value')
+        .order('created_at', { ascending: true })
+    ]);
 
-    // Get all conversions with full metadata
-    const { data: allConversions } = await supabase
-      .from('conversions')
-      .select('utm_source, utm_medium, utm_campaign, user_identifier, created_at, conversion_value')
-      .order('created_at', { ascending: true });
-
-    if (!allImpressions || !allConversions) {
-      throw new Error('Failed to fetch impression or conversion data');
-    }
+    if (impressionsResult.error) throw impressionsResult.error;
+    if (conversionsResult.error) throw conversionsResult.error;
+    
+    const allImpressions = impressionsResult.data || [];
+    const allConversions = conversionsResult.data || [];
 
     // 1. UTM Source Analysis with detailed metrics
     const sourceStats = new Map<string, { 

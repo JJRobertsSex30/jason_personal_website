@@ -1,307 +1,193 @@
 ---
 import Layout from '~/layouts/PageLayout.astro';
 import { supabase } from '~/lib/supabaseClient';
-import type { UserProfile, GemTransaction, UserEngagement, KitSubscriber } from '~/types';
-
-// A specific type for a referred user, combining their profile with the referral date
-interface ReferredUser extends UserProfile {
-  referral_created_at: string | null;
-}
-
-export interface Props {
-  userProfile: UserProfile | null;
-  gemTransactions: GemTransaction[] | null;
-  userEngagements: UserEngagement[] | null;
-  kitSubscriber: KitSubscriber | null;
-  referrals: ReferredUser[] | null;
-  error: string | null;
-}
-
-let userProfile: UserProfile | null = null;
-let gemTransactions: GemTransaction[] | null = null;
-let userEngagements: UserEngagement[] | null = null;
-let kitSubscriber: KitSubscriber | null = null;
-let referrals: ReferredUser[] | null = null;
-let error: string | null = null;
+import type { Session } from '@supabase/supabase-js';
+import type { UserProfile, KitSubscriber, GemTransaction, UserEngagement } from '~/types';
 
 const { id } = Astro.params;
 
-if (!id) {
-  error = 'User ID is missing.';
-} else {
-  try {
-    // 1. Fetch user profile from Supabase
-    const { data: profileData, error: profileError } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (profileError) throw new Error(`Failed to fetch user profile: ${profileError.message}`);
-    userProfile = profileData;
-
-    if (userProfile && userProfile.email) {
-      // 2. Fetch user data from ConvertKit
-      const apiSecret = import.meta.env.CONVERTKIT_API_SECRET;
-      if (apiSecret) {
-        const ckUrl = `https://api.convertkit.com/v3/subscribers?api_secret=${apiSecret}&email_address=${userProfile.email}`;
-        const ckResponse = await fetch(ckUrl);
-        if (ckResponse.ok) {
-          const ckData = await ckResponse.json();
-          if (ckData.subscribers && ckData.subscribers.length > 0) {
-            kitSubscriber = ckData.subscribers[0];
-          }
-        } else {
-          console.warn(`Could not fetch ConvertKit data for ${userProfile.email}: ${ckResponse.statusText}`);
-        }
-      }
-
-      // 3. Fetch gem transactions
-      const { data: gemsData, error: gemsError } = await supabase
-        .from('gem_transactions')
-        .select('*')
-        .eq('user_id', id)
-        .order('created_at', { ascending: false });
-
-      if (gemsError) throw new Error(`Failed to fetch gem transactions: ${gemsError.message}`);
-      gemTransactions = gemsData;
-
-      // 4. Fetch user engagements
-      const { data: engagementsData, error: engagementsError } = await supabase
-        .from('user_engagements')
-        .select('*')
-        .eq('user_id', id)
-        .order('created_at', { ascending: false });
-      
-      if (engagementsError) throw new Error(`Failed to fetch user engagements: ${engagementsError.message}`);
-      userEngagements = engagementsData;
-
-      // 5. Fetch referrals using a two-step query to bypass schema cache issues
-      // Step 5.1: Get all referral records for the current user
-      const { data: referralRecords, error: referralError } = await supabase
-        .from('referrals')
-        .select('new_user_id, created_at')
-        .eq('referrer_id', id);
-
-      if (referralError) throw new Error(`Failed to fetch referral records: ${referralError.message}`);
-
-      if (referralRecords && referralRecords.length > 0) {
-        const refereeIds = referralRecords.map(r => r.new_user_id).filter(Boolean);
-
-        if (refereeIds.length > 0) {
-          // Step 5.2: Get the profiles for all the referred users
-          const { data: refereeProfiles, error: profilesError } = await supabase
-            .from('user_profiles')
-            .select('id, email, first_name')
-            .in('id', refereeIds);
-
-          if (profilesError) throw new Error(`Failed to fetch referee profiles: ${profilesError.message}`);
-          
-          // Step 5.3: Combine the data
-          if (refereeProfiles) {
-            const referralDateMap = new Map(referralRecords.map(r => [r.new_user_id, r.created_at]));
-            referrals = refereeProfiles.map(profile => ({
-              ...profile,
-              referral_created_at: referralDateMap.get(profile.id) || null,
-            }));
-          }
-        }
-      }
-    }
-
-  } catch (e: unknown) {
-    if (e instanceof Error) {
-      error = e.message;
-    } else {
-      error = 'An unexpected error occurred.';
-    }
-    console.error(e);
-  }
-}
-
 const metadata = {
-  title: `User Profile: ${userProfile?.email || 'Unknown'}`,
-  description: `Detailed view of a user's profile, engagement, and history.`,
+  title: 'User Details',
 };
 
-// Helper to format field names
-const formatFieldName = (fieldName: string) => {
-  return fieldName
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, char => char.toUpperCase());
-};
+let pageError: string | null = null;
+let session: Session | null = null;
+let userProfile: UserProfile | null = null;
+let kitData: KitSubscriber | null = null;
+let gemTransactions: GemTransaction[] = [];
+let userEngagements: UserEngagement[] = [];
+let confirmedReferrals: UserProfile[] = [];
 
-const getGemTransactionColor = (type: string) => {
-  if (type === 'credit') return 'text-green-500';
-  if (type === 'debit') return 'text-red-500';
-  return 'text-slate-500';
+const {
+  data: { session: currentSession },
+} = await supabase.auth.getSession();
+session = currentSession;
+
+if (!session) {
+  return Astro.redirect('/dashboard');
 }
+
+if (!id) {
+  pageError = "No user ID provided.";
+} else {
+    try {
+        const apiUrl = new URL(`/api/users/${id}`, Astro.url.origin);
+        const response = await fetch(apiUrl.toString());
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || `API request failed with status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        userProfile = data.userProfile;
+        kitData = data.kitData;
+        gemTransactions = data.gemTransactions;
+        userEngagements = data.userEngagements;
+        confirmedReferrals = data.confirmedReferrals || [];
+
+        metadata.title = `Details for ${userProfile?.email || 'User'}`;
+
+    } catch (e: unknown) {
+        if (e instanceof Error) {
+            pageError = e.message;
+        } else {
+            pageError = 'An unexpected error occurred while fetching user data.';
+        }
+        console.error('Fetch user details error:', e);
+    }
+}
+
+const statusMap: Record<string, { text: string; color: string }> = {
+  active: { text: 'Confirmed', color: 'bg-green-100 dark:bg-green-400/30 text-green-600 dark:text-green-300' },
+  unconfirmed: { text: 'Unconfirmed', color: 'bg-yellow-100 dark:bg-yellow-400/30 text-yellow-600 dark:text-yellow-300' },
+  cancelled: { text: 'Cancelled', color: 'bg-gray-100 dark:bg-gray-400/30 text-gray-500 dark:text-gray-300' },
+  complained: { text: 'Complained', color: 'bg-orange-100 dark:bg-orange-400/30 text-orange-600 dark:text-orange-300' },
+  bounced: { text: 'Bounced', color: 'bg-red-100 dark:bg-red-400/30 text-red-600 dark:text-red-300' },
+  // Add other statuses as needed
+};
+
+const statusInfo = userProfile?.kit_state ? (statusMap[userProfile.kit_state] || { text: userProfile.kit_state, color: 'bg-gray-200 dark:bg-gray-700' }) : { text: 'Not in Mailing List', color: 'bg-gray-200 dark:bg-gray-700' };
+
 ---
-
-<Layout {metadata}>
-  <div class="container mx-auto px-4 py-8 max-w-7xl">
-    <div class="mb-6">
-      <a href="/dashboard#users-panel" class="text-blue-600 hover:underline dark:text-blue-400">
-        &larr; Back to User List
-      </a>
-    </div>
-
-    {error && (
-      <div class="mb-6 p-4 bg-red-100 dark:bg-red-800/30 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-300 rounded-lg shadow-sm" role="alert">
-        <p class="font-bold text-lg">Error:</p>
-        <p>{error}</p>
-      </div>
-    )}
-
-    {userProfile && !error && (
-      <>
-        <header class="mb-8">
-          <h1 class="text-4xl font-bold text-slate-800 dark:text-white">{userProfile.email}</h1>
-          <p class="text-lg text-slate-500 dark:text-slate-400">User ID: {userProfile.id}</p>
-        </header>
-
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <!-- Left Column: User Details -->
-          <div class="lg:col-span-1 space-y-6">
-            <!-- Supabase Profile Card -->
-            <div class="bg-white dark:bg-slate-800 shadow-lg rounded-lg p-6">
-              <h3 class="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-4">Database Profile</h3>
-              <dl class="space-y-2 text-sm">
-                <div class="flex justify-between">
-                  <dt class="text-slate-500 dark:text-slate-400">First Name:</dt>
-                  <dd class="font-medium text-slate-800 dark:text-white">{userProfile.first_name || 'N/A'}</dd>
-                </div>
-                <div class="flex justify-between">
-                  <dt class="text-slate-500 dark:text-slate-400">Insight Gems:</dt>
-                  <dd class="font-bold text-xl text-blue-600 dark:text-blue-400">{userProfile.insight_gems}</dd>
-                </div>
-                <div class="flex justify-between">
-                  <dt class="text-slate-500 dark:text-slate-400">Referral Code:</dt>
-                  <dd class="font-mono text-xs bg-slate-100 dark:bg-slate-700 p-1 rounded">{userProfile.referral_code || 'N/A'}</dd>
-                </div>
-                <div class="flex justify-between">
-                  <dt class="text-slate-500 dark:text-slate-400">Joined:</dt>
-                  <dd class="font-medium text-slate-800 dark:text-white">{userProfile.created_at ? new Date(userProfile.created_at).toLocaleString() : 'N/A'}</dd>
-                </div>
-                 <div class="flex justify-between">
-                  <dt class="text-slate-500 dark:text-slate-400">Last Updated:</dt>
-                  <dd class="font-medium text-slate-800 dark:text-white">{userProfile.updated_at ? new Date(userProfile.updated_at).toLocaleString() : 'N/A'}</dd>
-                </div>
-              </dl>
-            </div>
-
-            <!-- ConvertKit Card -->
-            <div class="bg-white dark:bg-slate-800 shadow-lg rounded-lg p-6">
-              <h3 class="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-4">ConvertKit Subscriber</h3>
-              {kitSubscriber ? (
-                <>
-                  <dl class="space-y-2 text-sm">
-                    <div class="flex justify-between">
-                      <dt class="text-slate-500 dark:text-slate-400">State:</dt>
-                      <dd class="font-medium text-slate-800 dark:text-white">{kitSubscriber.state}</dd>
-                    </div>
-                    <div class="flex justify-between">
-                      <dt class="text-slate-500 dark:text-slate-400">Subscribed At:</dt>
-                      <dd class="font-medium text-slate-800 dark:text-white">{kitSubscriber.created_at ? new Date(kitSubscriber.created_at).toLocaleString() : 'N/A'}</dd>
-                    </div>
-                  </dl>
-                  <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                    <h4 class="text-md font-semibold text-slate-600 dark:text-slate-300 mb-2">Custom Fields</h4>
-                    {Object.keys(kitSubscriber.fields).length > 0 ? (
-                      <dl class="space-y-2 text-sm">
-                        {Object.entries(kitSubscriber.fields).map(([key, value]) => (
-                           <div class="flex justify-between">
-                            <dt class="text-slate-500 dark:text-slate-400 capitalize">{formatFieldName(key)}:</dt>
-                            <dd class="font-medium text-slate-800 dark:text-white text-right break-all">{String(value) || 'N/A'}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    ) : (
-                      <p class="text-sm text-slate-500 dark:text-slate-400">No custom fields found.</p>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <p class="text-sm text-slate-500 dark:text-slate-400">No subscriber data found in ConvertKit for this email.</p>
-              )}
-            </div>
-            
-            <!-- Referrals Card -->
-            <div class="bg-white dark:bg-slate-800 shadow-lg rounded-lg p-6">
-              <h3 class="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-4">Referrals ({referrals?.length || 0})</h3>
-              {referrals && referrals.length > 0 ? (
-                <ul class="divide-y divide-slate-200 dark:divide-slate-700">
-                  {referrals.map(ref => (
-                    <li class="py-2">
-                      <div class="flex justify-between items-center">
-                        <div>
-                          <a href={`/dashboard/user/${ref.id}`} class="font-medium text-blue-600 hover:underline dark:text-blue-400">
-                            {ref.first_name || ref.email}
-                          </a>
-                          <p class="text-xs text-slate-500 dark:text-slate-400">{ref.email}</p>
-                        </div>
-                        <div class="text-right">
-                          <p class="text-sm text-slate-500 dark:text-slate-400">{ref.referral_created_at ? new Date(ref.referral_created_at).toLocaleDateString() : 'N/A'}</p>
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p class="text-sm text-slate-500 dark:text-slate-400">This user has not referred anyone.</p>
-              )}
-            </div>
-          </div>
-
-          <!-- Right Column: Activity Feeds -->
-          <div class="lg:col-span-2 space-y-8">
-            <!-- Gem Transactions -->
-            <div class="bg-white dark:bg-slate-800 shadow-lg rounded-lg p-6">
-              <h3 class="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-4">Gem Transaction History</h3>
-              {gemTransactions && gemTransactions.length > 0 ? (
-                <ul class="divide-y divide-slate-200 dark:divide-slate-700">
-                  {gemTransactions.map(tx => (
-                    <li class="py-3">
-                      <div class="flex justify-between items-center">
-                        <div>
-                          <p class="font-medium text-slate-800 dark:text-white">{tx.description}</p>
-                          <p class="text-xs text-slate-500 dark:text-slate-400">Type: {tx.type}</p>
-                        </div>
-                        <div class="text-right">
-                          <p class:list={["font-bold text-lg", getGemTransactionColor(tx.type)]}>
-                            {tx.type === 'credit' ? '+' : '-'}{tx.amount}
-                          </p>
-                          <p class="text-xs text-slate-500 dark:text-slate-400">{tx.created_at ? new Date(tx.created_at).toLocaleString() : 'N/A'}</p>
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p class="text-sm text-slate-500 dark:text-slate-400">No gem transactions found.</p>
-              )}
-            </div>
-
-            <!-- User Engagements -->
-            <div class="bg-white dark:bg-slate-800 shadow-lg rounded-lg p-6">
-              <h3 class="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-4">User Engagement Timeline</h3>
-              {userEngagements && userEngagements.length > 0 ? (
-                <ul class="divide-y divide-slate-200 dark:divide-slate-700">
-                  {userEngagements.map(event => (
-                    <li class="py-3">
-                      <p class="font-medium text-slate-800 dark:text-white">{event.engagement_type}</p>
-                      <p class="text-xs text-slate-500 dark:text-slate-400">{event.created_at ? new Date(event.created_at).toLocaleString() : 'N/A'}</p>
-                      {event.metadata && <pre class="mt-1 text-xs p-2 bg-slate-100 dark:bg-slate-900 rounded overflow-x-auto">{JSON.stringify(event.metadata, null, 2)}</pre>}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p class="text-sm text-slate-500 dark:text-slate-400">No engagement events found.</p>
-              )}
-            </div>
-          </div>
+<Layout metadata={metadata}>
+    <div class="container mx-auto max-w-5xl px-4 py-10">
+      
+        <div class="mb-6">
+            <a href="/dashboard#users-panel" class="inline-flex items-center text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                </svg>
+                Back to Dashboard
+            </a>
         </div>
-      </>
-    )}
-  </div>
+        
+        {pageError && (
+             <div class="mb-6 rounded-lg border border-red-400 bg-red-100 p-4 text-red-700 shadow-sm dark:border-red-600 dark:bg-red-800/30 dark:text-red-300" role="alert">
+                <p class="font-bold">Error:</p>
+                <p>{pageError}</p>
+            </div>
+        )}
+
+        {userProfile && !pageError && (
+            <div class="space-y-8">
+                <!-- User Header -->
+                <div class="bg-white dark:bg-slate-800 shadow-lg rounded-xl p-6 md:flex md:items-center md:justify-between">
+                    <div class="flex-1 min-w-0">
+                        <h1 class="text-3xl font-bold leading-7 text-slate-900 dark:text-white sm:truncate">
+                            {userProfile.full_name || userProfile.email}
+                        </h1>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{userProfile.email}</p>
+                    </div>
+                    <div class="mt-4 flex md:mt-0 md:ml-4">
+                        <span class:list={["inline-flex items-center px-3 py-1 rounded-full text-sm font-medium", statusInfo.color]}>
+                           {statusInfo.text}
+                        </span>
+                    </div>
+                </div>
+
+                <!-- User Details Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-1 space-y-6">
+                        <div class="bg-white dark:bg-slate-800 shadow-lg rounded-xl p-6">
+                            <h3 class="text-xl font-semibold text-slate-800 dark:text-white mb-4">Profile Details</h3>
+                             <dl class="space-y-3 text-sm">
+                                <div class="flex justify-between"><dt class="font-medium text-slate-500 dark:text-slate-400">User ID</dt><dd class="text-slate-700 dark:text-slate-300 font-mono text-xs bg-slate-100 dark:bg-slate-700 rounded px-2 py-1">{userProfile.id}</dd></div>
+                                {userProfile.username && <div class="flex justify-between"><dt class="font-medium text-slate-500 dark:text-slate-400">Username</dt><dd class="text-slate-700 dark:text-slate-300">{userProfile.username}</dd></div>}
+                                <div class="flex justify-between"><dt class="font-medium text-slate-500 dark:text-slate-400">Joined</dt><dd class="text-slate-700 dark:text-slate-300">{userProfile.created_at ? new Date(userProfile.created_at).toLocaleDateString() : 'N/A'}</dd></div>
+                                <div class="flex justify-between"><dt class="font-medium text-slate-500 dark:text-slate-400">Last Seen</dt><dd class="text-slate-700 dark:text-slate-300">{userProfile.updated_at ? new Date(userProfile.updated_at).toLocaleString() : 'Never'}</dd></div>
+                                <div class="flex justify-between"><dt class="font-medium text-slate-500 dark:text-slate-400">Insight Gems</dt><dd class="text-slate-700 dark:text-slate-300 font-bold">{userProfile.insight_gems || 0}</dd></div>
+                            </dl>
+                        </div>
+                         {kitData && (
+                            <div class="bg-white dark:bg-slate-800 shadow-lg rounded-xl p-6">
+                                <h3 class="text-xl font-semibold text-slate-800 dark:text-white mb-4">Mailing List Details</h3>
+                                <dl class="space-y-3 text-sm">
+                                    <div class="flex justify-between"><dt class="font-medium text-slate-500 dark:text-slate-400">ConvertKit ID</dt><dd class="text-slate-700 dark:text-slate-300">{kitData.id}</dd></div>
+                                    <div class="flex justify-between"><dt class="font-medium text-slate-500 dark:text-slate-400">First Name</dt><dd class="text-slate-700 dark:text-slate-300">{kitData.first_name || 'N/A'}</dd></div>
+                                    <div class="flex justify-between"><dt class="font-medium text-slate-500 dark:text-slate-400">Subscribed At</dt><dd class="text-slate-700 dark:text-slate-300">{kitData.created_at ? new Date(kitData.created_at).toLocaleString() : 'N/A'}</dd></div>
+                                </dl>
+                            </div>
+                        )}
+                    </div>
+                    <div class="lg:col-span-2 space-y-8">
+                        <!-- Gem Transactions -->
+                        <div class="bg-white dark:bg-slate-800 shadow-lg rounded-xl p-6">
+                            <h3 class="text-xl font-semibold text-slate-800 dark:text-white mb-4">Gem Transactions</h3>
+                            {gemTransactions.length > 0 ? (
+                                <ul role="list" class="divide-y divide-slate-200 dark:divide-slate-700">
+                                    {gemTransactions.map(tx => (
+                                        <li class="py-3 flex justify-between items-center">
+                                            <div>
+                                                <p class="text-sm font-medium text-slate-800 dark:text-slate-200">{tx.description}</p>
+                                                <p class="text-xs text-slate-500 dark:text-slate-400">{tx.created_at ? new Date(tx.created_at).toLocaleString() : 'N/A'}</p>
+                                            </div>
+                                            <span class:list={["text-sm font-bold", tx.type === 'credit' ? 'text-green-600' : 'text-red-600']}>
+                                                {tx.type === 'credit' ? '+' : '-'}{tx.amount}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (<p class="text-sm text-slate-500 dark:text-slate-400">No gem transactions found.</p>)}
+                        </div>
+                        <!-- User Engagements -->
+                         <div class="bg-white dark:bg-slate-800 shadow-lg rounded-xl p-6">
+                            <h3 class="text-xl font-semibold text-slate-800 dark:text-white mb-4">Recent Activity</h3>
+                            {userEngagements.length > 0 ? (
+                                <ul role="list" class="divide-y divide-slate-200 dark:divide-slate-700">
+                                    {userEngagements.map(event => (
+                                        <li class="py-3">
+                                            <p class="text-sm font-medium text-slate-800 dark:text-slate-200">{event.engagement_type}</p>
+                                            <p class="text-xs text-slate-500 dark:text-slate-400">{event.created_at ? new Date(event.created_at).toLocaleString() : 'N/A'}</p>
+                                            {event.metadata && <pre class="mt-2 text-xs bg-slate-100 dark:bg-slate-700 p-2 rounded-md overflow-x-auto"><code>{JSON.stringify(event.metadata, null, 2)}</code></pre>}
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (<p class="text-sm text-slate-500 dark:text-slate-400">No recent activity found.</p>)}
+                        </div>
+                        <!-- Referrals Section -->
+                        <div class="bg-white dark:bg-slate-800 shadow-lg rounded-xl p-6">
+                            <h3 class="text-xl font-semibold text-slate-800 dark:text-white mb-4">Confirmed Referrals</h3>
+                            {confirmedReferrals.length > 0 ? (
+                                <ul role="list" class="divide-y divide-slate-200 dark:divide-slate-700">
+                                    {confirmedReferrals.map(referral => (
+                                        <li class="py-3">
+                                            <a href={`/dashboard/user/${referral.id}`} class="flex items-center justify-between group">
+                                                <p class="text-sm font-medium text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                                                    {referral.email}
+                                                </p>
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                                                  <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                                                </svg>
+                                            </a>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (<p class="text-sm text-slate-500 dark:text-slate-400">No confirmed referrals found.</p>)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+    </div>
 </Layout>

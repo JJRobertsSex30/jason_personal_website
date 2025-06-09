@@ -1,0 +1,248 @@
+---
+// Component for the Campaign Performance Tab on the Dashboard
+---
+<div id="campaign-performance-panel" role="tabpanel" class="tab-panel pt-6">
+  <div class="mb-6">
+    <h2 class="text-2xl font-bold text-slate-800 dark:text-white mb-2">Campaign Performance</h2>
+    <p class="text-slate-600 dark:text-slate-400">Comprehensive UTM tracking, attribution analysis, ROI metrics, and funnel insights.</p>
+  </div>
+
+  <div id="campaign-loading" class="text-center py-8">
+    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+    <p class="mt-2 text-slate-600 dark:text-slate-400">Loading campaign performance data...</p>
+  </div>
+
+  <div id="campaign-error" class="hidden mb-6 p-4 bg-red-100 dark:bg-red-800/30 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-300 rounded-lg">
+    <p class="font-bold">Error loading campaign data:</p>
+    <p id="campaign-error-message"></p>
+  </div>
+
+  <div id="campaign-content" class="hidden space-y-8">
+    <!-- Attribution Summary -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg">
+      <h3 class="text-xl font-bold text-slate-800 dark:text-white mb-4">Attribution Summary</h3>
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+        <div class="text-center">
+          <div class="text-2xl font-bold text-blue-600" id="total-attributed-conversions">-</div>
+          <div class="text-sm text-slate-600 dark:text-slate-400">Total Attributed</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-gray-600" id="direct-conversions">-</div>
+          <div class="text-sm text-slate-600 dark:text-slate-400">Direct</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-green-600" id="organic-conversions">-</div>
+          <div class="text-sm text-slate-600 dark:text-slate-400">Organic</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-orange-600" id="paid-conversions">-</div>
+          <div class="text-sm text-slate-600 dark:text-slate-400">Paid</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-purple-600" id="social-conversions">-</div>
+          <div class="text-sm text-slate-600 dark:text-slate-400">Social</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-red-600" id="email-conversions">-</div>
+          <div class="text-sm text-slate-600 dark:text-slate-400">Email</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-indigo-600" id="referral-conversions">-</div>
+          <div class="text-sm text-slate-600 dark:text-slate-400">Referral</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- UTM Sources Performance -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg">
+        <h3 class="text-xl font-bold text-slate-800 dark:text-white mb-4">Top Traffic Sources</h3>
+        <div id="sources-table" class="space-y-3">
+          <!-- Dynamic content will be populated here -->
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg">
+        <h3 class="text-xl font-bold text-slate-800 dark:text-white mb-4">Top Mediums</h3>
+        <div id="mediums-table" class="space-y-3">
+          <!-- Dynamic content will be populated here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Campaign Funnel Analysis -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg">
+      <h3 class="text-xl font-bold text-slate-800 dark:text-white mb-4">Campaign Funnel Analysis</h3>
+      <div class="mb-4">
+        <div class="flex justify-between text-sm text-slate-600 dark:text-slate-400 mb-2">
+          <span>Overall Conversion Rate: <span id="overall-funnel-rate" class="font-semibold">-</span></span>
+          <span>Biggest Drop-off: <span id="biggest-dropoff" class="font-semibold">-</span></span>
+        </div>
+      </div>
+      <div id="funnel-stages" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <!-- Dynamic funnel stages will be populated here -->
+      </div>
+    </div>
+
+    <!-- Top Campaigns Performance -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg">
+      <h3 class="text-xl font-bold text-slate-800 dark:text-white mb-4">Top Campaigns</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-slate-700">
+              <th class="text-left py-3 text-slate-700 dark:text-slate-300">Campaign</th>
+              <th class="text-left py-3 text-slate-700 dark:text-slate-300">Source</th>
+              <th class="text-left py-3 text-slate-700 dark:text-slate-300">Medium</th>
+              <th class="text-right py-3 text-slate-700 dark:text-slate-300">Impressions</th>
+              <th class="text-right py-3 text-slate-700 dark:text-slate-300">Conversions</th>
+              <th class="text-right py-3 text-slate-700 dark:text-slate-300">Rate</th>
+              <th class="text-right py-3 text-slate-700 dark:text-slate-300">ROI</th>
+            </tr>
+          </thead>
+          <tbody id="campaigns-table">
+            <!-- Dynamic content will be populated here -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Performance Trends -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg">
+      <h3 class="text-xl font-bold text-slate-800 dark:text-white mb-4">Performance Trends (Last 30 Days)</h3>
+      <div class="h-64">
+        <canvas id="campaign-trends-chart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-8 text-center">
+    <button 
+      id="refresh-campaign-performance" 
+      class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+    >
+      Refresh Campaign Data
+    </button>
+  </div>
+</div>
+
+<script>
+document.addEventListener('astro:page-load', () => {
+    const campaignPanel = document.getElementById('campaign-performance-panel');
+    if (!campaignPanel) return;
+
+    const loadingIndicator = document.getElementById('campaign-loading');
+    const errorContainer = document.getElementById('campaign-error');
+    const errorMessage = document.getElementById('campaign-error-message');
+
+    let hasLoaded = false;
+
+    const observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                const target = mutation.target as HTMLElement;
+                if (target.classList.contains('is-active') && !hasLoaded) {
+                    hasLoaded = true;
+                    fetchAndDisplayCampaigns();
+                    observer.disconnect();
+                }
+            }
+        }
+    });
+
+    observer.observe(campaignPanel, { attributes: true });
+
+    async function fetchAndDisplayCampaigns() {
+        const contentContainer = document.getElementById('campaign-content');
+        if (!loadingIndicator || !errorContainer || !errorMessage || !contentContainer) return;
+
+        loadingIndicator.classList.remove('hidden');
+        errorContainer.classList.add('hidden');
+        contentContainer.classList.add('hidden');
+
+        try {
+            const response = await fetch('/api/campaign-performance');
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Network response was not ok: ${response.status} ${errorText}`);
+            }
+            const data = await response.json();
+
+            // Populate Attribution Summary
+            const summary = data.attributionSummary;
+            if (summary) {
+                const total = document.getElementById('total-attributed-conversions');
+                if (total) total.textContent = summary.totalAttributedConversions || '0';
+                const direct = document.getElementById('direct-conversions');
+                if (direct) direct.textContent = summary.directConversions || '0';
+                const organic = document.getElementById('organic-conversions');
+                if (organic) organic.textContent = summary.organicConversions || '0';
+                const paid = document.getElementById('paid-conversions');
+                if (paid) paid.textContent = summary.paidConversions || '0';
+                const social = document.getElementById('social-conversions');
+                if (social) social.textContent = summary.socialConversions || '0';
+                const email = document.getElementById('email-conversions');
+                if (email) email.textContent = summary.emailConversions || '0';
+                const referral = document.getElementById('referral-conversions');
+                if (referral) referral.textContent = summary.referralConversions || '0';
+            }
+
+            // Populate Top Traffic Sources
+            const sourcesContainer = document.getElementById('sources-table');
+            if (sourcesContainer && data.sources) {
+                sourcesContainer.innerHTML = '';
+                data.sources.slice(0, 5).forEach(source => { // Show top 5
+                    const sourceEl = document.createElement('div');
+                    sourceEl.className = 'flex justify-between items-center p-2 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700/50';
+                    sourceEl.innerHTML = `
+                        <div>
+                            <span class="font-semibold text-slate-700 dark:text-slate-200">${source.source}</span>
+                            <span class="text-sm text-slate-500 dark:text-slate-400 ml-2">${source.impressions} impressions</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="font-bold text-blue-600">${source.conversions}</span>
+                            <span class="text-xs text-slate-500"> conversions</span>
+                        </div>
+                    `;
+                    sourcesContainer.appendChild(sourceEl);
+                });
+            }
+            
+            // Populate Top Campaigns Table
+            const campaignsTableBody = document.getElementById('campaigns-table');
+            if (campaignsTableBody && data.campaigns) {
+                campaignsTableBody.innerHTML = '';
+                if (data.campaigns.length === 0) {
+                    campaignsTableBody.innerHTML = '<tr><td colspan="7" class="text-center p-4">No campaign data found.</td></tr>';
+                } else {
+                    data.campaigns.forEach(c => {
+                        const row = document.createElement('tr');
+                        row.className = 'border-b border-slate-200 dark:border-slate-700';
+                        row.innerHTML = `
+                            <td class="py-3 px-2 font-medium text-slate-800 dark:text-slate-200">${c.campaign}</td>
+                            <td class="py-3 px-2 text-slate-600 dark:text-slate-400">${c.source}</td>
+                            <td class="py-3 px-2 text-slate-600 dark:text-slate-400">${c.medium}</td>
+                            <td class="py-3 px-2 text-right">${c.impressions}</td>
+                            <td class="py-3 px-2 text-right">${c.conversions}</td>
+                            <td class="py-3 px-2 text-right">${c.conversionRate.toFixed(2)}%</td>
+                            <td class="py-3 px-2 text-right text-green-600 font-semibold">$${c.roi.toFixed(2)}</td>
+                        `;
+                        campaignsTableBody.appendChild(row);
+                    });
+                }
+            }
+
+            // ... (add population for other sections like mediums, funnel, chart if needed)
+
+            loadingIndicator.classList.add('hidden');
+            contentContainer.classList.remove('hidden');
+
+        } catch (err) {
+            console.error('Failed to fetch campaign performance:', err);
+            if (loadingIndicator) loadingIndicator.classList.add('hidden');
+            if (errorContainer) errorContainer.classList.remove('hidden');
+            if (errorMessage) errorMessage.textContent = err instanceof Error ? err.message : 'An unknown error occurred.';
+        }
+    }
+});
+</script> 

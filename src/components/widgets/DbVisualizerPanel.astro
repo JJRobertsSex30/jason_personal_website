@@ -1,0 +1,15 @@
+---
+// Component for the DB Visualizer Tab on the Dashboard
+import DbVisualizerClient from './DbVisualizerClient';
+---
+
+<div id="db-visualizer-panel" class="tab-panel p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md mt-4">
+  <div class="mb-6">
+    <h2 class="text-2xl font-bold text-slate-800 dark:text-white mb-2">Database Visualizer</h2>
+    <p class="text-slate-600 dark:text-slate-400">View the relationships between your database tables.</p>
+  </div>
+  
+  <div id="visualizer-container-wrapper" style="height: 600px; width: 100%;" class="relative border border-gray-200 dark:border-gray-700 rounded-lg">
+    <DbVisualizerClient client:idle />
+  </div>
+</div> 

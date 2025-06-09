@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { supabase } from '~/lib/supabaseClient';
+import type { UserProfile } from '~/types';
 
 interface ConvertKitSubscriber {
   id: number;
@@ -10,37 +11,6 @@ interface ConvertKitSubscriber {
   fields: Record<string, unknown>;
 }
 
-// This interface is a bit redundant with UserProfile but helps keep API-specific logic separate.
-interface CombinedUser {
-  id: string | null;
-  email: string;
-  kit_status: string;
-  kit_status_color: string;
-  db_status: string;
-  db_status_color: string;
-  created_at: string | null;
-  last_seen: string | null;
-}
-
-const getStatusColor = (status: string): string => {
-  switch (status) {
-    case 'confirmed':
-      return 'bg-green-100 text-green-800 dark:bg-green-800/30 dark:text-green-300';
-    case 'unconfirmed':
-      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800/30 dark:text-yellow-300';
-    case 'cancelled':
-      return 'bg-red-100 text-red-800 dark:bg-red-800/30 dark:text-red-300';
-    case 'complained':
-      return 'bg-orange-100 text-orange-800 dark:bg-orange-800/30 dark:text-orange-300';
-    case 'bounced':
-      return 'bg-purple-100 text-purple-800 dark:bg-purple-800/30 dark:text-purple-300';
-    case 'not_in_kit':
-      return 'bg-gray-100 text-gray-800 dark:bg-slate-700 dark:text-slate-300';
-    default:
-      return 'bg-gray-100 text-gray-800 dark:bg-slate-600 dark:text-slate-200';
-  }
-};
-
 export const GET: APIRoute = async () => {
   try {
     const apiSecret = import.meta.env.CONVERTKIT_API_SECRET;
@@ -48,9 +18,15 @@ export const GET: APIRoute = async () => {
       throw new Error('ConvertKit API secret is not set in environment variables.');
     }
 
-    // 1. Fetch all subscribers from ConvertKit (up to 1000 for now)
     const ckUrl = `https://api.convertkit.com/v3/subscribers?api_secret=${apiSecret}&sort_order=desc&per_page=1000`;
-    const ckResponse = await fetch(ckUrl);
+
+    // --- Parallel Data Fetching ---
+    const [ckResponse, dbResult] = await Promise.all([
+      fetch(ckUrl),
+      supabase.from('user_profiles').select('id, email, created_at, updated_at'),
+    ]);
+
+    // --- Error Handling & Data Extraction ---
     if (!ckResponse.ok) {
       const errorText = await ckResponse.text();
       console.error('ConvertKit API Error:', errorText);
@@ -59,69 +35,75 @@ export const GET: APIRoute = async () => {
     const ckData = await ckResponse.json();
     const allCkSubscribers: ConvertKitSubscriber[] = ckData.subscribers || [];
 
-    // 2. Fetch all user profiles from DB
-    const { data: dbUsers, error: dbError } = await supabase
-      .from('user_profiles')
-      .select('id, email, created_at, updated_at');
-
-    if (dbError) {
-      console.error('Supabase DB Error:', dbError);
-      throw new Error(dbError.message);
+    if (dbResult.error) {
+      console.error('Supabase DB Error:', dbResult.error);
+      throw dbResult.error;
     }
+    const dbUsers = dbResult.data || [];
 
     // 3. Combine and process user data
-    const combinedUsers = new Map<string, CombinedUser>();
-    const kitStateMap = { active: 'confirmed', inactive: 'unconfirmed' };
+    const combinedUsers = new Map<string, UserProfile>();
+    const kitStateMap: { [key: string]: UserProfile['kit_state'] } = {
+      active: 'active',
+      inactive: 'unconfirmed',
+    };
 
     // Process DB users first
     for (const dbUser of dbUsers) {
-      combinedUsers.set(String(dbUser.email).toLowerCase(), {
+      if (!dbUser.id || !dbUser.email) continue;
+      
+      const userProfileData: UserProfile = {
         id: dbUser.id,
-        email: String(dbUser.email),
-        kit_status: 'not_in_kit',
-        kit_status_color: getStatusColor('not_in_kit'),
-        db_status: 'active',
-        db_status_color: 'bg-blue-100 text-blue-800 dark:bg-blue-800/30 dark:text-blue-300',
-        created_at: dbUser.created_at,
-        last_seen: dbUser.updated_at,
-      });
+        email: dbUser.email,
+        created_at: dbUser.created_at || new Date().toISOString(),
+        updated_at: dbUser.updated_at || null,
+        kit_state: null,
+      };
+
+      combinedUsers.set(dbUser.email.toLowerCase(), userProfileData);
     }
 
     // Process and merge ConvertKit subscribers
     for (const ckUser of allCkSubscribers) {
       const email = ckUser.email_address.toLowerCase();
-      const kit_status = kitStateMap[ckUser.state] || ckUser.state;
+      const kit_state = (kitStateMap[ckUser.state] || ckUser.state) as UserProfile['kit_state'];
       const existingUser = combinedUsers.get(email);
 
       if (existingUser) {
-        existingUser.kit_status = kit_status;
-        existingUser.kit_status_color = getStatusColor(kit_status);
+        existingUser.kit_state = kit_state;
       } else {
-        combinedUsers.set(email, {
-          id: null,
+        const viewId = `ck-email-${Buffer.from(ckUser.email_address, 'utf8').toString('base64')}`;
+        const userProfileData: UserProfile = {
+          id: `kit-${ckUser.id}`,
+          view_id: viewId,
           email: ckUser.email_address,
-          kit_status: kit_status,
-          kit_status_color: getStatusColor(kit_status),
-          db_status: 'not_in_db',
-          db_status_color: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300',
           created_at: ckUser.created_at,
-          last_seen: null,
-        });
+          updated_at: null,
+          kit_state: kit_state,
+        };
+        combinedUsers.set(email, userProfileData);
       }
     }
+
+    // Add view_id to all users for consistent linking
+    combinedUsers.forEach(user => {
+        if (!user.view_id) {
+            user.view_id = user.id;
+        }
+    });
 
     const usersArray = Array.from(combinedUsers.values());
 
     // 4. Calculate summary
     const summary = {
       total: usersArray.length,
-      confirmed: usersArray.filter(u => u.kit_status === 'confirmed').length,
-      unconfirmed: usersArray.filter(u => u.kit_status === 'unconfirmed').length,
-      cancelled: usersArray.filter(u => u.kit_status === 'cancelled').length,
-      bounced: usersArray.filter(u => u.kit_status === 'bounced').length,
-      complained: usersArray.filter(u => u.kit_status === 'complained').length,
-      // Cold and Blocked are not standard states, so we report 0 for now.
-      cold: 0, 
+      confirmed: usersArray.filter((u) => u.kit_state === 'active').length,
+      unconfirmed: usersArray.filter((u) => u.kit_state === 'unconfirmed').length,
+      cancelled: usersArray.filter((u) => u.kit_state === 'cancelled').length,
+      bounced: usersArray.filter((u) => u.kit_state === 'bounced').length,
+      complained: usersArray.filter((u) => u.kit_state === 'complained').length,
+      // Cold and Blocked are not standard states from CK, so we report 0 for now.
+      cold: 0,
       blocked: 0,
     };
 
@@ -129,7 +111,6 @@ export const GET: APIRoute = async () => {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
-
   } catch (error) {
     console.error('Error in /api/users:', error);
     return new Response(JSON.stringify({ message: error instanceof Error ? error.message : 'An unexpected error occurred' }), {

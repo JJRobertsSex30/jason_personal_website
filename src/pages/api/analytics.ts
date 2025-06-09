@@ -80,61 +80,74 @@ export const GET: APIRoute = async ({ request: _request }) => {
   try {
     console.log('Analytics API: Starting data calculation...');
 
+    // --- Parallel Data Fetching ---
+    const [
+      impressionsCountResult,
+      conversionsCountResult,
+      impressionsTimeResult,
+      geoDataResult,
+      conversionGeoDataResult,
+      deviceDataResult,
+      scrollDataResult,
+      sessionDataResult,
+      utmDataResult
+    ] = await Promise.all([
+      supabase.from('impressions').select('*', { count: 'exact', head: true }),
+      supabase.from('conversions').select('*', { count: 'exact', head: true }),
+      supabase.from('impressions').select('time_on_page').not('time_on_page', 'is', null),
+      supabase.from('impressions').select('country_code').not('country_code', 'is', null),
+      supabase.from('conversions').select('country_code').not('country_code', 'is', null),
+      supabase.from('impressions').select('device_type, user_agent').not('device_type', 'is', null),
+      supabase.from('impressions').select('scroll_depth_percent, time_on_page').not('scroll_depth_percent', 'is', null),
+      supabase.from('impressions').select('user_identifier').not('user_identifier', 'is', null),
+      supabase.from('impressions').select('utm_source, utm_medium, utm_campaign').not('utm_source', 'is', null)
+    ]);
+
+    // --- Error Handling for Promises ---
+    const results = [
+      impressionsCountResult, conversionsCountResult, impressionsTimeResult, 
+      geoDataResult, conversionGeoDataResult, deviceDataResult, 
+      scrollDataResult, sessionDataResult, utmDataResult
+    ];
+
+    for (const result of results) {
+      if (result.error) {
+        console.error('Supabase query failed:', result.error);
+        throw new Error(`A database query failed: ${result.error.message}`);
+      }
+    }
+
+    // --- Data Processing ---
+    
     // 1. Performance Overview
-    const { count: totalImpressions } = await supabase
-      .from('impressions')
-      .select('*', { count: 'exact', head: true });
-
-    const { count: totalConversions } = await supabase
-      .from('conversions')
-      .select('*', { count: 'exact', head: true });
-
-    const impressionsCount = totalImpressions || 0;
-    const conversionsCount = totalConversions || 0;
+    const impressionsCount = impressionsCountResult.count || 0;
+    const conversionsCount = conversionsCountResult.count || 0;
     const conversionRate = impressionsCount > 0 ? (conversionsCount / impressionsCount) * 100 : 0;
-
-    // Average time on page from impressions metadata
-    const { data: impressionsWithTime } = await supabase
-      .from('impressions')
-      .select('time_on_page')
-      .not('time_on_page', 'is', null);
-
-    const avgTimeOnPage = impressionsWithTime && impressionsWithTime.length > 0 
+    const impressionsWithTime = impressionsTimeResult.data || [];
+    const avgTimeOnPage = impressionsWithTime.length > 0
       ? impressionsWithTime.reduce((sum, imp) => sum + (imp.time_on_page || 0), 0) / impressionsWithTime.length
       : 0;
 
     // 2. Geographic Insights
-    const { data: geoData } = await supabase
-      .from('impressions')
-      .select('country_code')
-      .not('country_code', 'is', null);
-
-    const countryStats = geoData?.reduce((acc, item) => {
+    const geoData = geoDataResult.data || [];
+    const countryStats = geoData.reduce((acc, item) => {
       const country = item.country_code;
-      acc[country] = (acc[country] || 0) + 1;
+      if(country) acc[country] = (acc[country] || 0) + 1;
       return acc;
-    }, {} as Record<string, number>) || {};
+    }, {} as Record<string, number>);
 
-    const topCountry = Object.entries(countryStats)
-      .sort(([,a], [,b]) => b - a)[0]?.[0] || 'Unknown';
-    
+    const topCountry = Object.entries(countryStats).sort(([,a], [,b]) => b - a)[0]?.[0] || 'Unknown';
     const countryCount = Object.keys(countryStats).length;
-
-    // Best converting country
-    const { data: conversionGeoData } = await supabase
-      .from('conversions')
-      .select('country_code')
-      .not('country_code', 'is', null);
-
-    const conversionCountryStats = conversionGeoData?.reduce((acc, item) => {
+    
+    const conversionGeoData = conversionGeoDataResult.data || [];
+    const conversionCountryStats = conversionGeoData.reduce((acc, item) => {
       const country = item.country_code;
       if (country) acc[country] = (acc[country] || 0) + 1;
       return acc;
-    }, {} as Record<string, number>) || {};
+    }, {} as Record<string, number>);
 
     let bestConvertingCountry = 'N/A';
     let bestConvertingRate = 0;
-
     for (const country of Object.keys(countryStats)) {
       const impressions = countryStats[country];
       const conversions = conversionCountryStats[country] || 0;
@@ -146,98 +159,63 @@ export const GET: APIRoute = async ({ request: _request }) => {
     }
 
     // 3. Device & Browser Analytics
-    const { data: deviceData } = await supabase
-      .from('impressions')
-      .select('device_type, user_agent')
-      .not('device_type', 'is', null);
-
-    const deviceStats = deviceData?.reduce((acc, item) => {
+    const deviceData = deviceDataResult.data || [];
+    const deviceStats = deviceData.reduce((acc, item) => {
       const device = item.device_type || 'Unknown';
       acc[device] = (acc[device] || 0) + 1;
       return acc;
-    }, {} as Record<string, number>) || {};
+    }, {} as Record<string, number>);
+    const topDevice = Object.entries(deviceStats).sort(([,a], [,b]) => b - a)[0]?.[0] || 'Unknown';
 
-    const topDevice = Object.entries(deviceStats)
-      .sort(([,a], [,b]) => b - a)[0]?.[0] || 'Unknown';
-
-    // Extract browser from user agent (simplified)
-    const browserStats = deviceData?.reduce((acc, item) => {
+    const browserStats = deviceData.reduce((acc, item) => {
       const ua = item.user_agent || '';
       let browser = 'Unknown';
       if (ua.includes('Chrome')) browser = 'Chrome';
       else if (ua.includes('Firefox')) browser = 'Firefox';
       else if (ua.includes('Safari')) browser = 'Safari';
       else if (ua.includes('Edge')) browser = 'Edge';
-      
       acc[browser] = (acc[browser] || 0) + 1;
       return acc;
-    }, {} as Record<string, number>) || {};
-
-    const topBrowser = Object.entries(browserStats)
-      .sort(([,a], [,b]) => b - a)[0]?.[0] || 'Unknown';
+    }, {} as Record<string, number>);
+    const topBrowser = Object.entries(browserStats).sort(([,a], [,b]) => b - a)[0]?.[0] || 'Unknown';
 
     const mobileCount = deviceStats['mobile'] || 0;
     const totalDevices = Object.values(deviceStats).reduce((sum, count) => sum + count, 0);
     const mobilePercentage = totalDevices > 0 ? (mobileCount / totalDevices) * 100 : 0;
 
     // 4. Engagement Metrics
-    const { data: scrollData } = await supabase
-      .from('impressions')
-      .select('scroll_depth_percent, time_on_page')
-      .not('scroll_depth_percent', 'is', null);
-
-    const avgScrollDepth = scrollData && scrollData.length > 0
+    const scrollData = scrollDataResult.data || [];
+    const avgScrollDepth = scrollData.length > 0
       ? scrollData.reduce((sum, imp) => sum + (imp.scroll_depth_percent || 0), 0) / scrollData.length
       : 0;
-
-    // Bounce rate (assume <30% scroll or <10 seconds as bounce)
-    const bounceCount = scrollData && scrollData.length > 0 
-      ? scrollData.filter(imp => 
-        (imp.scroll_depth_percent || 0) < 30 && 
-        (imp.time_on_page || 0) < 10
-      ).length
-      : 0;
-    const bounceRate = scrollData && scrollData.length > 0 ? (bounceCount / scrollData.length) * 100 : 0;
-
-    // Return visitors (simplified - users with multiple sessions)
-    const { data: sessionData } = await supabase
-      .from('impressions')
-      .select('user_identifier')
-      .not('user_identifier', 'is', null);
-
-    const userCounts = sessionData?.reduce((acc, item) => {
+    const bounceCount = scrollData.filter(imp => (imp.scroll_depth_percent || 0) < 30 && (imp.time_on_page || 0) < 10).length;
+    const bounceRate = scrollData.length > 0 ? (bounceCount / scrollData.length) * 100 : 0;
+    
+    const sessionData = sessionDataResult.data || [];
+    const userCounts = sessionData.reduce((acc, item) => {
       const user = item.user_identifier;
-      acc[user] = (acc[user] || 0) + 1;
+      if(user) acc[user] = (acc[user] || 0) + 1;
       return acc;
-    }, {} as Record<string, number>) || {};
-
+    }, {} as Record<string, number>);
     const returnVisitors = Object.values(userCounts).filter(count => count > 1).length;
 
     // 5. Campaign Tracking
-    const { data: utmData } = await supabase
-      .from('impressions')
-      .select('utm_source, utm_medium, utm_campaign')
-      .not('utm_source', 'is', null);
-
-    const utmSourceStats = utmData?.reduce((acc, item) => {
+    const utmData = utmDataResult.data || [];
+    const utmSourceStats = utmData.reduce((acc, item) => {
       const source = item.utm_source || 'Unknown';
       acc[source] = (acc[source] || 0) + 1;
       return acc;
-    }, {} as Record<string, number>) || {};
-
-    const topUtmSource = Object.entries(utmSourceStats)
-      .sort(([,a], [,b]) => b - a)[0]?.[0] || 'N/A';
-
-    const utmCampaignStats = utmData?.reduce((acc, item) => {
+    }, {} as Record<string, number>);
+    const topUtmSource = Object.entries(utmSourceStats).sort(([,a], [,b]) => b - a)[0]?.[0] || 'N/A';
+    
+    const utmCampaignStats = utmData.reduce((acc, item) => {
       const campaign = item.utm_campaign || 'Unknown';
       acc[campaign] = (acc[campaign] || 0) + 1;
       return acc;
-    }, {} as Record<string, number>) || {};
-
-    const topUtmCampaign = Object.entries(utmCampaignStats)
-      .sort(([,a], [,b]) => b - a)[0]?.[0] || 'N/A';
-
-    const directTrafficCount = impressionsCount - (utmData?.length || 0);
+    }, {} as Record<string, number>);
+    const topUtmCampaign = Object.entries(utmCampaignStats).sort(([,a], [,b]) => b - a)[0]?.[0] || 'N/A';
+    
+    const directTrafficCount = impressionsCount - (utmData.length || 0);
     const directTrafficPercentage = impressionsCount > 0 ? (directTrafficCount / impressionsCount) * 100 : 0;
 
     // 6. Statistical Significance

@@ -1,1158 +1,469 @@
 ---
 import type { Experiment } from '~/types';
 
-export interface Props {
+interface Props {
   experiments: Experiment[] | null;
   abTestError: string | null;
-  // We don't need to pass Astro.url, it's globally available in .astro files
-  // Adding a comment to try and resolve a potential tooling issue.
 }
 
 const { experiments, abTestError } = Astro.props;
+
+function formatDate(dateString: string) {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
 ---
-<section class="my-8">
-  <h2 class="text-3xl font-semibold mb-8 text-slate-800 dark:text-white text-center">A/B Test Management</h2>
 
-  {/* A/B Test Specific Error Display */}
-  {abTestError && (
-    <div class="mb-6 p-4 bg-orange-50 dark:bg-orange-800/30 border border-orange-300 dark:border-orange-600 text-orange-700 dark:text-orange-300 rounded-lg shadow-sm" role="alert">
-      <p class="font-bold text-lg">A/B Test Error:</p>
-      <p>{abTestError}</p>
+<div id="ab-test-manager">
+  <div class="mb-6 flex items-center justify-between">
+    <div>
+      <h2 class="text-2xl font-bold text-slate-800 dark:text-white mb-2">A/B Test Management</h2>
+      <p class="text-slate-600 dark:text-slate-400">Create, monitor, and manage your experiments and variants.</p>
     </div>
-  )}
-
-  {/* Create New Experiment Form */}
-  <div class="mb-10 p-6 bg-white dark:bg-slate-800 shadow-xl rounded-lg">
-    <h3 class="text-2xl font-semibold mb-6 text-slate-700 dark:text-slate-200">Create New Experiment</h3>
-    <form method="POST" action={Astro.url.pathname} class="space-y-6">
-      <input type="hidden" name="_action" value="create_experiment" />
-      <div>
-        <label for="experiment_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-          Experiment Name <span class="text-red-500">*</span>
-        </label>
-        <input
-          type="text"
-          id="experiment_name"
-          name="experiment_name"
-          required
-          class="shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md w-full py-2.5 px-3 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400 dark:placeholder-slate-500"
-          placeholder="e.g., Homepage Headline Test"
-        />
-      </div>
-      <div>
-        <label for="experiment_description" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-          Description (Optional)
-        </label>
-        <textarea
-          id="experiment_description"
-          name="experiment_description"
-          rows="3"
-          class="shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md w-full py-2.5 px-3 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400 dark:placeholder-slate-500"
-          placeholder="Briefly describe the goal of this experiment."
-        ></textarea>
-      </div>
-      <div class="flex items-center">
-        <input
-          id="experiment_is_active"
-          name="experiment_is_active"
-          type="checkbox"
-          checked
-          class="h-4 w-4 text-blue-600 border-slate-300 dark:border-slate-600 rounded focus:ring-blue-500 bg-white dark:bg-slate-700 dark:checked:bg-blue-500"
-        />
-        <label for="experiment_is_active" class="ml-2 block text-sm text-slate-700 dark:text-slate-300">
-          Activate this experiment immediately
-        </label>
-      </div>
-      <div class="flex justify-end">
-        <button
-          type="submit"
-          class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-5 rounded-md shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition duration-150 ease-in-out"
-        >
-          Create Experiment
-        </button>
-      </div>
-    </form>
+    <button
+      type="button"
+      id="create-experiment-btn"
+      class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+    >
+      New Experiment
+    </button>
   </div>
 
-  {/* List of Existing Experiments */}
-  <h3 class="text-2xl font-semibold mb-6 text-slate-700 dark:text-slate-200 mt-10">Existing Experiments</h3>
-  {experiments && experiments.length > 0 ? (
-    <div class="space-y-6">
-      {experiments.map((exp) => (
-        <div class="bg-white dark:bg-slate-800 shadow-lg rounded-lg p-6" id={`experiment-${exp.id}`}>
-          {/* SECTION 1: Just the core details, always visible unless editing */}
-          <div class={`experiment-display-section-${exp.id}`}>
-            <div class="flex justify-between items-start mb-2">
-              <div>
-                <h4 class="text-xl font-semibold text-blue-600 dark:text-blue-400">{exp.name}</h4>
-                <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">ID: {exp.id}</p>
-              </div>
-              <span class={`px-3 py-1 text-xs font-medium rounded-full ${exp.is_active ? 'bg-green-100 text-green-800 dark:bg-green-700/30 dark:text-green-300' : 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300'}`}>
-                {exp.is_active ? 'Active' : 'Inactive'}
-              </span>
-            </div>
-            <p class="text-sm text-slate-600 dark:text-slate-300 mb-3">{exp.description || 'No description provided.'}</p>
-          </div>
+  {
+    abTestError && (
+      <div
+        class="mb-6 rounded-lg border border-red-400 bg-red-100 p-4 text-red-700 shadow-sm dark:border-red-600 dark:bg-red-800/30 dark:text-red-300"
+        role="alert"
+      >
+        <p class="font-bold">Error:</p>
+        <p>{abTestError}</p>
+      </div>
+    )
+  }
 
-          {/* SECTION 2: The form for editing core details, hidden by default */}
-          <div class={`experiment-edit-form-section-${exp.id} hidden`}>
-            <h4 class="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-4">Edit Experiment: <span class="italic">{exp.name}</span></h4>
-            <form method="POST" action={Astro.url.pathname} class="space-y-4">
-              <input type="hidden" name="_action" value="update_experiment" />
-              <input type="hidden" name="experiment_id" value={exp.id} />
+  <!-- Create/Edit Experiment Modal -->
+  <div
+    id="experiment-modal"
+    class="fixed inset-0 z-50 hidden overflow-y-auto"
+    aria-labelledby="modal-title"
+    role="dialog"
+    aria-modal="true"
+  >
+    <div class="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+      <div class="fixed inset-0 bg-slate-800 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+      <span class="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
+      <div
+        class="inline-block transform-gpu overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all dark:bg-slate-800 sm:my-8 sm:w-full sm:max-w-lg sm:align-middle"
+      >
+        <form method="POST" action="#ab-testing-panel" id="experiment-form">
+          <input type="hidden" name="_action" id="experiment-action" value="create_experiment" />
+          <input type="hidden" name="experiment_id" id="form-experiment-id" />
+          <div class="bg-white px-4 pt-5 pb-4 dark:bg-slate-800 sm:p-6 sm:pb-4">
+            <h3 class="text-lg font-medium leading-6 text-slate-900 dark:text-white" id="experiment-modal-title">
+              Create New Experiment
+            </h3>
+            <div class="mt-4 space-y-4">
               <div>
-                <label for={`edit_experiment_name-${exp.id}`} class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Experiment Name <span class="text-red-500">*</span>
+                <label for="experiment_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Experiment Name
                 </label>
                 <input
                   type="text"
-                  id={`edit_experiment_name-${exp.id}`}
                   name="experiment_name"
+                  id="experiment_name"
                   required
-                  value={exp.name}
-                  class="shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md w-full py-2.5 px-3 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400 dark:placeholder-slate-500"
+                  class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
                 />
               </div>
               <div>
-                <label for={`edit_experiment_description-${exp.id}`} class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Description (Optional)
-                </label>
+                <label for="experiment_description" class="block text-sm font-medium text-slate-700 dark:text-slate-300"
+                  >Description</label
+                >
                 <textarea
-                  id={`edit_experiment_description-${exp.id}`}
                   name="experiment_description"
+                  id="experiment_description"
                   rows="3"
-                  class="shadow-sm appearance-none border border-slate-300 dark:border-slate-600 rounded-md w-full py-2.5 px-3 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400 dark:placeholder-slate-500"
-                >{exp.description}</textarea>
+                  class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                ></textarea>
               </div>
               <div class="flex items-center">
                 <input
-                  id={`edit_experiment_is_active-${exp.id}`}
+                  id="experiment_is_active"
                   name="experiment_is_active"
                   type="checkbox"
-                  checked={exp.is_active}
-                  class="h-4 w-4 text-blue-600 border-slate-300 dark:border-slate-600 rounded focus:ring-blue-500 bg-white dark:bg-slate-700 dark:checked:bg-blue-500"
+                  class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
-                <label for={`edit_experiment_is_active-${exp.id}`} class="ml-2 block text-sm text-slate-700 dark:text-slate-300">
-                  Activate this experiment
-                </label>
-              </div>
-              <div class="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  class="cancel-edit-experiment-btn text-sm bg-slate-500 hover:bg-slate-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150"
-                  data-experiment-id={exp.id}
+                <label for="experiment_is_active" class="ml-2 block text-sm text-slate-900 dark:text-slate-200"
+                  >Active</label
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  class="text-sm bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-md shadow-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition duration-150 ease-in-out"
-                >
-                  Save Changes
-                </button>
               </div>
-            </form>
-          </div>
-
-          {/* SECTION 3: Variants, Chart, and Main Actions, visible unless editing */}
-          <div class={`experiment-actions-section-${exp.id}`}>
-            <div class="mt-4 pt-4 border-t border-dashed border-slate-300 dark:border-slate-600">
-                <h5 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">Current Variants ({exp.variants?.length || 0}):</h5>
-                {exp.variants && exp.variants.length > 0 ? (
-                  <ul class="list-disc list-inside pl-1 space-y-0.5 text-sm text-slate-500 dark:text-slate-400">
-                    {exp.variants.map(variant => (
-                      <li>
-                        {variant.name} <span class="text-xs text-slate-400">(ID: {variant.id})</span>
-                        {typeof variant.impressions_count === 'number' && (
-                          <span class="text-xs text-slate-400 ml-2">
-                            (Imp: {variant.impressions_count}, Conv: {variant.conversions_count ?? 0}, Rate: {variant.conversion_rate?.toFixed(1) ?? 'N/A'}%)
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p class="text-sm text-slate-500 dark:text-slate-400 italic">No variants defined for this experiment yet.</p>
-                )}
             </div>
+          </div>
+          <div class="bg-slate-50 px-4 py-3 dark:bg-slate-800/50 sm:flex sm:flex-row-reverse sm:px-6">
+            <button
+              type="submit"
+              class="inline-flex w-full justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Save Experiment
+            </button>
+            <button
+              type="button"
+              id="cancel-experiment-modal-btn"
+              class="mt-3 inline-flex w-full justify-center rounded-md border border-slate-300 bg-white px-4 py-2 text-base font-medium text-slate-700 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 sm:mt-0 sm:w-auto sm:text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 
-            {/* Pie Chart Section */}
-            {exp.variants && exp.variants.filter(v => typeof v.conversion_rate === 'number').length > 0 ? (
-              <div class="mt-6 pt-6 border-t border-dashed border-slate-300 dark:border-slate-600">
-                <h5 class="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-3 text-center">Variant Conversion Rates</h5>
-                <div 
-                  class="chart-container relative mx-auto"
-                  style="max-width: 350px; height: 350px;" 
-                  data-experiment-id={exp.id}
-                  data-variants={exp.variantsJsonString}
+  <!-- Create/Edit Variant Modal -->
+  <div
+    id="variant-modal"
+    class="fixed inset-0 z-50 hidden overflow-y-auto"
+    aria-labelledby="variant-modal-title"
+    role="dialog"
+    aria-modal="true"
+  >
+    <div class="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+      <div class="fixed inset-0 bg-slate-800 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+      <span class="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
+      <div
+        class="inline-block transform-gpu overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all dark:bg-slate-800 sm:my-8 sm:w-full sm:max-w-lg sm:align-middle"
+      >
+        <form method="POST" action="#ab-testing-panel" id="variant-form">
+          <input type="hidden" name="_action" id="variant-action" value="create_variant" />
+          <input type="hidden" name="experiment_id" id="form-variant-experiment-id" />
+          <input type="hidden" name="variant_id" id="form-variant-id" />
+          <div class="bg-white px-4 pt-5 pb-4 dark:bg-slate-800 sm:p-6 sm:pb-4">
+            <h3 class="text-lg font-medium leading-6 text-slate-900 dark:text-white" id="variant-modal-title">
+              Create New Variant
+            </h3>
+            <div class="mt-4 space-y-4">
+              <div>
+                <label for="variant_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Variant Name
+                </label>
+                <input
+                  type="text"
+                  name="variant_name"
+                  id="variant_name"
+                  required
+                  class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                />
+              </div>
+              <div>
+                <label for="variant_description" class="block text-sm font-medium text-slate-700 dark:text-slate-300"
+                  >Description</label
                 >
-                  <canvas id={`chart-${exp.id}`}></canvas> 
+                <textarea
+                  name="variant_description"
+                  id="variant_description"
+                  rows="3"
+                  class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                ></textarea>
+              </div>
+              <div>
+                <label for="variant_config_json" class="block text-sm font-medium text-slate-700 dark:text-slate-300"
+                  >Config (JSON)</label
+                >
+                <textarea
+                  name="variant_config_json"
+                  id="variant_config_json"
+                  rows="5"
+                  class="mt-1 block w-full rounded-md border-slate-300 font-mono text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                  placeholder={`{\n  "cta_text": "Sign Up Now",\n  "color": "blue"\n}`}></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="bg-slate-50 px-4 py-3 dark:bg-slate-800/50 sm:flex sm:flex-row-reverse sm:px-6">
+            <button
+              type="submit"
+              class="inline-flex w-full justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Save Variant
+            </button>
+            <button
+              type="button"
+              id="cancel-variant-modal-btn"
+              class="mt-3 inline-flex w-full justify-center rounded-md border border-slate-300 bg-white px-4 py-2 text-base font-medium text-slate-700 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 sm:mt-0 sm:w-auto sm:text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="space-y-8">
+    {
+      experiments && experiments.length > 0 ? (
+        experiments.map((experiment) => (
+          <div id={`experiment-${experiment.id}`} class="rounded-xl bg-white p-6 shadow-lg dark:bg-slate-800">
+            <div class="mb-4 border-b border-slate-200 pb-4 dark:border-slate-700">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-xl font-bold text-slate-800 dark:text-white">{experiment.name}</h3>
+                  <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{experiment.description}</p>
+                </div>
+                <div class="flex items-center space-x-3">
+                  <span
+                    class:list={[
+                      'rounded-full px-3 py-1 text-xs font-semibold',
+                      experiment.is_active
+                        ? 'bg-green-100 text-green-800 dark:bg-green-800/30 dark:text-green-300'
+                        : 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300',
+                    ]}
+                  >
+                    {experiment.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                  <button
+                    type="button"
+                    class="edit-experiment-btn rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700"
+                    data-experiment-id={experiment.id}
+                    data-experiment-name={experiment.name}
+                    data-experiment-description={experiment.description}
+                    data-experiment-is-active={experiment.is_active.toString()}
+                  >
+                    <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
+                      <path
+                        fill-rule="evenodd"
+                        d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                        clip-rule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                  <form method="POST" action="#ab-testing-panel" class="delete-experiment-form">
+                    <input type="hidden" name="_action" value="delete_experiment" />
+                    <input type="hidden" name="experiment_id" value={experiment.id} />
+                    <button
+                      type="submit"
+                      class="delete-experiment-btn rounded p-1 text-slate-500 hover:bg-red-100 hover:text-red-700 dark:text-slate-400 dark:hover:bg-red-700/50"
+                    >
+                      <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path
+                          fill-rule="evenodd"
+                          d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                          clip-rule="evenodd"
+                        />
+                      </svg>
+                    </button>
+                  </form>
                 </div>
               </div>
-            ) : (
-              <div class="mt-6 pt-6 border-t border-dashed border-slate-300 dark:border-slate-600">
-                <h5 class="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-3 text-center">Variant Conversion Rates</h5>
-                <p class="text-sm text-slate-400 dark:text-slate-500 text-center italic">No conversion data available to display chart.</p>
+              <div class="mt-2 text-xs text-slate-500">
+                Created: {formatDate(experiment.created_at)} | Last Updated: {formatDate(experiment.updated_at)}
               </div>
-            )}
-
-            <div class="flex items-center justify-end space-x-3 mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
-              <button type="button" class="text-sm bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 edit-experiment-btn" data-experiment-id={exp.id}>Edit Details</button>
-              <button 
-                type="button" 
-                class="text-sm bg-purple-500 hover:bg-purple-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 manage-variants-btn"
-                data-experiment-id={exp.id}
-                aria-expanded={exp.managingVariants ? 'true' : 'false'}
-                aria-controls={`manage-variants-section-${exp.id}`}
-              >
-                {exp.managingVariants ? 'Hide Variants' : 'Manage Variants'}
-              </button>
-              <button 
-                type="button" 
-                class="text-sm bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 clear-data-btn"
-                data-experiment-id={exp.id}
-                data-experiment-name={exp.name}
-                title="Clear all impression and conversion data for this experiment"
-              >
-                Clear Data
-              </button>
-              <form method="POST" action={Astro.url.pathname} class="inline-block delete-experiment-form" data-experiment-name={exp.name}>
-                <input type="hidden" name="_action" value="delete_experiment" />
-                <input type="hidden" name="experiment_id" value={exp.id} />
-                <button type="submit" class="text-sm bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 delete-experiment-btn-submit">
-                  Delete Exp.
-                </button>
-              </form>
             </div>
-          </div>
 
-          {/* SECTION 4: Form for managing/adding variants, toggled independently */}
-          <div 
-            id={`manage-variants-section-${exp.id}`}
-            class={`mt-6 pt-6 border-t border-dashed border-slate-300 dark:border-slate-600 ${!exp.managingVariants ? 'hidden' : ''}`}
-          >
-            <h4 class="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-4">Manage Variants for: <span class="italic">{exp.name}</span></h4>
-            
-            {/* Display Existing Variants */}
-            {exp.variants && exp.variants.length > 0 ? (
-              <div class="mb-6">
-                <h5 class="text-md font-medium text-slate-600 dark:text-slate-300 mb-2">Existing Variants:</h5>
-                <ul class="space-y-3">
-                  {exp.variants.map(variant => (
-                    <li data-variant-id={variant.id} class="variant-item p-3 bg-slate-50 dark:bg-slate-700/50 rounded-md shadow-sm">
-                      {/* Variant Display Section */}
-                      <div class="variant-display-section">
-                        <div class="flex justify-between items-start">
-                          <div>
-                            <p class="font-semibold text-slate-700 dark:text-slate-200">{variant.name}</p>
-                            <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">ID: {variant.id}</p>
-                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{variant.description || 'No description'}</p>
-                          </div>
-                          <div class="variant-stats text-xs text-slate-500 dark:text-slate-400 text-right">
-                            <p>Impressions: {variant.impressions_count ?? 0}</p>
-                            <p>Conversions: {variant.conversions_count ?? 0}</p>
-                            <p>Rate: {variant.conversion_rate?.toFixed(1) ?? 'N/A'}%</p>
+            <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div class="variants-chart-container" data-experiment-id={experiment.id} data-variants={experiment.variantsJsonString}>
+                <canvas></canvas>
+              </div>
+              <div>
+                <div class="mb-2 flex items-center justify-between">
+                  <h4 class="font-semibold text-slate-700 dark:text-slate-300">Variants</h4>
+                  <button
+                    type="button"
+                    class="create-variant-btn rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white shadow-sm hover:bg-green-700"
+                    data-experiment-id={experiment.id}
+                  >
+                    Add Variant
+                  </button>
+                </div>
+                <div class="space-y-3">
+                  {
+                    experiment.variants && experiment.variants.map((variant) => (
+                      <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-700/50">
+                        <div class="flex items-center justify-between">
+                          <p class="font-semibold text-slate-800 dark:text-white">{variant.name}</p>
+                          <div class="flex items-center space-x-2">
+                            <button
+                              type="button"
+                              class="edit-variant-btn rounded p-1 text-xs text-slate-500 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-600"
+                              data-variant-id={variant.id}
+                              data-experiment-id={experiment.id}
+                              data-variant-name={variant.name}
+                              data-variant-description={variant.description || ''}
+                              data-variant-config-json={JSON.stringify(variant.config_json, null, 2) || ''}
+                            >
+                              Edit
+                            </button>
+                            <form method="POST" action="#ab-testing-panel" class="delete-variant-form">
+                              <input type="hidden" name="_action" value="delete_variant" />
+                              <input type="hidden" name="experiment_id" value={experiment.id} />
+                              <input type="hidden" name="variant_id" value={variant.id} />
+                              <button type="submit" class="delete-variant-btn rounded p-1 text-xs text-red-500 hover:bg-red-100">
+                                Delete
+                              </button>
+                            </form>
                           </div>
                         </div>
-                        {variant.config_json && (
-                          <details class="mt-2">
-                            <summary class="text-xs text-blue-500 dark:text-blue-400 cursor-pointer hover:underline">Show/Hide Config JSON</summary>
-                            <pre class="mt-1 text-xs p-2 bg-slate-100 dark:bg-slate-600 rounded overflow-x-auto whitespace-pre-wrap break-all">{JSON.stringify(variant.config_json, null, 2)}</pre>
-                          </details>
-                        )}
-                        <div class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-600 flex justify-end space-x-2">
-                          <button type="button" class="edit-variant-btn text-xs bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-1 px-3 rounded-md shadow-sm transition duration-150" data-experiment-id={exp.id} data-variant-id={variant.id}>
-                            Edit
-                          </button>
-                          <form method="POST" action={Astro.url.pathname} class="inline-block delete-variant-form" data-variant-name={variant.name}>
-                            <input type="hidden" name="_action" value="delete_variant" />
-                            <input type="hidden" name="experiment_id" value={exp.id} />
-                            <input type="hidden" name="variant_id" value={variant.id} />
-                            <button type="submit" class="delete-variant-btn-submit text-xs bg-red-500 hover:bg-red-600 text-white font-medium py-1 px-3 rounded-md shadow-sm transition duration-150">
-                              Delete
-                            </button>
-                          </form>
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          {variant.description || 'No description.'}
+                        </p>
+                        <div class="mt-2 flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">
+                          <span>
+                            {variant.impressions_count} impressions / {variant.conversions_count} conversions
+                          </span>
+                          <span class="font-bold text-blue-600">
+                            {typeof variant.conversion_rate === 'number' ? variant.conversion_rate.toFixed(2) + '%' : 'N/A'} CR
+                          </span>
                         </div>
                       </div>
-
-                      {/* Variant Edit Form Section (Initially Hidden) */}
-                      <div class="variant-edit-form-section hidden mt-2">
-                        <h6 class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">Editing Variant: <span class="italic">{variant.name}</span></h6>
-                        <form method="POST" action={Astro.url.pathname} class="space-y-3">
-                          <input type="hidden" name="_action" value="update_variant" />
-                          <input type="hidden" name="experiment_id" value={exp.id} />
-                          <input type="hidden" name="variant_id" value={variant.id} />
-                          <div>
-                            <label for={`edit_variant_name-${variant.id}`} class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-0.5">Variant Name <span class="text-red-500">*</span></label>
-                            <input type="text" name="variant_name" id={`edit_variant_name-${variant.id}`} required value={variant.name} class="w-full p-1.5 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-white"/>
-                          </div>
-                          <div>
-                            <label for={`edit_variant_description-${variant.id}`} class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-0.5">Variant Description</label>
-                            <textarea name="variant_description" id={`edit_variant_description-${variant.id}`} rows="2" class="w-full p-1.5 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-white">{variant.description}</textarea>
-                          </div>
-                          <div>
-                            <label for={`edit_variant_config_json-${variant.id}`} class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-0.5">Variant Configuration (JSON)</label>
-                            <textarea name="variant_config_json" id={`edit_variant_config_json-${variant.id}`} rows="3" class="w-full p-1.5 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm font-mono text-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-white" placeholder='{
-  "headline": "New Headline!",
-  "buttonColor": "blue"
-}'>{JSON.stringify(variant.config_json, null, 2)}</textarea>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Enter valid JSON. <strong class="text-orange-500">Cannot be changed if variant has impressions.</strong></p>
-                          </div>
-                          <div class="flex justify-end space-x-2 pt-2">
-                            <button type="button" class="cancel-edit-variant-btn text-xs bg-slate-500 hover:bg-slate-600 text-white font-medium py-1.5 px-3 rounded-md shadow-sm transition duration-150" data-variant-id={variant.id}>
-                              Cancel
-                            </button>
-                            <button type="submit" class="save-variant-btn text-xs bg-green-600 hover:bg-green-700 text-white font-semibold py-1.5 px-3 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500">
-                              Save Changes
-                            </button>
-                          </div>
-                        </form>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                    ))
+                  }
+                </div>
               </div>
-            ) : (
-              <p class="text-sm text-slate-500 dark:text-slate-400 italic mb-4">No variants currently exist for this experiment.</p>
-            )}
-            <h5 class="text-md font-medium text-slate-600 dark:text-slate-300 mb-3 pt-4 border-t border-slate-200 dark:border-slate-700">Add New Variant</h5>
-            <form method="POST" action={Astro.url.pathname} class="space-y-4 p-4 bg-slate-50 dark:bg-slate-800/30 rounded-lg shadow">
-              <input type="hidden" name="_action" value="create_variant" />
-              <input type="hidden" name="experiment_id" value={exp.id} />
-              <div>
-                <label for={`variant_name-${exp.id}`} class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Variant Name <span class="text-red-500">*</span></label>
-                <input type="text" name="variant_name" id={`variant_name-${exp.id}`} required class="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-white" placeholder="e.g., Control, Variation A"/>
-              </div>
-              <div>
-                <label for={`variant_description-${exp.id}`} class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Variant Description</label>
-                <textarea name="variant_description" id={`variant_description-${exp.id}`} rows="2" class="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-white" placeholder="Brief description of this variant"></textarea>
-              </div>
-              <div>
-                <label for={`variant_config_json-${exp.id}`} class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Variant Configuration (JSON)</label>
-                <textarea name="variant_config_json" id={`variant_config_json-${exp.id}`} rows="3" class="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 font-mono text-sm dark:bg-slate-700 dark:text-white" placeholder='{
-  "headline": "New Headline!",
-  "buttonColor": "blue"
-}'></textarea>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Enter valid JSON or leave blank.</p>
-              </div>
-              <div class="flex justify-end">
-                <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-md shadow-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900">Add Variant</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ))}
-    </div>
-  ) : (
-    (!abTestError && experiments && experiments.length === 0) && ( 
-        <div class="text-center py-8 px-4 bg-white dark:bg-slate-800 rounded-lg shadow-md">
-        <svg class="mx-auto h-10 w-10 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-            <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
-        </svg>
-        <h3 class="mt-2 text-md font-medium text-slate-700 dark:text-slate-200">No Experiments Found</h3>
-        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Get started by creating your first A/B experiment using the form above.</p>
-        </div>
-    )
-  )}
-</section>
-
-<!-- Modern Confirmation Modal -->
-<div id="delete-confirmation-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-  <!-- Background overlay -->
-  <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
-
-    <!-- This element is to trick the browser into centering the modal contents. -->
-    <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-
-    <!-- Modal panel -->
-    <div class="relative inline-block align-bottom bg-white dark:bg-slate-800 rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
-      <div class="sm:flex sm:items-start">
-        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 sm:mx-0 sm:h-10 sm:w-10">
-          <!-- Heroicon name: outline/exclamation-triangle -->
-          <svg class="h-6 w-6 text-red-600 dark:text-red-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-          </svg>
-        </div>
-        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-          <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white" id="modal-title">
-            Delete Experiment
-          </h3>
-          <div class="mt-2">
-            <p class="text-sm text-gray-500 dark:text-gray-300" id="modal-description">
-              Are you sure you want to delete this experiment? This action will permanently remove the experiment and all its associated variants, impressions, and conversion data. This action cannot be undone.
-            </p>
-          </div>
-        </div>
-      </div>
-      <div class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
-        <button type="button" id="confirm-delete-btn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-slate-800 sm:ml-3 sm:w-auto sm:text-sm transition duration-150 ease-in-out">
-          Delete Experiment
-        </button>
-        <button type="button" id="cancel-delete-btn" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-slate-700 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-slate-800 sm:mt-0 sm:w-auto sm:text-sm transition duration-150 ease-in-out">
-          Cancel
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Modern Confirmation Modal for Variants -->
-<div id="delete-variant-confirmation-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="variant-modal-title" role="dialog" aria-modal="true">
-  <!-- Background overlay -->
-  <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
-
-    <!-- This element is to trick the browser into centering the modal contents. -->
-    <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-
-    <!-- Modal panel -->
-    <div class="relative inline-block align-bottom bg-white dark:bg-slate-800 rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
-      <div class="sm:flex sm:items-start">
-        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 sm:mx-0 sm:h-10 sm:w-10">
-          <!-- Heroicon name: outline/exclamation-triangle -->
-          <svg class="h-6 w-6 text-red-600 dark:text-red-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-          </svg>
-        </div>
-        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-          <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white" id="variant-modal-title">
-            Delete Variant
-          </h3>
-          <div class="mt-2">
-            <p class="text-sm text-gray-500 dark:text-gray-300" id="variant-modal-description">
-              Are you sure you want to delete this variant? This action cannot be undone, especially if the variant has impressions.
-            </p>
-          </div>
-        </div>
-      </div>
-      <div class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
-        <button type="button" id="confirm-delete-variant-btn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-slate-800 sm:ml-3 sm:w-auto sm:text-sm transition duration-150 ease-in-out">
-          Delete Variant
-        </button>
-        <button type="button" id="cancel-delete-variant-btn" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-slate-700 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-slate-800 sm:mt-0 sm:w-auto sm:text-sm transition duration-150 ease-in-out">
-          Cancel
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Clear Data Confirmation Modal -->
-<div id="clear-data-confirmation-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="clear-data-modal-title" role="dialog" aria-modal="true">
-  <!-- Background overlay -->
-  <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
-
-    <!-- This element is to trick the browser into centering the modal contents. -->
-    <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-
-    <!-- Modal panel -->
-    <div class="relative inline-block align-bottom bg-white dark:bg-slate-800 rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
-      <div class="sm:flex sm:items-start">
-        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-orange-100 dark:bg-orange-900/30 sm:mx-0 sm:h-10 sm:w-10">
-          <!-- Warning icon -->
-          <svg class="h-6 w-6 text-orange-600 dark:text-orange-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-          </svg>
-        </div>
-        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-          <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white" id="clear-data-modal-title">
-            Clear Experiment Data
-          </h3>
-          <div class="mt-2">
-            <p class="text-sm text-gray-500 dark:text-gray-300" id="clear-data-modal-description">
-              Are you sure you want to clear all data for this experiment? This will permanently delete:
-            </p>
-            <ul class="text-sm text-gray-500 dark:text-gray-300 mt-2 ml-4 list-disc list-inside">
-              <li>All impression records from all variants in this experiment</li>
-              <li>All conversion records from all variants in this experiment</li>
-            </ul>
-            <p class="text-sm text-red-600 dark:text-red-400 mt-2 font-semibold">
-              This action cannot be undone. The experiment structure and variants will remain, but all tracking data will be lost.
-            </p>
-          </div>
-        </div>
-      </div>
-      <div class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
-        <button type="button" id="confirm-clear-data-btn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-orange-600 text-base font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 dark:focus:ring-offset-slate-800 sm:ml-3 sm:w-auto sm:text-sm transition duration-150 ease-in-out">
-          Clear All Data
-        </button>
-        <button type="button" id="cancel-clear-data-btn" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-slate-700 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-slate-800 sm:mt-0 sm:w-auto sm:text-sm transition duration-150 ease-in-out">
-          Cancel
-        </button>
-      </div>
-      <div id="clear-data-status" class="mt-3 hidden">
-        <div class="rounded-md bg-blue-50 dark:bg-blue-900/30 p-3">
-          <div class="flex">
-            <div class="flex-shrink-0">
-              <svg class="h-5 w-5 text-blue-400 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            </div>
-            <div class="ml-3">
-              <p class="text-sm text-blue-800 dark:text-blue-200" id="clear-data-status-text">
-                Clearing experiment data...
-              </p>
             </div>
           </div>
+        ))
+      ) : (
+        <div class="rounded-lg border-2 border-dashed border-slate-300 p-12 text-center dark:border-slate-700">
+          <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1"
+              d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"
+            />
+          </svg>
+          <h3 class="mt-2 text-sm font-medium text-slate-900 dark:text-white">No experiments</h3>
+          <p class="mt-1 text-sm text-slate-500">Get started by creating a new experiment.</p>
         </div>
-      </div>
-    </div>
+      )
+    }
   </div>
 </div>
 
 <script>
-  // Define an interface for the variant data used in the chart (if needed by chart.js in this component context)
-  // This might be better defined in a global types file or passed if Chart.js types are used directly
-  interface ChartVariantData {
-    name: string;
-    rate: number | null | undefined;
-    impressions: number | null | undefined;
-    conversions: number | null | undefined;
-  }
+    function initializeABTestManager() {
+        // Find the parent panel for this manager instance
+        const managerElement = document.getElementById('ab-test-manager');
+        const panel = managerElement ? managerElement.closest('.tab-panel') : null;
 
-  // Function to load analytics data for all experiments
-  async function loadAnalyticsData() {
-    const experimentElements = document.querySelectorAll('[data-experiment-id]');
-    const experimentIds = new Set<string>();
-    
-    // Collect all unique experiment IDs
-    experimentElements.forEach(el => {
-      const expId = (el as HTMLElement).dataset.experimentId;
-      if (expId) experimentIds.add(expId);
-    });
-
-    // Fetch analytics data for each experiment
-    for (const experimentId of experimentIds) {
-      try {
-        const response = await fetch(`/api/analytics?experimentId=${experimentId}`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' }
-        });
-
-        if (!response.ok) {
-          console.error(`Failed to fetch analytics for experiment ${experimentId}:`, response.statusText);
-          setErrorState(experimentId);
-          continue;
-        }
-
-        const analytics = await response.json();
-        updateAnalyticsDisplay(experimentId, analytics);
-
-      } catch (error) {
-        console.error(`Error fetching analytics for experiment ${experimentId}:`, error);
-        setErrorState(experimentId);
-      }
-    }
-  }
-
-  // Function to update the analytics display with fetched data
-  function updateAnalyticsDisplay(experimentId: string, analytics: {
-    totalImpressions?: number;
-    totalConversions?: number;
-    overallRate?: number;
-    avgTimeOnPage?: number;
-    topCountry?: string;
-    countryCount?: number;
-    bestCountry?: string;
-    topDevice?: string;
-    topBrowser?: string;
-    mobilePercentage?: number;
-    avgScroll?: number;
-    bounceRate?: number;
-    returnVisitors?: number;
-    topUtmSource?: string;
-    topUtmCampaign?: string;
-    directTraffic?: number;
-    sampleSize?: number;
-    isSignificant?: boolean;
-  }) {
-    const elements = document.querySelectorAll(`[data-experiment-id="${experimentId}"]`);
-    
-    elements.forEach(el => {
-      const element = el as HTMLElement;
-      const metric = element.dataset.metric;
-      
-      if (!metric) return;
-
-      let value = 'N/A';
-      let className = 'text-slate-800 dark:text-slate-200';
-
-      switch (metric) {
-        case 'total-impressions':
-          value = analytics.totalImpressions?.toLocaleString() || '0';
-          break;
-        case 'total-conversions':
-          value = analytics.totalConversions?.toLocaleString() || '0';
-          break;
-        case 'overall-rate':
-          value = analytics.overallRate ? `${(analytics.overallRate ?? 0).toFixed(1)}%` : '0%';
-          className = (analytics.overallRate ?? 0) > 5 ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-slate-200';
-          break;
-        case 'avg-time-on-page':
-          value = analytics.avgTimeOnPage ? `${Math.round(analytics.avgTimeOnPage)}s` : 'N/A';
-          break;
-        case 'top-country':
-          value = analytics.topCountry || 'N/A';
-          break;
-        case 'country-count':
-          value = analytics.countryCount?.toString() || '0';
-          break;
-        case 'best-country':
-          value = analytics.bestCountry || 'N/A';
-          break;
-        case 'top-device':
-          value = analytics.topDevice || 'N/A';
-          break;
-        case 'top-browser':
-          value = analytics.topBrowser || 'N/A';
-          break;
-        case 'mobile-percentage':
-          value = analytics.mobilePercentage ? `${analytics.mobilePercentage.toFixed(1)}%` : 'N/A';
-          break;
-        case 'avg-scroll':
-          value = analytics.avgScroll ? `${analytics.avgScroll.toFixed(1)}%` : 'N/A';
-          break;
-        case 'bounce-rate':
-          value = `${(analytics.bounceRate ?? 0).toFixed(1)}%`;
-          className = (analytics.bounceRate ?? 0) > 70 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400';
-          break;
-        case 'return-visitors':
-          value = analytics.returnVisitors?.toLocaleString() || '0';
-          break;
-        case 'top-utm-source':
-          value = analytics.topUtmSource || 'Direct';
-          break;
-        case 'top-utm-campaign':
-          value = analytics.topUtmCampaign || 'N/A';
-          break;
-        case 'direct-traffic':
-          value = analytics.directTraffic ? `${analytics.directTraffic.toFixed(1)}%` : 'N/A';
-          break;
-        case 'sample-size':
-          value = analytics.sampleSize?.toLocaleString() || '0';
-          break;
-        case 'significance-status':
-          value = analytics.isSignificant ? 'Significant' : 'Not Significant';
-          className = analytics.isSignificant ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400';
-          break;
-      }
-
-      element.textContent = value;
-      element.className = element.className.replace(/text-\w+-\d+/g, '') + ` ${className}`;
-    });
-  }
-
-  // Function to set error state for failed analytics loads
-  function setErrorState(experimentId: string) {
-    const elements = document.querySelectorAll(`[data-experiment-id="${experimentId}"][data-metric]`);
-    elements.forEach(el => {
-      el.textContent = 'Error';
-      el.className = el.className.replace(/text-\w+-\d+/g, '') + ' text-red-500 dark:text-red-400';
-    });
-  }
-
-  function initializeABTestManagerScripts() {
-    // Load analytics data for all experiments
-    loadAnalyticsData();
-
-    // Manage Variants toggle
-    document.querySelectorAll('.manage-variants-btn').forEach(btnEl => {
-      const btn = btnEl as HTMLButtonElement;
-      btn.addEventListener('click', () => {
-        const experimentId = btn.dataset.experimentId;
-        if (!experimentId) return;
-        const variantSection = document.getElementById(`manage-variants-section-${experimentId}`);
-        const isExpanded = btn.getAttribute('aria-expanded') === 'true';
-
-        if (variantSection) {
-          variantSection.classList.toggle('hidden');
-          btn.setAttribute('aria-expanded', String(!isExpanded));
-          btn.textContent = !isExpanded ? 'Hide Variants' : 'Manage Variants';
-          
-          const currentUrl = new URL(window.location.href);
-          if (!isExpanded) {
-            currentUrl.searchParams.set('openExperiment', experimentId);
-            // Preserve existing hash for the main tabs
-            window.history.pushState({ path: currentUrl.href }, '', currentUrl.pathname + currentUrl.search + currentUrl.hash);
-          } else {
-            currentUrl.searchParams.delete('openExperiment');
-            window.history.pushState({ path: currentUrl.href }, '', currentUrl.pathname + currentUrl.search + currentUrl.hash);
-          }
-        }
-      });
-    });
-
-    // Restore "Manage Variants" open state on popstate/reload based on URL query param
-    // This specific part might need to be coordinated if popstate is also handled by dashboard.astro for tabs
-    const params = new URLSearchParams(window.location.search);
-    const openExperimentIdQuery = params.get('openExperiment');
-    if (openExperimentIdQuery) {
-      const sectionToOpen = document.getElementById(`manage-variants-section-${openExperimentIdQuery}`);
-      const buttonForSection = document.querySelector(`.manage-variants-btn[data-experiment-id="${openExperimentIdQuery}"]`) as HTMLButtonElement | null;
-      if (sectionToOpen) sectionToOpen.classList.remove('hidden');
-      if (buttonForSection) {
-        buttonForSection.setAttribute('aria-expanded', 'true');
-        buttonForSection.textContent = 'Hide Variants';
-      }
-    }
-
-
-    // Event listeners for Edit Experiment buttons
-    document.querySelectorAll('.edit-experiment-btn').forEach(btnEl => {
-      const btn = btnEl as HTMLButtonElement;
-      btn.addEventListener('click', () => {
-        const experimentId = btn.dataset.experimentId;
-        if (!experimentId) return;
-
-        const displaySection = document.querySelector(`.experiment-display-section-${experimentId}`);
-        const actionsSection = document.querySelector(`.experiment-actions-section-${experimentId}`);
-        const editFormSection = document.querySelector(`.experiment-edit-form-section-${experimentId}`) as HTMLElement | null;
-
-        if (displaySection) displaySection.classList.add('hidden');
-        if (actionsSection) actionsSection.classList.add('hidden');
-        if (editFormSection) {
-          editFormSection.classList.remove('hidden');
-          const firstInput = editFormSection.querySelector('input[name="experiment_name"]') as HTMLInputElement | null;
-          if (firstInput) {
-            firstInput.focus();
-          }
-        }
-      });
-    });
-
-    // Event listeners for Cancel Edit Experiment buttons
-    document.querySelectorAll('.cancel-edit-experiment-btn').forEach(btnEl => {
-      const btn = btnEl as HTMLButtonElement;
-      btn.addEventListener('click', () => {
-        const experimentId = btn.dataset.experimentId;
-        if (!experimentId) return;
-
-        const displaySection = document.querySelector(`.experiment-display-section-${experimentId}`);
-        const actionsSection = document.querySelector(`.experiment-actions-section-${experimentId}`);
-        const editFormSection = document.querySelector(`.experiment-edit-form-section-${experimentId}`);
-
-        if (displaySection) displaySection.classList.remove('hidden');
-        if (actionsSection) actionsSection.classList.remove('hidden');
-        if (editFormSection) editFormSection.classList.add('hidden');
-      });
-    });
-
-    // Event listeners for Edit Variant buttons
-    document.querySelectorAll('.edit-variant-btn').forEach(btnEl => {
-      const btn = btnEl as HTMLButtonElement;
-      btn.addEventListener('click', () => {
-        const variantId = btn.dataset.variantId;
-        if (!variantId) return;
-        const listItem = btn.closest('.variant-item');
-        if (!listItem) return;
-
-        const displaySection = listItem.querySelector('.variant-display-section');
-        const editFormSection = listItem.querySelector('.variant-edit-form-section');
-
-        if (displaySection) displaySection.classList.add('hidden');
-        if (editFormSection) editFormSection.classList.remove('hidden');
-      });
-    });
-
-    // Event listeners for Cancel Edit Variant buttons
-    document.querySelectorAll('.cancel-edit-variant-btn').forEach(btnEl => {
-      const btn = btnEl as HTMLButtonElement;
-      btn.addEventListener('click', () => {
-        const variantId = btn.dataset.variantId;
-        if (!variantId) return;
-        const listItem = btn.closest('.variant-item');
-        if (!listItem) return;
-
-        const displaySection = listItem.querySelector('.variant-display-section');
-        const editFormSection = listItem.querySelector('.variant-edit-form-section');
-
-        if (displaySection) displaySection.classList.remove('hidden');
-        if (editFormSection) editFormSection.classList.add('hidden');
-      });
-    });
-
-    // Event listener for Delete Variant form submissions
-    document.querySelectorAll('.delete-variant-form').forEach(formEl => {
-      const form = formEl as HTMLFormElement;
-      form.addEventListener('submit', (event) => {
-        event.preventDefault(); // Always prevent default, we'll handle via modal
-        
-        const variantName = form.dataset.variantName || 'this variant';
-        const modal = document.getElementById('delete-variant-confirmation-modal');
-        const modalDescription = document.getElementById('variant-modal-description');
-        const confirmBtn = document.getElementById('confirm-delete-variant-btn');
-        const cancelBtn = document.getElementById('cancel-delete-variant-btn');
-        
-        if (modal && modalDescription && confirmBtn && cancelBtn) {
-          // Update modal text with specific variant name
-          modalDescription.textContent = `Are you sure you want to delete "${variantName}"? This action cannot be undone, especially if the variant has impressions.`;
-          
-          // Show modal
-          modal.classList.remove('hidden');
-          
-          // Handle confirm
-          const handleConfirm = () => {
-            form.submit(); // Actually submit the form
-            cleanup();
-          };
-          
-          // Handle cancel
-          const handleCancel = () => {
-            cleanup();
-          };
-          
-          // Cleanup function
-          const cleanup = () => {
-            modal.classList.add('hidden');
-            confirmBtn.removeEventListener('click', handleConfirm);
-            cancelBtn.removeEventListener('click', handleCancel);
-            modal.removeEventListener('click', handleBackdropClick);
-            document.removeEventListener('keydown', handleEscape);
-          };
-          
-          // Handle backdrop click
-          const handleBackdropClick = (e: MouseEvent) => {
-            if (e.target === modal) {
-              handleCancel();
-            }
-          };
-          
-          // Handle escape key
-          const handleEscape = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-              handleCancel();
-            }
-          };
-          
-          // Add event listeners
-          confirmBtn.addEventListener('click', handleConfirm);
-          cancelBtn.addEventListener('click', handleCancel);
-          modal.addEventListener('click', handleBackdropClick);
-          document.addEventListener('keydown', handleEscape);
-        }
-      });
-    });
-
-    // Event listener for Delete Experiment form submissions
-    document.querySelectorAll('.delete-experiment-form').forEach(formEl => {
-      const form = formEl as HTMLFormElement;
-      form.addEventListener('submit', (event) => {
-        event.preventDefault(); // Always prevent default, we'll handle via modal
-        
-        const experimentName = form.dataset.experimentName || 'this experiment';
-        const modal = document.getElementById('delete-confirmation-modal');
-        const modalDescription = document.getElementById('modal-description');
-        const confirmBtn = document.getElementById('confirm-delete-btn');
-        const cancelBtn = document.getElementById('cancel-delete-btn');
-        
-        if (modal && modalDescription && confirmBtn && cancelBtn) {
-          // Update modal text with specific experiment name
-          modalDescription.textContent = `Are you sure you want to delete "${experimentName}"? This action will permanently remove the experiment and all its associated variants, impressions, and conversion data. This action cannot be undone.`;
-          
-          // Show modal
-          modal.classList.remove('hidden');
-          
-          // Handle confirm
-          const handleConfirm = () => {
-            form.submit(); // Actually submit the form
-            cleanup();
-          };
-          
-          // Handle cancel
-          const handleCancel = () => {
-            cleanup();
-          };
-          
-          // Cleanup function
-          const cleanup = () => {
-            modal.classList.add('hidden');
-            confirmBtn.removeEventListener('click', handleConfirm);
-            cancelBtn.removeEventListener('click', handleCancel);
-            modal.removeEventListener('click', handleBackdropClick);
-            document.removeEventListener('keydown', handleEscape);
-          };
-          
-          // Handle backdrop click
-          const handleBackdropClick = (e: MouseEvent) => {
-            if (e.target === modal) {
-              handleCancel();
-            }
-          };
-          
-          // Handle escape key
-          const handleEscape = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-              handleCancel();
-            }
-          };
-          
-          // Add event listeners
-          confirmBtn.addEventListener('click', handleConfirm);
-          cancelBtn.addEventListener('click', handleCancel);
-          modal.addEventListener('click', handleBackdropClick);
-          document.addEventListener('keydown', handleEscape);
-        }
-      });
-    });
-
-    // Event listener for Clear Data buttons
-    document.querySelectorAll('.clear-data-btn').forEach(btnEl => {
-      const btn = btnEl as HTMLButtonElement;
-      btn.addEventListener('click', () => {
-        const experimentId = btn.dataset.experimentId;
-        const experimentName = btn.dataset.experimentName || 'this experiment';
-        
-        if (!experimentId) return;
-        
-        const modal = document.getElementById('clear-data-confirmation-modal');
-        const modalDescription = document.getElementById('clear-data-modal-description');
-        const confirmBtn = document.getElementById('confirm-clear-data-btn') as HTMLButtonElement | null;
-        const cancelBtn = document.getElementById('cancel-clear-data-btn') as HTMLButtonElement | null;
-        const statusDiv = document.getElementById('clear-data-status');
-        const statusText = document.getElementById('clear-data-status-text');
-        
-        if (modal && modalDescription && confirmBtn && cancelBtn && statusDiv && statusText) {
-          // Update modal text with specific experiment name
-          const descriptionText = modalDescription.querySelector('p');
-          if (descriptionText) {
-            descriptionText.textContent = `Are you sure you want to clear all data for "${experimentName}"? This will permanently delete:`;
-          }
-          
-          // Show modal
-          modal.classList.remove('hidden');
-          
-          // Handle confirm
-          const handleConfirm = async () => {
-            try {
-              // Show loading state
-              statusDiv.classList.remove('hidden');
-              statusText.textContent = 'Clearing experiment data...';
-              confirmBtn.disabled = true;
-              cancelBtn.disabled = true;
-              
-              const response = await fetch('/api/clear-experiment-data', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ experimentId })
-              });
-              
-              const result = await response.json();
-              
-              if (result.success) {
-                statusText.textContent = `✅ Success! Cleared ${result.deletedImpressions} impressions and ${result.deletedConversions} conversions.`;
-                
-                // Refresh to the A/B testing tab after a short delay to show updated stats
-                setTimeout(() => {
-                  window.location.href = window.location.pathname + '#ab-testing-panel';
-                  window.location.reload();
-                }, 2000);
-              } else {
-                statusText.textContent = `❌ Error: ${result.error}`;
-                confirmBtn.disabled = false;
-                cancelBtn.disabled = false;
-              }
-            } catch (error) {
-              console.error('Error clearing experiment data:', error);
-              statusText.textContent = '❌ Error: Failed to clear experiment data. Please try again.';
-              confirmBtn.disabled = false;
-              cancelBtn.disabled = false;
-            }
-          };
-          
-          // Handle cancel
-          const handleCancel = () => {
-            cleanup();
-          };
-          
-          // Cleanup function
-          const cleanup = () => {
-            modal.classList.add('hidden');
-            statusDiv.classList.add('hidden');
-            confirmBtn.disabled = false;
-            cancelBtn.disabled = false;
-            confirmBtn.removeEventListener('click', handleConfirm);
-            cancelBtn.removeEventListener('click', handleCancel);
-            modal.removeEventListener('click', handleBackdropClick);
-            document.removeEventListener('keydown', handleEscape);
-          };
-          
-          // Handle backdrop click
-          const handleBackdropClick = (e: MouseEvent) => {
-            if (e.target === modal) {
-              handleCancel();
-            }
-          };
-          
-          // Handle escape key
-          const handleEscape = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-              handleCancel();
-            }
-          };
-          
-          // Add event listeners
-          confirmBtn.addEventListener('click', handleConfirm);
-          cancelBtn.addEventListener('click', handleCancel);
-          modal.addEventListener('click', handleBackdropClick);
-          document.addEventListener('keydown', handleEscape);
-        }
-      });
-    });
-
-    // Chart.js rendering logic
-    const chartContainers = document.querySelectorAll('.chart-container');
-    console.log(`[Chart Debug] Found ${chartContainers.length} chart containers`);
-    
-    if (chartContainers.length > 0) {
-      console.log(`[Chart Debug] Starting Chart.js import and initialization`);
-      import('chart.js/auto').then(({default: Chart}) => {
-        console.log(`[Chart Debug] Chart.js imported successfully`);
-        chartContainers.forEach((containerEl, index) => {
-          const container = containerEl as HTMLElement; 
-          const experimentId = container.dataset.experimentId;
-          console.log(`[Chart Debug] Processing container ${index + 1}, experimentId: ${experimentId}`);
-          
-          if (!experimentId) {
-            console.error(`[Chart Debug] Chart container ${index + 1} missing experiment ID`);
+        if (!panel) {
             return;
-          }
-          
-          const canvas = container.querySelector(`canvas#chart-${experimentId}`) as HTMLCanvasElement | null;
-          if (!canvas) {
-            console.error(`[Chart Debug] Canvas not found for experiment ${experimentId}`);
-            return;
-          }
-          console.log(`[Chart Debug] Canvas found for experiment ${experimentId}`);
-          
-          let variantsData: ChartVariantData[] = [];
-          try {
-            const variantsJson = container.dataset.variants;
-            console.log(`[Chart Debug] Raw variants JSON for experiment ${experimentId}:`, variantsJson);
-            
-            if (variantsJson) {
-              variantsData = JSON.parse(variantsJson);
-              console.log(`[Chart Debug] Parsed variants data for experiment ${experimentId}:`, variantsData);
-            } else {
-              console.warn(`[Chart Debug] No variants JSON data found for experiment ${experimentId}`);
-              return;
+        }
+
+        let hasInitialized = false;
+        const chartInstances = {};
+
+        const destroyExistingChart = (experimentId) => {
+            if (chartInstances[experimentId]) {
+                chartInstances[experimentId].destroy();
+                delete chartInstances[experimentId];
             }
-          } catch (e) {
-            console.error(`[Chart Debug] Failed to parse variants data for chart experiment ${experimentId}:`, e);
-            return;
-          }
+        };
 
-          const chartableVariants = variantsData.filter(v => typeof v.rate === 'number');
-          console.log(`[Chart Debug] Chartable variants for experiment ${experimentId}:`, chartableVariants);
+        const initCharts = async () => {
+            if (hasInitialized) return;
+            hasInitialized = true;
+            
+            const chartContainers = panel.querySelectorAll('.variants-chart-container');
+            if (chartContainers.length === 0) return;
 
-          if (chartableVariants.length > 0) {
-            console.log(`[Chart Debug] Creating chart for experiment ${experimentId} with ${chartableVariants.length} variants`);
-            
-            const labels = chartableVariants.map(v => `${v.name} (Imp: ${v.impressions ?? 0}, Conv: ${v.conversions ?? 0}, Rate: ${(v.rate ?? 0).toFixed(1)}%)`);
-            const data = chartableVariants.map(v => v.rate ?? 0);
-            
-            console.log(`[Chart Debug] Chart labels:`, labels);
-            console.log(`[Chart Debug] Chart data:`, data);
-            
-            const N = chartableVariants.length;
-            const baseColors = [
-              { r: 54, g: 162, b: 235 }, { r: 255, g: 99, b: 132 }, 
-              { r: 255, g: 206, b: 86 }, { r: 75, g: 192, b: 192 }, 
-              { r: 153, g: 102, b: 255 }, { r: 255, g: 159, b: 64 }
-            ];
-            const backgroundColors: string[] = []; 
-            const borderColors: string[] = [];   
+            const { default: Chart } = await import('chart.js/auto');
 
-            for (let i = 0; i < N; i++) {
-              const color = baseColors[i % baseColors.length];
-              backgroundColors.push(`rgba(${color.r}, ${color.g}, ${color.b}, 0.6)`);
-              borderColors.push(`rgba(${color.r}, ${color.g}, ${color.b}, 1)`);
-            }
-            
-            const existingChart = Chart.getChart(canvas);
-            if (existingChart) {
-              console.log(`[Chart Debug] Destroying existing chart for experiment ${experimentId}`);
-              existingChart.destroy();
-            }
+            chartContainers.forEach(container => {
+                if (!(container instanceof HTMLElement)) return;
+                const experimentId = container.dataset.experimentId;
+                const canvas = container.querySelector('canvas');
+                const variantsJson = container.dataset.variants;
 
-            try {
-              const newChart = new Chart(canvas, {
-                type: 'pie',
-                data: {
-                  labels: labels,
-                  datasets: [{
-                    label: 'Conversion Rate (%)',
-                    data: data,
-                    backgroundColor: backgroundColors,
-                    borderColor: borderColors,
-                    borderWidth: 1
-                  }]
-                },
-                options: {
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: { position: 'top', labels: { boxWidth: 20, font: { size: 10 }}},
-                    tooltip: {
-                      callbacks: {
-                        label: function(context) {
-                          let label = context.label || '';
-                          if (label) { label += ': '; }
-                          if (context.parsed !== null && typeof context.parsed === 'number') {
-                            label += context.parsed.toFixed(2) + '%';
-                          }
-                          return label;
-                        }
-                      }
-                    }
-                  }
+                if (!canvas || !variantsJson || !experimentId) return;
+
+                destroyExistingChart(experimentId);
+
+                try {
+                    const variants = JSON.parse(variantsJson);
+                    if (!Array.isArray(variants)) return;
+                    
+                    const chartableVariants = variants.filter(v => typeof v.rate === 'number');
+                    if (chartableVariants.length === 0) return;
+
+                    const labels = chartableVariants.map(v => `${v.name} (Imp: ${v.impressions}, Conv: ${v.conversions}, Rate: ${v.rate.toFixed(1)}%)`);
+                    const data = chartableVariants.map(v => v.rate);
+                    
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) return;
+
+                    chartInstances[experimentId] = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Conversion Rate (%)',
+                                data: data,
+                                backgroundColor: [
+                                    'rgba(54, 162, 235, 0.6)', 'rgba(255, 99, 132, 0.6)',
+                                    'rgba(75, 192, 192, 0.6)', 'rgba(255, 206, 86, 0.6)',
+                                    'rgba(153, 102, 255, 0.6)', 'rgba(255, 159, 64, 0.6)',
+                                ],
+                                borderColor: [
+                                    'rgba(54, 162, 235, 1)', 'rgba(255, 99, 132, 1)',
+                                    'rgba(75, 192, 192, 1)', 'rgba(255, 206, 86, 1)',
+                                    'rgba(153, 102, 255, 1)', 'rgba(255, 159, 64, 1)',
+                                ],
+                                borderWidth: 1,
+                            }],
+                        },
+                        options: {
+                            indexAxis: 'y',
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: { beginAtZero: true, ticks: { color: document.documentElement.classList.contains('dark') ? '#e2e8f0' : '#475569' } },
+                                y: { ticks: { color: document.documentElement.classList.contains('dark') ? '#e2e8f0' : '#475569' } }
+                            },
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            let label = context.dataset.label || '';
+                                            if (label) label += ': ';
+                                            if (context.parsed.x !== null) label += context.parsed.x.toFixed(2) + '%';
+                                            return label;
+                                        }
+                                    }
+                                }
+                            },
+                        },
+                    });
+                } catch (e) {
+                    console.error('Failed to initialize A/B test chart:', e);
                 }
-              });
-              console.log(`[Chart Debug] Chart created successfully for experiment ${experimentId}:`, newChart.id);
-            } catch (chartError) {
-              console.error(`[Chart Debug] Error creating chart for experiment ${experimentId}:`, chartError);
+            });
+        };
+
+        const observer = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    if (panel.classList.contains('is-active')) {
+                        initCharts();
+                        observer.disconnect(); // Run only once
+                    }
+                }
             }
-          } else {
-            console.log(`[Chart Debug] No chartable variants found for experiment ${experimentId} - destroying any existing chart`);
-            const existingChart = Chart.getChart(canvas);
-            if (existingChart) { 
-              existingChart.destroy(); 
-            }
-          }
         });
-      }).catch(error => {
-        console.error('[Chart Debug] Failed to load Chart.js dynamically:', error);
-      });
-    } else {
-      console.log(`[Chart Debug] No chart containers found on page`);
+        
+        // If the panel is already active on page load, run immediately.
+        if (panel.classList.contains('is-active')) {
+             initCharts();
+        } else {
+            // Otherwise, wait for it to become active.
+            observer.observe(panel, { attributes: true });
+        }
     }
-  }
-  
-  // Initialize these scripts when the main dashboard page loads this component
-  if (typeof document !== 'undefined') { // Ensure this runs only in the browser
-    console.log('[Chart Debug] Setting up chart initialization event listeners');
-    
-    // Use multiple events to ensure charts get initialized
-    document.addEventListener('astro:page-load', () => {
-      console.log('[Chart Debug] astro:page-load event fired');
-      initializeABTestManagerScripts();
-    });
-    
-    document.addEventListener('DOMContentLoaded', () => {
-      console.log('[Chart Debug] DOMContentLoaded event fired');
-      initializeABTestManagerScripts();
-    });
-    
-    // Also try immediate initialization if DOM is already ready
-    if (document.readyState === 'loading') {
-      console.log('[Chart Debug] Document still loading, waiting for events');
-    } else {
-      console.log('[Chart Debug] Document already loaded, initializing immediately');
-      setTimeout(() => initializeABTestManagerScripts(), 100);
-    }
-  }
+
+    // Use astro:page-load to ensure this runs on client-side navigation
+    document.addEventListener('astro:page-load', initializeABTestManager, { once: true });
 </script> 

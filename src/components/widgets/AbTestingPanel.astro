@@ -1,0 +1,15 @@
+---
+// Component for the A/B Testing Tab on the Dashboard
+import ABTestManager from '~/components/widgets/ABTestManager.astro';
+import type { Experiment } from '~/types';
+
+interface Props {
+  experiments: Experiment[] | null;
+  abTestError: string | null;
+}
+
+const { experiments, abTestError } = Astro.props;
+---
+<div id="ab-testing-panel" role="tabpanel" class="tab-panel pt-6">
+  <ABTestManager experiments={experiments} abTestError={abTestError} />
+</div> 
