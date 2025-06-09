@@ -2,7 +2,7 @@
 *Lead Generation Platform & Relationship Expertise Business*
 
 **Version:** 2.0  
-**Last Updated:** July 26, 2024 (BT-07 ADDED - Email Verification Flow)
+**Last Updated:** August 1, 2024 (BT-09 FIX - Missing DB Function)
 **Project Manager:** Jason Roberts  
 **Target Launch:** v1.0 within 12 weeks (3 months)
 
@@ -112,6 +112,7 @@ A focused v1.0 launch platform serving as a high-converting lead generation syst
 | 9.2 | Fix "Unknown" User Status | ✅ Complete | 🟢 | 🔵 | - | User status was showing as "Unknown". Also fixed by correcting the `dashboard.astro` data query. | July 31, 2024 |
 | 9.3 | Fix Incorrect User Detail Data | ✅ Complete | 🟢 | 🔵 | - | User detail page showed "Pending Verification" and "N/A" for several fields. Fixed by correcting the API key usage in the `/api/get-user-details` endpoint. | July 31, 2024 |
 | 9.4 | Fix Missing ConvertKit Tags | ✅ Complete | 🟢 | 🔵 | - | User tags were not appearing on the detail page. Also fixed by correcting the API key usage in the `/api/get-user-details` endpoint. | July 31, 2024 |
+| 9.5 | Fix missing DB function update_quiz_verification_timestamp | ✅ Complete | 🟢 | 🔵 | - | The function was missing from the main migration script, causing errors when updating quiz verification status. Added the function back to `migration-add-cascade-deletes.sql`. | August 1, 2024 |
 
 ---
 
