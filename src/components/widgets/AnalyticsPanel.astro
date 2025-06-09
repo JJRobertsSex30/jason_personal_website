@@ -39,6 +39,7 @@ document.addEventListener('astro:page-load', () => {
     const errorContainer = document.getElementById('analytics-error');
     const errorMessage = document.getElementById('analytics-error-message');
     const contentContainer = document.getElementById('analytics-content');
+    const refreshButton = document.getElementById('refresh-analytics');
     
     let hasLoaded = false;
 
@@ -56,6 +57,21 @@ document.addEventListener('astro:page-load', () => {
     });
 
     observer.observe(analyticsPanel, { attributes: true });
+
+    // Initial check in case the panel is already active on page load
+    if (analyticsPanel.classList.contains('is-active')) {
+        hasLoaded = true;
+        fetchAndDisplayAnalytics();
+        observer.disconnect();
+    }
+
+    refreshButton?.addEventListener('click', () => {
+        // Always refetch when the button is clicked
+        if (contentContainer) {
+            contentContainer.innerHTML = ''; // Clear old content
+        }
+        fetchAndDisplayAnalytics();
+    });
 
     function createCard(title, value, change, iconSvg, colorClass) {
         const card = document.createElement('div');

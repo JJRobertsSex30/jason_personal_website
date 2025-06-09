@@ -1,0 +1,128 @@
+# Database Schema
+
+## Tables
+
+### `user_engagement_tracking`
+
+| Column | Type | Nullable | Primary Key | Default |
+|--------|------|----------|-------------|---------|
+| `[object Object]` | `UUID` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `TEXT` | ✅ |  |  |
+| `[object Object]` | `TEXT` | ✅ |  |  |
+| `[object Object]` | `TEXT` | ✅ |  |  |
+| `[object Object]` | `TEXT` | ✅ |  |  |
+| `[object Object]` | `TEXT` | ✅ |  |  |
+| `[object Object]` | `JSONB` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `TIMESTAMPTZ` | ✅ |  | `[unsupported]` |
+
+### `user_engagements`
+
+| Column | Type | Nullable | Primary Key | Default |
+|--------|------|----------|-------------|---------|
+| `[object Object]` | `UUID` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `UUID` | ✅ |  |  |
+| `[object Object]` | `TEXT` | ✅ |  |  |
+| `[object Object]` | `JSONB` | ✅ |  |  |
+| `[object Object]` | `TIMESTAMPTZ` | ✅ |  | `[unsupported]` |
+
+### `user_profiles`
+
+| Column | Type | Nullable | Primary Key | Default |
+|--------|------|----------|-------------|---------|
+| `[object Object]` | `UUID` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `TEXT` | ✅ |  |  |
+| `[object Object]` | `INT` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `TEXT` | ✅ |  |  |
+| `[object Object]` | `TIMESTAMPTZ` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `TIMESTAMPTZ` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `TEXT` | ✅ |  |  |
+| `[object Object]` | `BOOL` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `TIMESTAMPTZ` | ✅ |  |  |
+| `[object Object]` | `TEXT` | ✅ |  |  |
+| `[object Object]` | `TIMESTAMPTZ` | ✅ |  |  |
+| `[object Object]` | `UUID` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `TEXT` | ✅ |  | `[unsupported]` |
+
+### `gem_transactions`
+
+| Column | Type | Nullable | Primary Key | Default |
+|--------|------|----------|-------------|---------|
+| `[object Object]` | `UUID` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `UUID` | ✅ |  |  |
+| `[object Object]` | `UUID` | ✅ |  |  |
+| `[object Object]` | `TEXT` | ✅ |  |  |
+| `[object Object]` | `INT` | ✅ |  |  |
+| `[object Object]` | `TEXT` | ✅ |  |  |
+| `[object Object]` | `TIMESTAMPTZ` | ✅ |  | `[unsupported]` |
+
+### `referrals`
+
+| Column | Type | Nullable | Primary Key | Default |
+|--------|------|----------|-------------|---------|
+| `[object Object]` | `UUID` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `UUID` | ✅ |  |  |
+| `[object Object]` | `UUID` | ✅ |  |  |
+| `[object Object]` | `TEXT` | ✅ |  |  |
+| `[object Object]` | `TIMESTAMPTZ` | ✅ |  | `[unsupported]` |
+
+### `variants`
+
+| Column | Type | Nullable | Primary Key | Default |
+|--------|------|----------|-------------|---------|
+| `[object Object]` | `UUID` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `UUID` | ✅ |  |  |
+| `[object Object]` | `TEXT` | ✅ |  |  |
+| `[object Object]` | `JSONB` | ✅ |  |  |
+| `[object Object]` | `TIMESTAMPTZ` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `TEXT` | ✅ |  |  |
+| `[object Object]` | `TIMESTAMPTZ` | ✅ |  | `[unsupported]` |
+
+### `email_verification_tokens`
+
+| Column | Type | Nullable | Primary Key | Default |
+|--------|------|----------|-------------|---------|
+| `[object Object]` | `UUID` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `UUID` | ✅ |  |  |
+| `[object Object]` | `TEXT` | ✅ |  |  |
+| `[object Object]` | `TEXT` | ✅ |  |  |
+| `[object Object]` | `TIMESTAMPTZ` | ✅ |  |  |
+| `[object Object]` | `BOOL` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `TIMESTAMPTZ` | ✅ |  |  |
+| `[object Object]` | `TIMESTAMPTZ` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `UUID` | ✅ |  |  |
+| `[object Object]` | `UUID` | ✅ |  |  |
+| `[object Object]` | `UUID` | ✅ |  |  |
+
+### `user_experiment_participation`
+
+| Column | Type | Nullable | Primary Key | Default |
+|--------|------|----------|-------------|---------|
+| `[object Object]` | `UUID` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `TEXT` | ✅ |  |  |
+| `[object Object]` | `UUID` | ✅ |  |  |
+| `[object Object]` | `UUID` | ✅ |  |  |
+| `[object Object]` | `TIMESTAMPTZ` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `BOOL` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `JSONB` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `INT` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `BOOL` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `TIMESTAMPTZ` | ✅ |  |  |
+| `[object Object]` | `BOOL` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `TIMESTAMPTZ` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `TIMESTAMPTZ` | ✅ |  | `[unsupported]` |
+
+### `conversion_attribution`
+
+| Column | Type | Nullable | Primary Key | Default |
+|--------|------|----------|-------------|---------|
+| `[object Object]` | `UUID` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `UUID` | ✅ |  |  |
+| `[object Object]` | `TEXT` | ✅ |  |  |
+| `[object Object]` | `UUID` | ✅ |  |  |
+| `[object Object]` | `UUID` | ✅ |  |  |
+| `[object Object]` | `TEXT` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `NUMERIC` | ✅ |  | `[unsupported]` |
+| `[object Object]` | `INT` | ✅ |  |  |
+| `[object Object]` | `NUMERIC` | ✅ |  |  |
+| `[object Object]` | `TIMESTAMPTZ` | ✅ |  | `[unsupported]` |
+
