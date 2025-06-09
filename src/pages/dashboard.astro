@@ -314,7 +314,7 @@ if (Astro.request.method === 'GET') {
     }
 
     try {
-      const usersResponse = await fetch('http://localhost:4321/api/users');
+      const usersResponse = await fetch(new URL('/api/users', Astro.url));
       if (!usersResponse.ok) {
         throw new Error(`Failed to fetch users: ${usersResponse.statusText}`);
       }
