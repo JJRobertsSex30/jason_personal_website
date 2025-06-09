@@ -15,7 +15,7 @@ export interface ABVariant {
 // Payload for the 'impressions' table
 interface ImpressionPayload {
   variant_id: string;
-  user_identifier: string;
+  user_id: string;
   experiment_id: string;
   session_identifier?: string | null;
   page_url?: string | null;
@@ -54,7 +54,7 @@ interface ImpressionPayload {
 interface ConversionPayload {
   variant_id: string;
   experiment_id: string;
-  user_identifier: string;
+  user_id: string;
   conversion_type: string;
   details?: Record<string, unknown> | null;
   session_identifier?: string | null;
@@ -154,10 +154,10 @@ function getClientUserIdentifier(): string {
     console.warn("[abTester] Client user identifier requested in non-browser environment. Generating transient ID.");
     return 'client_anon_ssr_' + crypto.randomUUID(); 
   }
-  let userId = localStorage.getItem('ab_user_identifier');
+  let userId = localStorage.getItem('ab_user_id');
   if (!userId) {
     userId = crypto.randomUUID();
-    localStorage.setItem('ab_user_identifier', userId);
+    localStorage.setItem('ab_user_id', userId);
     console.log('[abTester] New client user identifier generated and stored:', userId);
   }
   return userId;
@@ -586,7 +586,7 @@ export async function logClientImpression(variant: ABVariant | null, experimentN
   const impressionData: ImpressionPayload = {
     // Core A/B testing data
     variant_id: variant.id,
-    user_identifier: userIdentifier,
+    user_id: userIdentifier,
     experiment_id: variant.experiment_id, 
     session_identifier: sessionIdentifier,
     page_url: window.location.href,
@@ -628,7 +628,7 @@ export async function logClientImpression(variant: ABVariant | null, experimentN
     user_context: {
       experiment_name: experimentNameFromContext,
       variant_name: variant.name,
-      user_identifier_type: 'ab_user_identifier'
+      user_identifier_type: 'ab_user_id'
     },
     metadata: {
       ...getBrowserMetadata(),
@@ -715,7 +715,7 @@ export async function trackConversion(
     .select('id')
     .eq('experiment_id', associatedExperimentId)
     .eq('variant_id', variantId) 
-    .eq('user_identifier', userIdentifierString)
+    .eq('user_id', userIdentifierString)
     .eq('conversion_type', conversionType) 
     .limit(1)
     .maybeSingle();
@@ -776,7 +776,7 @@ export async function trackConversion(
   const conversionData: ConversionPayload = {
     variant_id: variantId, 
     experiment_id: associatedExperimentId,
-    user_identifier: userIdentifierString,
+    user_id: userIdentifierString,
     conversion_type: conversionType,
     details: details,
     session_identifier: sessionIdentifier,
@@ -791,7 +791,7 @@ export async function trackConversion(
     conversion_context: {
       variant_id: variantId,
       experiment_id: associatedExperimentId,
-      user_identifier_type: 'ab_user_identifier',
+      user_identifier_type: 'ab_user_id',
       conversion_timestamp: new Date().toISOString(),
       client_info: {
         page_url: typeof window !== 'undefined' ? window.location.href : null,

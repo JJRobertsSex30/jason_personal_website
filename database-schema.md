@@ -58,7 +58,7 @@ Detailed attribution for conversions to specific experiments.
 |--------|------|----------|---------|
 | `id` | uuid | NO | `gen_random_uuid()` |
 | `conversion_id` | uuid | NO | `null` |
-| `user_identifier` | text | NO | `null` |
+| `user_id` | text | NO | `null` |
 | `experiment_id` | uuid | NO | `null` |
 | `variant_id` | uuid | NO | `null` |
 | `attribution_method` | text | NO | `'first_exposure'::text` |
@@ -74,7 +74,7 @@ Tracks user conversion events.
 | `id` | uuid | NO | `extensions.uuid_generate_v4()` |
 | `variant_id` | uuid | NO | `null` |
 | `experiment_id` | uuid | NO | `null` |
-| `user_identifier` | text | YES | `null` |
+| `user_id` | text | YES | `null` |
 | `session_identifier` | text | YES | `null` |
 | `conversion_type` | text | NO | `null` |
 | `details` | jsonb | YES | `null` |
@@ -174,7 +174,7 @@ Tracks user impressions for A/B tests.
 | `id` | uuid | NO | `extensions.uuid_generate_v4()` |
 | `variant_id` | uuid | NO | `null` |
 | `experiment_id` | uuid | NO | `null` |
-| `user_identifier` | uuid | NO | `null` |
+| `user_id` | uuid | NO | `null` |
 | `impression_at` | timestamp with time zone | NO | `now()` |
 | `page_url` | text | YES | `null` |
 | `user_agent` | text | YES | `null` |
@@ -207,7 +207,7 @@ Detailed analytics for individual page views.
 |--------|------|----------|---------|
 | `id` | uuid | NO | `gen_random_uuid()` |
 | `page_url` | text | NO | `null` |
-| `user_identifier` | text | YES | `null` |
+| `user_id` | text | YES | `null` |
 | `session_id` | uuid | YES | `null` |
 | `view_timestamp` | timestamp with time zone | YES | `timezone('utc'::text, now())` |
 | `time_on_page_seconds` | integer | YES | `null` |
@@ -236,7 +236,7 @@ Stores results from user-submitted quizzes.
 | `utm_source` | text | YES | `null` |
 | `utm_medium` | text | YES | `null` |
 | `utm_campaign` | text | YES | `null` |
-| `user_identifier` | text | YES | `null` |
+| `user_id` | text | YES | `null` |
 | `quiz_version` | text | YES | `'1.0'::text` |
 | `quiz_metadata` | jsonb | YES | `null` |
 | `email_validation_status` | jsonb | YES | `null` |
@@ -288,7 +288,7 @@ Tracks user participation in experiments to prevent double-counting.
 | Column | Type | Nullable | Default |
 |--------|------|----------|---------|
 | `id` | uuid | NO | `gen_random_uuid()` |
-| `user_identifier` | text | NO | `null` |
+| `user_id` | text | NO | `null` |
 | `experiment_id` | uuid | NO | `null` |
 | `variant_id` | uuid | NO | `null` |
 | `first_exposure_date` | timestamp with time zone | NO | `now()` |

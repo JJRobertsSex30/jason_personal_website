@@ -657,7 +657,7 @@ function getResultSummary(score: number) {
               }
 
               // Add browser_identifier
-              const browserIdentifier = localStorage.getItem('ab_user_identifier');
+              const browserIdentifier = localStorage.getItem('ab_user_id');
               if (browserIdentifier) {
                 formData.append('browser_identifier', browserIdentifier);
               }
@@ -776,7 +776,7 @@ function getResultSummary(score: number) {
               }
 
               // Add browser_identifier
-              const browserIdentifier = localStorage.getItem('ab_user_identifier');
+              const browserIdentifier = localStorage.getItem('ab_user_id');
               if (browserIdentifier) {
                 formData.append('browser_identifier', browserIdentifier);
               }

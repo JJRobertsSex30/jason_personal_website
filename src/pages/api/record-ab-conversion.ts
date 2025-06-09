@@ -10,219 +10,141 @@ interface ConversionPayload {
   original_exposure_timestamp?: string | null; // ISO string
   page_url_at_submission?: string | null; // URL where the original A/B form was
   conversion_type: string; // e.g., 'email_confirmed', 'purchase_completed'
+  conversion_value?: number;
   // You might add other relevant metadata here
   conversion_metadata?: Record<string, unknown>; 
 }
 
 export const POST: APIRoute = async ({ request, clientAddress }) => {
-  const requestTimestamp = new Date().toISOString();
-  console.log(`[API RecordABConversion ${requestTimestamp}] Received request from IP: ${clientAddress}`);
-
-  let payload: ConversionPayload;
   try {
-    payload = await request.json();
-  } catch (error) {
-    console.warn(`[API RecordABConversion ${requestTimestamp}] Error parsing request body:`, error);
-    return new Response(JSON.stringify({ success: false, message: 'Invalid request body. JSON expected.' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+    const payload: ConversionPayload = await request.json();
+    const { app_confirmation_token: token } = payload;
+    const requestTimestamp = new Date().toISOString();
 
-  console.log(`[API RecordABConversion ${requestTimestamp}] Received payload:`, payload);
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Confirmation token is required" }), { status: 400 });
+    }
 
-  // Basic validation
-  if (!payload.app_confirmation_token || !payload.conversion_type) {
-    console.warn(`[API RecordABConversion ${requestTimestamp}] Missing required fields: app_confirmation_token or conversion_type.`);
-    return new Response(JSON.stringify({ 
-      success: false, 
-      message: 'Missing required fields: app_confirmation_token and conversion_type are required.' 
-    }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  try {
-    // --- 1. Validate app_confirmation_token and get associated data --- 
-    // This is a placeholder. You'll need to implement this based on your DB schema.
-    // Example: Check against `pending_email_confirmations` table.
-    console.log(`[API RecordABConversion ${requestTimestamp}] Placeholder: Validating app_confirmation_token: ${payload.app_confirmation_token}`);
     const { data: pendingConfirmation, error: tokenError } = await supabase
       .from('pending_email_confirmations')
-      .select('id, email, variant_id, experiment_id, browser_identifier, session_identifier, original_exposure_timestamp, submission_details, confirmed_at')
-      .eq('confirmation_token', payload.app_confirmation_token)
-      .maybeSingle();
+      .select('*')
+      .eq('confirmation_token', token)
+      .single();
 
-    if (tokenError) {
-      console.error(`[API RecordABConversion ${requestTimestamp}] DB error validating token: ${tokenError.message}`);
-      return new Response(JSON.stringify({ success: false, message: 'Database error during token validation.' }), { status: 500 });
+    if (tokenError || !pendingConfirmation) {
+      return new Response(JSON.stringify({ error: 'Invalid or expired token' }), { status: 404 });
     }
 
-    if (!pendingConfirmation) {
-      console.warn(`[API RecordABConversion ${requestTimestamp}] Invalid or unknown app_confirmation_token: ${payload.app_confirmation_token}`);
-      return new Response(JSON.stringify({ success: false, message: 'Invalid or expired confirmation token.' }), { status: 404 });
-    }
-
-    if (pendingConfirmation.confirmed_at) {
-        console.warn(`[API RecordABConversion ${requestTimestamp}] Token ${payload.app_confirmation_token} already used at ${pendingConfirmation.confirmed_at}.`);
-        // Decide if this is an error or just a note. For now, allow re-processing but log it.
-        // You might return a 409 Conflict or a success if re-processing is fine.
-    }
-
-    // --- 2. Determine Experiment ID if not already present ---
-    let experimentId = pendingConfirmation.experiment_id;
-    const variantId = pendingConfirmation.variant_id || payload.ab_test_variant_id;
-    const userIdentifier = pendingConfirmation.browser_identifier; // This is the ab_user_identifier from localStorage
-    const sessionIdentifier = pendingConfirmation.session_identifier || payload.session_identifier;
-
-    if (!userIdentifier) {
-      console.warn(`[API RecordABConversion ${requestTimestamp}] Critical: user_identifier (browser_identifier) is missing from pendingConfirmation. Cannot reliably record conversion.`);
-      // Depending on strictness, you might return an error here
-    }
-
-    if (!experimentId && variantId) {
-        console.log(`[API RecordABConversion ${requestTimestamp}] Experiment ID missing, attempting to look up via variant ID: ${variantId}`);
-        const { data: variantData, error: variantError } = await supabase
-            .from('variants')
-            .select('experiment_id')
-            .eq('id', variantId)
-            .single();
-        if (variantError) {
-            console.error(`[API RecordABConversion ${requestTimestamp}] DB error fetching experiment ID for variant ${variantId}: ${variantError.message}`);
-            // Continue without experiment_id, or handle as critical error
-        } else if (variantData) {
-            experimentId = variantData.experiment_id;
-            console.log(`[API RecordABConversion ${requestTimestamp}] Found experiment_id ${experimentId} for variant ${variantId}`);
-        }
-    }
-
-    // --- 3. Record the conversion event ---
-    console.log(`[API RecordABConversion ${requestTimestamp}] Preparing to record conversion event for email: ${pendingConfirmation.email}, User Identifier: ${userIdentifier}`);
-    
-    // Determine if this is the first conversion for this user in this experiment
-    let isFirstConversion = true;
-    if (userIdentifier && experimentId) {
-      const { data: existingConversions, error: existingConversionError } = await supabase
-        .from('conversions')
-        .select('id')
-        .eq('user_identifier', userIdentifier)
-        .eq('experiment_id', experimentId)
-        .limit(1);
-
-      if (existingConversionError) {
-        console.warn(`[API RecordABConversion ${requestTimestamp}] DB error checking for existing conversions: ${existingConversionError.message}. Proceeding as if first conversion.`);
-      } else if (existingConversions && existingConversions.length > 0) {
-        isFirstConversion = false;
-        console.log(`[API RecordABConversion ${requestTimestamp}] Existing conversion found for user ${userIdentifier} in experiment ${experimentId}. Marking as not first conversion.`);
-      }
-    }
-
-    const conversionTimestamp = new Date();
-    let timeToConvertSeconds = null;
-    const originalExposureDate = pendingConfirmation.original_exposure_timestamp ? new Date(pendingConfirmation.original_exposure_timestamp) : null;
-    if (originalExposureDate) {
-      timeToConvertSeconds = Math.round((conversionTimestamp.getTime() - originalExposureDate.getTime()) / 1000);
-    }
-
+    const experimentId = pendingConfirmation.experiment_id;
+    const variantId = pendingConfirmation.variant_id;
+    const userIdentifier = pendingConfirmation.browser_identifier;
+    const sessionIdentifier = pendingConfirmation.session_identifier;
     const submissionDetails = pendingConfirmation.submission_details || {};
 
-    const getJsonStringOrNull = (value: unknown): string | null => {
-      if (value === null || typeof value === 'undefined') {
-        return null;
-      }
-      return String(value);
-    };
+    // Check for existing conversion
+    const { data: existingConversions, error: existingConversionCheckError } = await supabase
+      .from('conversions')
+      .select('id')
+      .eq('user_id', userIdentifier)
+      .eq('experiment_id', experimentId);
 
-    // const utmSourceRaw = submissionDetails.utm_source || submissionDetails.UTM_SOURCE; // Removed for simplification
-    // const utmMediumRaw = submissionDetails.utm_medium || submissionDetails.UTM_MEDIUM; // Removed for simplification
-    // const utmCampaignRaw = submissionDetails.utm_campaign || submissionDetails.UTM_CAMPAIGN; // Removed for simplification
-    // const referrerSourceRaw = submissionDetails.referrer_source || submissionDetails.page_referrer; // Removed for simplification
-
-    const conversionDetailsForJson = {
-        confirmation_token_used: payload.app_confirmation_token,
-        client_ip_at_conversion: clientAddress,
-        page_url_at_initial_submission: submissionDetails.page_url_at_submission || payload.page_url_at_submission,
-        form_source_at_initial_submission: submissionDetails.form_source,
-        // Include other parts of pendingConfirmation.submission_details if they are not mapped elsewhere
-        ...(payload.conversion_metadata || {}), // Any additional metadata passed in payload
-    };
+    if (existingConversionCheckError) {
+      console.warn(`[API RecordABConversion ${requestTimestamp}] DB error checking existing conversions:`, existingConversionCheckError.message);
+    }
+    
+    const conversionTimestamp = new Date();
+    const originalExposureDate: Date | null = new Date(pendingConfirmation.original_exposure_timestamp);
 
     const conversionDataToInsert = {
       experiment_id: experimentId,
       variant_id: variantId, 
-      user_identifier: userIdentifier, 
+      user_id: userIdentifier, 
       session_identifier: sessionIdentifier, 
-      conversion_type: payload.conversion_type, // e.g., 'email_confirmed'
-      details: conversionDetailsForJson, 
-      metadata: { // For new structured metadata fields in `conversions` table
-        confirmation_token_used: payload.app_confirmation_token,
-        initial_submission_details: submissionDetails,
-        payload_metadata: payload.conversion_metadata || null,
+      conversion_type: payload.conversion_type,
+      conversion_value: payload.conversion_value || 0,
+      details: {
+        confirmation_token_used: token,
+        client_ip_at_conversion: clientAddress,
+        page_url_at_initial_submission: submissionDetails.page_url_at_submission,
+        form_source_at_initial_submission: submissionDetails.form_source,
+        ...(payload.conversion_metadata || {}),
+      },
+      metadata: {
         source_ip: clientAddress,
       },
+      traffic_source: 'direct', 
+      referrer_source: submissionDetails.referrer_source || null,
+      utm_source: submissionDetails.utm_source,
+      utm_medium: submissionDetails.utm_medium,
+      utm_campaign: submissionDetails.utm_campaign,
+      utm_term: submissionDetails.utm_term,
+      utm_content: submissionDetails.utm_content,
       created_at: conversionTimestamp.toISOString(),
       original_exposure_date: originalExposureDate ? originalExposureDate.toISOString() : null,
-      is_first_conversion_for_experiment: isFirstConversion,
-      conversion_attribution_source: 'email_confirmation', // Or derive more dynamically if needed
-      time_to_convert: timeToConvertSeconds,
-      conversion_eligibility_verified: true, // Assuming confirmation implies eligibility for this step
-      conversion_context: { stage: 'email_confirmed' }, // Basic context
-      // UTM and referrer fields will rely on DB defaults (if nullable) or be null
-      utm_source: null,
-      utm_medium: null,
-      utm_campaign: null,
-      referrer_source: null,
-      // country_code: null, // If available from initial submission & needed
-      // device_type: null, // If available from initial submission & needed
-      // conversion_value: null // If applicable and available
     };
 
-    console.log(`[API RecordABConversion ${requestTimestamp}] Simplified conversion data to insert into 'conversions' table:`, conversionDataToInsert);
+    if (!existingConversions || existingConversions.length === 0) {
+      const { data: newConversion, error: insertError } = await supabase
+        .from('conversions')
+        .insert(conversionDataToInsert)
+        .select('id')
+        .single();
 
-    const { error: conversionInsertError } = await supabase
-      .from('conversions') // Corrected table name to 'conversions'
-      .insert(conversionDataToInsert);
-
-    if (conversionInsertError) {
-      console.error(`[API RecordABConversion ${requestTimestamp}] DB error inserting into 'conversions': ${conversionInsertError.message}`);
-      return new Response(JSON.stringify({ success: false, message: 'Database error recording conversion.' }), { status: 500 });
-    }
+      if (insertError) {
+        console.error(`[API RecordABConversion ${requestTimestamp}] DB error inserting conversion: ${insertError.message}`);
+      } else if (newConversion) {
+        console.log(`[API RecordABConversion ${requestTimestamp}] Successfully inserted conversion with ID: ${newConversion.id}`);
+        // Attribution logic can now safely use newConversion.id
+        if(userIdentifier) {
+            const { data: participation, error: participationError } = await supabase
+                .from('user_experiment_participation')
+                .select('experiment_id, variant_id')
+                .eq('user_id', userIdentifier)
+                .order('first_seen_at', { ascending: false })
+                .limit(1)
+                .single();
     
-    console.log(`[API RecordABConversion ${requestTimestamp}] Conversion recorded successfully into 'conversions' for ${pendingConfirmation.email}.`);
-
-    // --- 4. Update pending_email_confirmations (e.g., mark as confirmed) ---
-    // YOU MUST VERIFY `pending_email_confirmations` table and its columns `confirmed_at` and `status` from your schema.
-    if (!pendingConfirmation.confirmed_at) {
-        console.log(`[API RecordABConversion ${requestTimestamp}] Marking email as confirmed in 'pending_email_confirmations' for token ${payload.app_confirmation_token}`);
-        
-        const { error: updateConfirmError } = await supabase
-        .from('pending_email_confirmations')
-        .update({ 
-            confirmed_at: new Date().toISOString(), 
-            is_confirmed: true // Corrected from status: 'confirmed' to is_confirmed: true based on schema
-        })
-        .eq('id', pendingConfirmation.id);
-
-        if (updateConfirmError) {
-        console.error(`[API RecordABConversion ${requestTimestamp}] DB error updating 'pending_email_confirmations': ${updateConfirmError.message}`);
-        // This might not be a fatal error for the conversion itself, but should be logged.
+            if (participationError && participationError.code !== 'PGRST116') {
+                console.error(`[API RecordABConversion ${requestTimestamp}] DB error checking for experiment participation: ${participationError.message}`);
+            } else if (participation) {
+                const attributionData = {
+                    conversion_id: newConversion.id,
+                    experiment_id: participation.experiment_id,
+                    variant_id: participation.variant_id,
+                    user_id: userIdentifier,
+                    attribution_type: 'email_verification_first_touch'
+                };
+                
+                const { error: attributionError } = await supabase
+                    .from('conversion_attributions')
+                    .insert(attributionData);
+    
+                if (attributionError) {
+                    console.error(`[API RecordABConversion ${requestTimestamp}] DB error inserting into 'conversion_attributions': ${attributionError.message}`);
+                }
+            }
         }
-    } else {
-        console.log(`[API RecordABConversion ${requestTimestamp}] Email already marked as confirmed at ${pendingConfirmation.confirmed_at} in 'pending_email_confirmations'. Skipping update.`);
+      }
     }
-    
+      
+    // Update the pending_email_confirmations table
+    const { error: updateConfirmationError } = await supabase
+      .from('pending_email_confirmations')
+      .update({ confirmed_at: conversionTimestamp.toISOString(), status: 'confirmed' })
+      .eq('id', pendingConfirmation.id);
+
+    if (updateConfirmationError) {
+      console.error(`[API RecordABConversion ${requestTimestamp}] DB error updating 'pending_email_confirmations': ${updateConfirmationError.message}`);
+    }
+
     return new Response(JSON.stringify({ success: true, message: 'Conversion recorded successfully.' }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
 
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(`[API RecordABConversion ${requestTimestamp}] Outer error processing conversion: ${errorMessage}`, error);
-    return new Response(JSON.stringify({ success: false, message: 'An unexpected server error occurred.', error: errorMessage }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+  } catch (error) {
+    console.error(`[API RecordABConversion] Unhandled error:`, error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+    return new Response(JSON.stringify({ error: 'Server Error', message: errorMessage }), { status: 500 });
   }
 }; 

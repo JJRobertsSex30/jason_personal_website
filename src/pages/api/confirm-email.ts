@@ -88,28 +88,12 @@ export const GET: APIRoute = async ({ request, clientAddress }) => {
     if (pendingConfirmation.experiment_id && pendingConfirmation.variant_id && pendingConfirmation.browser_identifier) {
       console.log(`[API Confirm Email ${requestTimestamp}] Proceeding to log A/B conversion for email: ${pendingConfirmation.email}, Experiment: ${pendingConfirmation.experiment_id}`);
       
-      let timeToConvert: number | null = null;
-      if (pendingConfirmation.original_exposure_timestamp) {
-        try {
-          const exposureDate = new Date(pendingConfirmation.original_exposure_timestamp);
-          const confirmedDate = new Date(confirmedAt);
-          if (confirmedDate >= exposureDate) {
-            timeToConvert = Math.round((confirmedDate.getTime() - exposureDate.getTime()) / 1000); // in seconds
-            console.log(`[API Confirm Email ${requestTimestamp}] Calculated time_to_convert: ${timeToConvert}s`);
-          } else {
-            console.warn(`[API Confirm Email ${requestTimestamp}] Confirmation date (${confirmedAt}) is before exposure date (${pendingConfirmation.original_exposure_timestamp}). Setting time_to_convert to 0.`);
-            timeToConvert = 0;
-          }
-        } catch (e: unknown) {
-          const errorMessage = e instanceof Error ? e.message : String(e);
-          console.error(`[API Confirm Email ${requestTimestamp}] Error calculating time_to_convert: ${errorMessage}. Original exposure: ${pendingConfirmation.original_exposure_timestamp}, Confirmed at: ${confirmedAt}`);
-        }
-      } else {
-        console.log(`[API Confirm Email ${requestTimestamp}] No original_exposure_timestamp found for ${pendingConfirmation.email}. time_to_convert will be null.`);
-      }
+      // Determine the time to convert in seconds
+      const submittedAt = new Date(pendingConfirmation.created_at);
+      const timeToConvert = (now.getTime() - submittedAt.getTime()) / 1000; // in seconds
 
+      // Extract details from the submission_details JSON blob
       const submissionDetails = pendingConfirmation.submission_details || {};
-      const conversionType = submissionDetails.form_source === 'quiz-submit' ? 'quiz_double_opt_in' : 'hero_double_opt_in';
 
       // Basic geo data (can be enriched if needed, e.g. by calling geolocation API again using clientAddress if stored)
       // For now, using what might have been in submission_details or default to null
@@ -120,24 +104,25 @@ export const GET: APIRoute = async ({ request, clientAddress }) => {
       };
       const deviceType = getDeviceTypeFromUserAgent(submissionDetails.user_agent || null);
 
-
+      // Step 4: Record a conversion event for this successful email confirmation
       const conversionData = {
-        experiment_id: pendingConfirmation.experiment_id,
-        variant_id: pendingConfirmation.variant_id,
-        user_identifier: pendingConfirmation.browser_identifier, // Critical: Use the browser_identifier from impression
-        session_identifier: pendingConfirmation.session_identifier,
-        conversion_type: conversionType,
-        details: {
-          email: pendingConfirmation.email,
-          confirmed_at: confirmedAt,
-          original_submission_details: submissionDetails, // Store all originally submitted details
+        conversion_type: 'email_confirmed',
+        user_id: pendingConfirmation.browser_identifier, // Critical: Use the browser_identifier from impression
+        conversion_value: 0,
+        metadata: { 
+          email_used: pendingConfirmation.email,
+          token_used: token,
+          source_table: 'pending_email_confirmations',
+          source_record_id: pendingConfirmation.id,
+          api_endpoint: '/api/confirm-email',
+          confirmation_token_used: token,
         },
-        time_to_convert: timeToConvert,
+        session_identifier: pendingConfirmation.session_identifier,
         conversion_eligibility_verified: true, // Implicitly verified by going through double opt-in
         original_exposure_date: pendingConfirmation.original_exposure_timestamp, // Already an ISO string or null
         conversion_context: {
-            confirmation_method: 'double_opt_in_link',
-            form_source_at_submission: submissionDetails.form_source || 'unknown',
+          confirmation_method: 'double_opt_in_link',
+          form_source_at_submission: submissionDetails.form_source || 'unknown',
         },
         // Fields from database-schema.md for conversions table
         country_code: geo.country_code,
@@ -146,13 +131,7 @@ export const GET: APIRoute = async ({ request, clientAddress }) => {
         utm_source: submissionDetails.utm_source || null, // Assuming these might be in submission_details
         utm_medium: submissionDetails.utm_medium || null,
         utm_campaign: submissionDetails.utm_campaign || null,
-        conversion_value: 1.0, // Default value for an email confirmation
-        metadata: {
-            source_table: 'pending_email_confirmations',
-            source_record_id: pendingConfirmation.id,
-            api_endpoint: '/api/confirm-email',
-            confirmation_token_used: token,
-        }
+        time_to_convert: timeToConvert,
       };
 
       console.log(`[API Confirm Email ${requestTimestamp}] Inserting conversion data for ${pendingConfirmation.email}:`, conversionData);

@@ -18,14 +18,14 @@ export const GET: APIRoute = async () => {
         
         // Fetch raw data from all relevant tables in parallel without complex joins
         const [impressionsRes, conversionsRes, engagementsRes] = await Promise.all([
-            supabase.from('impressions').select('*').order('impression_at', { ascending: false }).limit(200),
-            supabase.from('conversions').select('*').order('created_at', { ascending: false }).limit(200),
+            supabase.from('impressions').select('user_id, page_url, impression_at, experiment_id, variant_id, session_identifier, device_type, country_code'),
+            supabase.from('conversions').select('user_id, conversion_type, created_at, experiment_id, variant_id, session_identifier, device_type, country_code, conversion_value'),
             supabase.from('user_engagements').select('*').order('created_at', { ascending: false }).limit(200)
         ]);
 
-        if (impressionsRes.error) throw impressionsRes.error;
-        if (conversionsRes.error) throw conversionsRes.error;
-        if (engagementsRes.error) throw engagementsRes.error;
+        if (impressionsRes.error) throw new Error(`Impressions fetch error: ${impressionsRes.error.message}`);
+        if (conversionsRes.error) throw new Error(`Conversions fetch error: ${conversionsRes.error.message}`);
+        if (engagementsRes.error) throw new Error(`Engagements fetch error: ${engagementsRes.error.message}`);
 
         // In the future, this data can be combined and processed here on the server
         // to create a unified timeline, but for now, we pass the raw, separated data
@@ -47,25 +47,38 @@ export const GET: APIRoute = async () => {
         
         const events: JourneyEvent[] = [];
         
-        (journeyData.impressions || []).forEach(imp => events.push({
-            type: 'Impression',
-            timestamp: imp.impression_at,
-            title: `Viewed Page`,
-            details: `URL: ${imp.page_url || 'Unknown'}`,
-            userId: imp.user_identifier,
-            email: usersMap.get(imp.user_identifier),
-        }));
+        // Group events by user
+        const userJourneys: { [key: string]: JourneyEvent[] } = {};
 
-        (journeyData.conversions || []).forEach(conv => events.push({
-            type: 'Conversion',
-            timestamp: conv.created_at,
-            title: `Converted: ${conv.conversion_type}`,
-            details: `Value: ${conv.conversion_value || 'N/A'}`,
-            userId: conv.user_identifier,
-            email: usersMap.get(conv.user_identifier),
-        }));
+        journeyData.impressions.forEach(imp => {
+            if (!userJourneys[imp.user_id]) {
+                userJourneys[imp.user_id] = [];
+            }
+            userJourneys[imp.user_id].push({
+                type: 'Impression',
+                timestamp: new Date(imp.impression_at).toISOString(),
+                title: `Viewed Page`,
+                details: `URL: ${imp.page_url || 'Unknown'}`,
+                userId: imp.user_id,
+                email: usersMap.get(imp.user_id),
+            });
+        });
 
-        (journeyData.engagements || []).forEach(eng => events.push({
+        journeyData.conversions.forEach(conv => {
+            if (!userJourneys[conv.user_id]) {
+                userJourneys[conv.user_id] = [];
+            }
+            userJourneys[conv.user_id].push({
+                type: 'Conversion',
+                timestamp: new Date(conv.created_at).toISOString(),
+                title: `Converted: ${conv.conversion_type}`,
+                details: `Value: ${conv.conversion_value || 'N/A'}`,
+                userId: conv.user_id,
+                email: usersMap.get(conv.user_id),
+            });
+        });
+
+        journeyData.engagements.forEach(eng => events.push({
             type: 'Engagement',
             timestamp: eng.created_at,
             title: `Engaged: ${eng.event_type}`,

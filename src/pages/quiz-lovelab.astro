@@ -756,7 +756,7 @@ const scoreRanges = [
               }
 
               // Add browser_identifier
-              const browserIdentifier = localStorage.getItem('ab_user_identifier');
+              const browserIdentifier = localStorage.getItem('ab_user_id');
               if (browserIdentifier) {
                 formData.append('browser_identifier', browserIdentifier);
               }
@@ -880,7 +880,7 @@ const scoreRanges = [
               }
 
               // Add browser_identifier
-              const browserIdentifier = localStorage.getItem('ab_user_identifier');
+              const browserIdentifier = localStorage.getItem('ab_user_id');
               if (browserIdentifier) {
                 formData.append('browser_identifier', browserIdentifier);
               }

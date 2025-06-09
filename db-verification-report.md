@@ -35,9 +35,9 @@ Due to Supabase RLS/permissions limitations, the following components **cannot b
 11. `conversion_attribution` ✅ (empty)
 
 ### 🔧 **Corrections Made to Documentation:**
-1. **`impressions.user_identifier`**: Changed from `text` → `uuid` ✅
+1. **`impressions.user_id`**: Changed from `text` → `uuid` ✅
 2. **`impressions.session_identifier`**: Changed from `text` → `uuid` ✅  
-3. **`conversions.session_identifier`**: Changed from `text` → `uuid` ✅
+3. **`conversions.user_id`**: Changed from `text` → `uuid` ✅
 4. **Added missing column**: `user_was_eligible` in impressions table ✅
 
 ---
@@ -57,22 +57,22 @@ CREATE TYPE connection_type_enum AS ENUM ('slow-2g', '2g', '3g', '4g', '5g', 'wi
 ### 📇 **Performance Indexes (Probably Missing)**
 ```sql
 -- Critical indexes for A/B testing performance:
-CREATE INDEX idx_impressions_user_identifier ON impressions(user_identifier);
-CREATE INDEX idx_impressions_user_variant ON impressions(user_identifier, variant_id);
+CREATE INDEX idx_impressions_user_id ON impressions(user_id);
+CREATE INDEX idx_impressions_user_variant ON impressions(user_id, variant_id);
 CREATE INDEX idx_impressions_first_exposure ON impressions(is_first_exposure);
 CREATE INDEX idx_impressions_eligibility ON impressions USING GIN(user_eligibility_status);
 CREATE INDEX idx_impressions_metadata ON impressions USING GIN(metadata);
 CREATE INDEX idx_impressions_date ON impressions(impression_at);
 
-CREATE INDEX idx_conversions_user_identifier ON conversions(user_identifier);
-CREATE INDEX idx_conversions_user_variant ON conversions(user_identifier, variant_id);
+CREATE INDEX idx_conversions_user_id ON conversions(user_id);
+CREATE INDEX idx_conversions_user_variant ON conversions(user_id, variant_id);
 CREATE INDEX idx_conversions_first_conversion ON conversions(is_first_conversion_for_experiment);
 CREATE INDEX idx_conversions_attribution ON conversions(conversion_attribution_source);
 CREATE INDEX idx_conversions_metadata ON conversions USING GIN(metadata);
 CREATE INDEX idx_conversions_date ON conversions(created_at);
 
 -- User participation tracking indexes:
-CREATE INDEX idx_user_exp_participation_user ON user_experiment_participation(user_identifier);
+CREATE INDEX idx_user_exp_participation_user ON user_experiment_participation(user_id);
 CREATE INDEX idx_user_exp_participation_exp ON user_experiment_participation(experiment_id);
 CREATE INDEX idx_user_exp_participation_variant ON user_experiment_participation(variant_id);
 CREATE INDEX idx_user_exp_participation_eligible ON user_experiment_participation(was_eligible_at_exposure);
@@ -81,7 +81,7 @@ CREATE INDEX idx_user_exp_participation_dates ON user_experiment_participation(f
 
 -- Conversion attribution indexes:
 CREATE INDEX idx_conversion_attribution_exp ON conversion_attribution(experiment_id);
-CREATE INDEX idx_conversion_attribution_user ON conversion_attribution(user_identifier);
+CREATE INDEX idx_conversion_attribution_user ON conversion_attribution(user_id);
 CREATE INDEX idx_conversion_attribution_method ON conversion_attribution(attribution_method);
 CREATE INDEX idx_conversion_attribution_time ON conversion_attribution(time_to_conversion_hours);
 ```
@@ -106,6 +106,11 @@ CREATE INDEX idx_conversion_attribution_time ON conversion_attribution(time_to_c
 -- This analytics view likely needs to be created:
 1. ab_test_analytics - Comprehensive A/B test performance view
 ```
+
+### 🎯 **New Indexes:**
+- `CREATE INDEX idx_referrals_user_id ON referrals(user_id);`
+- `CREATE INDEX idx_referrals_referring_user_id ON referrals(referring_user_id);`
+- `CREATE INDEX idx_gem_transactions_user_id ON gem_transactions(user_id);`
 
 ---
 

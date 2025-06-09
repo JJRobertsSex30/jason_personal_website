@@ -1,3 +1,4 @@
+import { SupabaseClient, PostgrestError } from '@supabase/supabase-js';
 import { supabase } from './supabaseClient';
 
 /**
@@ -29,15 +30,15 @@ export interface UserEligibilityResult {
  * Fails gracefully on network errors to ensure A/B testing continues working
  */
 export async function checkUserEligibilityForABTesting(
-  userIdentifier: string,
-  experimentId?: string
+  user_id: string,
+  experiment_id?: string
 ): Promise<UserEligibilityResult> {
   try {
     // 1. Check for ANY site-wide conversions for this user
     const { data: siteWideConversions, error: conversionError } = await supabase
       .from('conversions')
       .select('experiment_id, variant_id, conversion_type, created_at')
-      .eq('user_identifier', userIdentifier)
+      .eq('user_id', user_id)
       .limit(5); // Limit for performance, we just need to know if ANY exist
 
     if (conversionError) {
@@ -66,7 +67,7 @@ export async function checkUserEligibilityForABTesting(
 
     // If user has ANY conversions site-wide, they're ineligible for ALL future experiments
     if (siteWideConversions && siteWideConversions.length > 0) {
-      console.log(`[UserEligibility] User ${userIdentifier} ineligible: already converted site-wide`);
+      console.log(`[UserEligibility] User ${user_id} ineligible: already converted site-wide`);
       return {
         isEligible: false,
         reason: 'already_converted_site_wide',
@@ -77,13 +78,13 @@ export async function checkUserEligibilityForABTesting(
     }
 
     // 2. If checking for specific experiment, also check recent impressions to prevent spam
-    if (experimentId) {
+    if (experiment_id) {
       try {
         const { data: recentImpressions, error: impressionError } = await supabase
           .from('impressions')
           .select('impression_at')  // Fix: Use impression_at instead of created_at
-          .eq('user_identifier', userIdentifier)
-          .eq('experiment_id', experimentId)
+          .eq('user_id', user_id)
+          .eq('experiment_id', experiment_id)
           .gte('impression_at', new Date(Date.now() - 2 * 60 * 1000).toISOString()) // Last 2 minutes
           .limit(1);
 
@@ -130,7 +131,7 @@ export async function checkUserEligibilityForABTesting(
  * Fails gracefully on network errors to prevent disruption
  */
 export async function trackIneligibleUserEngagement(
-  userIdentifier: string,
+  user_id: string,
   experimentName: string,
   variantName: string,
   pageUrl: string,
@@ -141,7 +142,7 @@ export async function trackIneligibleUserEngagement(
     const { error } = await supabase
       .from('user_engagement_tracking')
       .insert({
-        user_identifier: userIdentifier,
+        user_id: user_id,
         engagement_type: engagementType,
         experiment_context: experimentName,
         variant_context: variantName,
@@ -179,21 +180,21 @@ export async function trackIneligibleUserEngagement(
  * For quiz completions by return users, we track engagement but not conversion
  */
 export async function handleReturnUserConversion(
-  userIdentifier: string,
+  user_id: string,
   variantId: string,
   conversionType: string,
   conversionValue?: number,
   details?: Record<string, unknown>
 ): Promise<{ tracked: boolean; reason: string }> {
   
-  const eligibility = await checkUserEligibilityForABTesting(userIdentifier);
+  const eligibility = await checkUserEligibilityForABTesting(user_id);
   
   if (!eligibility.isEligible && eligibility.reason === 'already_converted_site_wide') {
     // This is a return user who has already converted
     // Track as engagement, not as A/B test conversion
     
     await supabase.from('user_engagement_tracking').insert({
-      user_identifier: userIdentifier,
+      user_id: user_id,
       engagement_type: 'repeat_conversion',
       metadata: {
         original_variant_id: variantId,
@@ -217,4 +218,78 @@ export async function handleReturnUserConversion(
     tracked: true,
     reason: 'User eligible for A/B test conversion tracking'
   };
-} 
+}
+
+export const checkUserExperimentParticipation = async (
+  supabase: SupabaseClient,
+  user_id: string,
+  experiment_id: string
+): Promise<{ participated: boolean; variant_id: string | null }> => {
+  const { data } = await supabase
+    .from('user_experiment_participation')
+    .select('variant_id')
+    .eq('user_id', user_id)
+    .eq('experiment_id', experiment_id)
+    .single();
+
+  return {
+    participated: data !== null,
+    variant_id: data ? data.variant_id : null
+  };
+};
+
+export const checkUserConversionForExperiment = async (
+  supabase: SupabaseClient,
+  user_id: string,
+  experiment_id: string
+): Promise<boolean> => {
+  const { data, count } = await supabase
+    .from('conversions')
+    .select('id', { count: 'exact' })
+    .eq('user_id', user_id)
+    .eq('experiment_id', experiment_id);
+
+  return (data && data.length > 0) || (count !== null && count > 0);
+};
+
+export const recordUserParticipation = async (
+  supabase: SupabaseClient,
+  user_id: string,
+  experiment_id: string,
+  variant_id: string
+): Promise<{ success: boolean; error?: PostgrestError }> => {
+  const { error } = await supabase
+    .from('user_experiment_participation')
+    .insert({
+      user_id: user_id,
+      experiment_id,
+      variant_id,
+    });
+
+  return {
+    success: error === null,
+    error: error || undefined
+  };
+};
+
+export const recordConversion = async (
+  supabase: SupabaseClient,
+  user_id: string,
+  experiment_id: string,
+  variant_id: string,
+  conversion_type: string,
+  value?: number
+): Promise<{ success: boolean; error?: PostgrestError }> => {
+  const { error } = await supabase.from('conversions').insert({
+    user_id: user_id,
+    experiment_id,
+    variant_id,
+    conversion_type,
+    conversion_value: value,
+  });
+
+  return {
+    success: error === null,
+    error: error || undefined
+  };
+}; 

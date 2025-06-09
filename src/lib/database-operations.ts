@@ -38,7 +38,7 @@ export interface UserProfile {
 export interface ImpressionData {
   experiment_id: string; // UUID
   variant_id: string; // UUID
-  user_identifier: string; // This will be the user_profiles.id
+  user_id: string; // This will be the user_profiles.id
   page_url?: string;
   metadata?: Record<string, unknown>;
   session_identifier?: string;
@@ -79,7 +79,7 @@ export interface ImpressionRecord {
   id: string; // uuid
   variant_id: string; // uuid
   experiment_id: string; // uuid
-  user_identifier: string; // uuid
+  user_id: string; // uuid
   session_identifier?: string | null; // uuid
   impression_at: string; // timestamptz
   page_url?: string | null;
@@ -110,7 +110,7 @@ export interface ImpressionRecord {
 }
 
 export interface ConversionInsertData {
-  user_identifier: string; // text in schema, but typically uuid from user_profiles.id
+  user_id: string; // text in schema, but typically uuid from user_profiles.id
   conversion_type: string;
   experiment_id?: string | null; // uuid
   variant_id?: string | null; // uuid
@@ -800,7 +800,7 @@ export async function verifyTokenAndLogConversion(tokenValue: string): Promise<V
     // Constructing the object for the 'conversions' table
     // Ensuring all keys match the snake_case column names from database-schema.md
     const conversionData: ConversionInsertData = {
-      user_identifier: tokenRecord.user_profile_id,
+      user_id: tokenRecord.user_profile_id,
       conversion_type: 'email_verified',
       experiment_id: tokenRecord.experiment_id,
       variant_id: tokenRecord.variant_id,
@@ -890,7 +890,7 @@ export async function updateUserFirstName(userId: string, firstName: string): Pr
 }
 
 export async function logHeroImpression(impressionData: ImpressionData): Promise<SingleResult<ImpressionRecord>> {
-    if (!impressionData.experiment_id || !impressionData.variant_id || !impressionData.user_identifier) {
+    if (!impressionData.experiment_id || !impressionData.variant_id || !impressionData.user_id) {
         // Ensure the error object matches PostgrestError structure if possible, or a simple error object
         return { 
             data: null, 
@@ -906,7 +906,7 @@ export async function logHeroImpression(impressionData: ImpressionData): Promise
         const payload: Record<string, unknown> = {
             experiment_id: impressionData.experiment_id,
             variant_id: impressionData.variant_id,
-            user_identifier: impressionData.user_identifier,
+            user_id: impressionData.user_id,
             impression_at: new Date().toISOString(),
             page_url: impressionData.page_url,
             session_identifier: impressionData.session_identifier,

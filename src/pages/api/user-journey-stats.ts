@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
 import { supabase } from '~/lib/supabaseClient';
 
-interface Impression {
-    user_identifier: string;
+type Impression = {
+    user_id: string;
     session_identifier: string;
     page_url: string;
     impression_at: string;
@@ -17,9 +17,9 @@ interface Impression {
 }
 
 // Helper to safely calculate averages, avoiding division by zero
-const calculateAverage = (sum: number, count: number, toFixed = 0) => {
+const calculateAverage = (sum: number, count: number, decimals = 2) => {
     if (count === 0) return 0;
-    return parseFloat((sum / count).toFixed(toFixed));
+    return parseFloat((sum / count).toFixed(decimals));
 };
 
 // Helper to count occurrences of a key in an array of objects
@@ -40,19 +40,19 @@ const ensureNumber = (value: unknown): number => {
 // Main function to get all journey stats
 export const GET: APIRoute = async () => {
     try {
-        // Fetch all impressions and conversions once
-        const [{ data: impressions, error: impressionsError }, { data: conversions, error: conversionsError }] = await Promise.all([
-            supabase.from('impressions').select('user_identifier, session_identifier, page_url, impression_at, time_on_page, scroll_depth_percent, bounce, device_type, utm_source, connection_type, screen_resolution, page_load_time'),
-            supabase.from('conversions').select('user_identifier, conversion_type, device_type')
+        // Fetch data in parallel
+        const [impressionsRes, conversionsRes] = await Promise.all([
+            supabase.from('impressions').select('user_id, session_identifier, page_url, impression_at, time_on_page, scroll_depth_percent, bounce, device_type, utm_source, connection_type, screen_resolution, page_load_time'),
+            supabase.from('conversions').select('user_id, conversion_type, device_type')
         ]);
 
-        if (impressionsError) throw new Error(`Impressions fetch error: ${impressionsError.message}`);
-        if (conversionsError) throw new Error(`Conversions fetch error: ${conversionsError.message}`);
-        if (!impressions) throw new Error('No impression data available.');
+        if (impressionsRes.error) throw new Error(`Impressions fetch error: ${impressionsRes.error.message}`);
+        if (conversionsRes.error) throw new Error(`Conversions fetch error: ${conversionsRes.error.message}`);
+        if (!impressionsRes.data) throw new Error('No impression data available.');
 
-        const totalImpressions = impressions.length;
-        const sessions = new Map<string, typeof impressions>();
-        impressions.forEach(imp => {
+        const totalImpressions = impressionsRes.data.length;
+        const sessions = new Map<string, typeof impressionsRes.data>();
+        impressionsRes.data.forEach(imp => {
             if (!sessions.has(imp.session_identifier)) {
                 sessions.set(imp.session_identifier, []);
             }
@@ -61,26 +61,26 @@ export const GET: APIRoute = async () => {
         const sessionCount = sessions.size;
 
         // --- Session Flow Analysis ---
-        const totalSessionDuration = impressions.reduce((sum, imp) => sum + ensureNumber(imp.time_on_page), 0);
+        const totalSessionDuration = impressionsRes.data.reduce((sum, imp) => sum + ensureNumber(imp.time_on_page), 0);
         const averageSessionDuration = calculateAverage(totalSessionDuration, sessionCount, 1);
         const averagePagesPerSession = calculateAverage(totalImpressions, sessionCount, 1);
 
         // --- Bounce Rate Analysis ---
-        const totalBounces = impressions.filter(imp => imp.bounce).length;
+        const totalBounces = impressionsRes.data.filter(imp => imp.bounce).length;
         const overallBounceRate = calculateAverage(totalBounces, sessionCount, 2) * 100;
 
-        const bounceRateByDevice = Object.entries(countBy(impressions.filter(i => i.bounce), 'device_type'))
+        const bounceRateByDevice = Object.entries(countBy(impressionsRes.data.filter(i => i.bounce), 'device_type'))
             .map(([device, count]) => ({ device, bounceRate: calculateAverage(count, totalBounces, 2) * 100 }))
             .sort((a,b) => b.bounceRate - a.bounceRate);
 
         // --- Engagement Metrics ---
-        const averageTimeOnPage = calculateAverage(impressions.reduce((sum, imp) => sum + ensureNumber(imp.time_on_page), 0), totalImpressions, 1);
-        const averageScrollDepth = calculateAverage(impressions.reduce((sum, imp) => sum + ensureNumber(imp.scroll_depth_percent), 0), totalImpressions, 1);
+        const averageTimeOnPage = calculateAverage(impressionsRes.data.reduce((sum, imp) => sum + ensureNumber(imp.time_on_page), 0), totalImpressions, 1);
+        const averageScrollDepth = calculateAverage(impressionsRes.data.reduce((sum, imp) => sum + ensureNumber(imp.scroll_depth_percent), 0), totalImpressions, 1);
         
         // --- Device & Connection Impact ---
-        const performanceByDevice = Object.entries(countBy(impressions, 'device_type')).map(([deviceType, count]) => {
-            const deviceImpressions = impressions.filter(i => i.device_type === deviceType);
-            const deviceConversions = conversions?.filter(c => c.device_type === deviceType).length || 0;
+        const performanceByDevice = Object.entries(countBy(impressionsRes.data, 'device_type')).map(([deviceType, count]) => {
+            const deviceImpressions = impressionsRes.data.filter(i => i.device_type === deviceType);
+            const deviceConversions = conversionsRes?.data?.filter(c => c.device_type === deviceType).length || 0;
             return {
                 deviceType,
                 sessions: count,

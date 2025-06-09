@@ -314,9 +314,10 @@ Content-Type: application/json
 #### **Request Body**
 ```typescript
 interface ImpressionPayload {
-  user_identifier: string;
-  experiment_id: string;
-  variant_id: string;
+  user_id: string;
+  engagement_type: string;
+  experiment_context: string;
+  variant_context: string;
   page_url?: string;
   user_agent?: string;
   country_code?: string;
@@ -330,9 +331,10 @@ interface ImpressionPayload {
 #### **Example Request**
 ```json
 {
-  "user_identifier": "user_abc123",
-  "experiment_id": "exp_homepage_cta",
-  "variant_id": "var_button_blue",
+  "user_id": "user_123e4567-e89b-12d3-a456-426614174000",
+  "engagement_type": "viewed_dashboard",
+  "experiment_context": "Dashboard v2",
+  "variant_context": "Variant B",
   "page_url": "https://example.com/",
   "user_agent": "Mozilla/5.0...",
   "country_code": "US",
@@ -368,9 +370,10 @@ interface ImpressionPayload {
 // Track impression when user sees A/B test variant
 function trackImpression(experimentId, variantId, userContext = {}) {
   const payload = {
-    user_identifier: getUserIdentifier(),
-    experiment_id: experimentId,
-    variant_id: variantId,
+    user_id: getUserIdentifier(),
+    engagement_type: "viewed_dashboard",
+    experiment_context: "Dashboard v2",
+    variant_context: "Variant B",
     page_url: window.location.href,
     user_agent: navigator.userAgent,
     device_type: getDeviceType(),
@@ -410,9 +413,7 @@ Content-Type: application/json
 #### **Request Body**
 ```typescript
 interface ConversionPayload {
-  user_identifier: string;
-  experiment_id: string;
-  variant_id: string;
+  user_id: string;
   conversion_type: string;
   conversion_value?: number;
   details?: Record<string, any>;
@@ -423,9 +424,7 @@ interface ConversionPayload {
 #### **Example Request**
 ```json
 {
-  "user_identifier": "user_abc123",
-  "experiment_id": "exp_homepage_cta",
-  "variant_id": "var_button_blue",
+  "user_id": "user_123e4567-e89b-12d3-a456-426614174000",
   "conversion_type": "contact_form_submission",
   "conversion_value": 100.00,
   "details": {
@@ -459,9 +458,7 @@ interface ConversionPayload {
 // Track conversion when user completes desired action
 function trackConversion(experimentId, variantId, conversionData) {
   const payload = {
-    user_identifier: getUserIdentifier(),
-    experiment_id: experimentId,
-    variant_id: variantId,
+    user_id: getUserIdentifier(),
     conversion_type: conversionData.type,
     conversion_value: conversionData.value,
     details: conversionData.details,

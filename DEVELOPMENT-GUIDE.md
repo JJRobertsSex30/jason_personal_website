@@ -145,11 +145,11 @@ export const POST: APIRoute = async ({ request }) => {
     const body = await request.json();
     
     // Validate input
-    if (!body.user_identifier) {
+    if (!body.user_id) {
       return new Response(JSON.stringify({
         success: false,
         error: 'ValidationError',
-        message: 'user_identifier is required'
+        message: 'user_id is required'
       }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
@@ -477,7 +477,7 @@ AND created_at > NOW() - INTERVAL '7 days';
 ```sql
 -- Use proper indexes
 CREATE INDEX CONCURRENTLY idx_impressions_experiment_user 
-ON impressions(experiment_id, user_identifier, impression_at);
+ON impressions(experiment_id, user_id, impression_at);
 
 -- Optimize queries with LIMIT and proper WHERE clauses
 SELECT * FROM impressions 

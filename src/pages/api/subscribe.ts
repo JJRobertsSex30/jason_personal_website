@@ -259,6 +259,19 @@ export const POST: APIRoute = async ({ request, site: _site }) => {
       }
   }
 
+  // 5. Create Conversion Record
+  const { error: conversionError } = await supabase.from('conversions').insert({
+      conversion_type: 'subscribed_from_email_capture',
+      user_id: userProfileId,
+      experiment_id: experimentId,
+      variant_id: variantId,
+      session_identifier: sessionIdentifier,
+  });
+
+  if (conversionError) {
+      console.warn(`[API /subscribe] Failed to create conversion record for user ${userProfileId}:`, conversionError.message);
+  }
+
   // Return the desired success message for new/unverified subscriptions
   return new Response(JSON.stringify({ 
     success: true, // Explicitly set success to true

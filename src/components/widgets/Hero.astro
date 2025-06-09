@@ -44,15 +44,17 @@ console.log(`[Hero SSR] Destructured values: headline="${headline ? headline.sub
         {subheadline && <p class="text-lg text-gray-700 dark:text-gray-300 mb-8" set:html={subheadline} />}
         
         <form 
-          id="hero-custom-ab-form" 
-          class="flex flex-col sm:flex-row gap-4 max-w-md"
-          aria-labelledby="hero-custom-ab-form-title"
+          id="email-capture-form"
+          class="w-full max-w-md mx-auto"
+          method="POST" 
+          action="/api/subscribe"
         >
-          <span id="hero-custom-ab-form-title" class="sr-only">Sign up for updates</span>
-          <input type="hidden" name="ab_test_variant_id" value={abTestVariantKey} />
+          <input type="hidden" name="ab_user_id" id="ab-user-id-input" value="" />
+          <input type="hidden" name="source" value="hero_email_capture" />
+          <input type="hidden" name="experiment_id" id="experiment-id-input" value="" />
+          <input type="hidden" name="variant_id" id="variant-id-input" value="" />
           <input type="hidden" name="ab_test_experiment_name" value={experimentName} />
           <input type="hidden" name="signup_source" value="hero-custom-ab" />
-          <input type="hidden" name="ab_user_identifier" id="ab-user-identifier-input" value="" />
           
           <label for="hero-email-bg-custom-ab" class="sr-only">Email address</label>
           <input
@@ -100,7 +102,7 @@ console.log(`[Hero SSR] Destructured values: headline="${headline ? headline.sub
 }}>
   document.addEventListener('astro:page-load', function() {
     console.log('[Hero Client] astro:page-load fired.');
-    const form = document.getElementById('hero-custom-ab-form');
+    const form = document.getElementById('email-capture-form');
     const messageElement = document.getElementById('hero-custom-ab-form-message');
 
     if (!form || !messageElement) {
@@ -110,15 +112,15 @@ console.log(`[Hero SSR] Destructured values: headline="${headline ? headline.sub
     console.log('[Hero Client] Form and message elements found. Attaching submit listener.');
     
     function ensureAbUserIdentifier() {
-      let userId = localStorage.getItem('ab_user_identifier');
+      let userId = localStorage.getItem('ab_user_id');
       if (!userId) {
         userId = crypto.randomUUID();
-        localStorage.setItem('ab_user_identifier', userId);
-        console.log('[Hero Client] New ab_user_identifier generated and stored:', userId);
+        localStorage.setItem('ab_user_id', userId);
+        console.log('[Hero Client] New ab_user_id generated and stored:', userId);
       }
-      const hiddenInput = form.querySelector('input[name="ab_user_identifier"]');
+      const hiddenInput = form.querySelector('input[name="ab_user_id"]');
       if (hiddenInput) {
-        hiddenInput.value = userId;
+        (hiddenInput as HTMLInputElement).value = userId;
       }
     }
     ensureAbUserIdentifier();

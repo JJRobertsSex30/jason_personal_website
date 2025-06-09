@@ -1,52 +1,82 @@
 import type { APIRoute } from 'astro';
 import { supabase } from '~/lib/supabaseClient';
 
-export const POST: APIRoute = async ({ request }) => {
+// Define explicit types for the nested query results
+type VariantWithExperiment = {
+  name: string;
+  experiments: {
+    name: string;
+  };
+};
+
+type ConversionWithRelations = {
+  id: string;
+  variant_id: string;
+  experiment_id: string;
+  user_id: string;
+  conversion_type: string;
+  created_at: string;
+  conversion_eligibility_verified: boolean;
+  variants: VariantWithExperiment;
+};
+
+type ImpressionWithRelations = {
+    id: string;
+    variant_id: string;
+    experiment_id: string;
+    user_id: string;
+    created_at: string;
+    user_was_eligible: boolean;
+    user_eligibility_status: string;
+    variants: VariantWithExperiment;
+};
+
+type IntegrityIssue = {
+  issue: string;
+  conversion_id: string;
+  variant_id: string;
+  variant_name: string;
+  experiment_name: string;
+  conversion_type: string;
+  conversion_time: string;
+  conversion_eligibility: boolean;
+};
+
+export const GET: APIRoute = async ({ request }) => {
+  const url = new URL(request.url);
+  const userIdentifier = url.searchParams.get('user_id');
+
   try {
-    const { userIdentifier } = await request.json();
+    if (!userIdentifier) return new Response(JSON.stringify({ error: 'user_id is required' }), { status: 400 });
 
-    if (!userIdentifier) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: 'User identifier is required' 
-      }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    console.log(`[Debug User Data] Analyzing data for user: ${userIdentifier}`);
-
-    // Get all impressions for this user
     const { data: impressions, error: impressionsError } = await supabase
       .from('impressions')
-      .select(`
+      .select<string, ImpressionWithRelations>(`
         id,
         variant_id,
         experiment_id,
-        user_identifier,
+        user_id,
         created_at,
         user_was_eligible,
         user_eligibility_status,
         variants!inner(name, experiments!inner(name))
       `)
-      .eq('user_identifier', userIdentifier)
+      .eq('user_id', userIdentifier)
       .order('created_at', { ascending: false });
 
-    // Get all conversions for this user
     const { data: conversions, error: conversionsError } = await supabase
       .from('conversions')
-      .select(`
+      .select<string, ConversionWithRelations>(`
         id,
         variant_id,
         experiment_id,
-        user_identifier,
+        user_id,
         conversion_type,
         created_at,
         conversion_eligibility_verified,
         variants!inner(name, experiments!inner(name))
       `)
-      .eq('user_identifier', userIdentifier)
+      .eq('user_id', userIdentifier)
       .order('created_at', { ascending: false });
 
     if (impressionsError || conversionsError) {
@@ -54,27 +84,40 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     // Analyze data integrity
-    const integrityAnalysis = [];
-    
-    for (const conversion of conversions || []) {
-      const matchingImpression = impressions?.find(imp => 
-        imp.variant_id === conversion.variant_id && 
-        imp.experiment_id === conversion.experiment_id
-      );
+    const integrityIssues: IntegrityIssue[] = [];
+    if (conversions) {
+      for (const conversion of conversions) {
+        if (!conversion.conversion_eligibility_verified) {
+          const matchingImpression = impressions?.find(imp => 
+            imp.variant_id === conversion.variant_id && 
+            imp.experiment_id === conversion.experiment_id
+          );
 
-      if (!matchingImpression) {
-        integrityAnalysis.push({
-          issue: 'CONVERSION_WITHOUT_IMPRESSION',
-          conversion_id: conversion.id,
-          variant_id: conversion.variant_id,
-          variant_name: conversion.variants.name,
-          experiment_name: conversion.variants.experiments.name,
-          conversion_type: conversion.conversion_type,
-          conversion_time: conversion.created_at,
-          conversion_eligibility: conversion.conversion_eligibility_verified
-        });
+          if (!matchingImpression) {
+            integrityIssues.push({
+              issue: 'CONVERSION_WITHOUT_IMPRESSION',
+              conversion_id: conversion.id,
+              variant_id: conversion.variant_id,
+              variant_name: conversion.variants.name,
+              experiment_name: conversion.variants.experiments.name,
+              conversion_type: conversion.conversion_type,
+              conversion_time: conversion.created_at,
+              conversion_eligibility: conversion.conversion_eligibility_verified
+            });
+          }
+        }
       }
     }
+
+    const { error: engagementError } = await supabase
+      .from('user_engagement_tracking')
+      .insert({
+        user_id: userIdentifier,
+        engagement_type: 'debug_data_viewed',
+        experiment_context: `Debug for user: ${userIdentifier}`,
+      });
+
+    if (engagementError) console.error(`Engagement Tracking Error:`, engagementError.message);
 
     return new Response(JSON.stringify({ 
       success: true,
@@ -82,11 +125,11 @@ export const POST: APIRoute = async ({ request }) => {
       summary: {
         total_impressions: impressions?.length || 0,
         total_conversions: conversions?.length || 0,
-        integrity_issues: integrityAnalysis.length
+        integrity_issues: integrityIssues.length
       },
       impressions: impressions || [],
       conversions: conversions || [],
-      integrity_analysis: integrityAnalysis,
+      integrity_analysis: integrityIssues,
       debug_info: {
         timestamp: new Date().toISOString(),
         user_agent: typeof window !== 'undefined' ? navigator.userAgent : 'server-side'

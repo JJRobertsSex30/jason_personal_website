@@ -63,22 +63,25 @@ export const GET: APIRoute = async ({ request: _request }) => {
     console.log('Campaign Performance API: Starting comprehensive analysis...');
 
     // --- Parallel Data Fetching ---
-    const [impressionsResult, conversionsResult] = await Promise.all([
-      supabase
-        .from('impressions')
-        .select('utm_source, utm_medium, utm_campaign, time_on_page, scroll_depth_percent, user_identifier, impression_at, user_agent, device_type, country_code')
-        .order('impression_at', { ascending: true }),
-      supabase
-        .from('conversions')
-        .select('utm_source, utm_medium, utm_campaign, user_identifier, created_at, conversion_value')
-        .order('created_at', { ascending: true })
-    ]);
-
-    if (impressionsResult.error) throw impressionsResult.error;
-    if (conversionsResult.error) throw conversionsResult.error;
+    const { data: impressions, error: impressionsError } = await supabase
+      .from('impressions')
+      .select('utm_source, utm_medium, utm_campaign, time_on_page, scroll_depth_percent, user_id, impression_at, user_agent, device_type, country_code');
     
-    const allImpressions = impressionsResult.data || [];
-    const allConversions = conversionsResult.data || [];
+    const { data: conversions, error: conversionsError } = await supabase
+      .from('conversions')
+      .select('utm_source, utm_medium, utm_campaign, user_id, created_at, conversion_value');
+
+    if (impressionsError) {
+      console.error('Error fetching impressions:', impressionsError);
+      throw impressionsError;
+    }
+    if (conversionsError) {
+      console.error('Error fetching conversions:', conversionsError);
+      throw conversionsError;
+    }
+    
+    const allImpressions = impressions || [];
+    const allConversions = conversions || [];
 
     // 1. UTM Source Analysis with detailed metrics
     const sourceStats = new Map<string, { 

@@ -74,7 +74,7 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
     
     // A/B Testing & Context Data from Client
     const variantInfoString = formData.get('variantInfo')?.toString();
-    const browserIdentifier = formData.get('browser_identifier')?.toString() || null; // This is user_identifier from client localStorage (ab_user_identifier)
+    const browserIdentifier = formData.get('browser_identifier')?.toString() || null; // This is user_id from client localStorage (ab_user_id)
     const sessionIdentifier = formData.get('session_identifier')?.toString() || null;
     const pageUrlAtSubmission = formData.get('page_url_at_submission')?.toString() || request.headers.get('referer') || null;
     const clientSideImpressionId = formData.get('client_side_impression_id')?.toString() || null; // New field
