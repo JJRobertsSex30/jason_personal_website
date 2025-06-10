@@ -3,13 +3,26 @@
 import DbVisualizerClient from './DbVisualizerClient';
 ---
 
-<div id="db-visualizer-panel" class="tab-panel p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md mt-4">
-  <div class="mb-6">
-    <h2 class="text-2xl font-bold text-slate-800 dark:text-white mb-2">Database Visualizer</h2>
-    <p class="text-slate-600 dark:text-slate-400">View the relationships between your database tables.</p>
+<div id="db-visualizer-panel-content" class="tab-panel p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md mt-4">
+  <div class="mb-6 flex items-start justify-between gap-4">
+    <div class="flex-grow">
+      <h2 class="text-2xl font-bold text-slate-800 dark:text-white mb-2">Database Visualizer</h2>
+      <p class="text-slate-600 dark:text-slate-400 max-w-prose">
+        An interactive diagram of your database schema. If the visual is missing or outdated, scan the database to regenerate it.
+      </p>
+    </div>
+    <form method="POST" action="/dashboard#db-visualizer-panel" class="flex-shrink-0">
+      <input type="hidden" name="_action" value="scan_db_schema" />
+      <button
+        type="submit"
+        class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+      >
+        Scan Database Schema
+      </button>
+    </form>
   </div>
   
-  <div id="visualizer-container-wrapper" style="height: 600px; width: 100%;" class="relative border border-gray-200 dark:border-gray-700 rounded-lg">
+  <div id="visualizer-container-wrapper" style="height: 600px; width: 100%;" class="relative rounded-lg border border-gray-200 bg-gray-50/50 dark:border-gray-700 dark:bg-gray-800/50">
     <DbVisualizerClient client:idle />
   </div>
 </div> 
