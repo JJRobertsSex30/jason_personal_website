@@ -11,18 +11,50 @@ import DbVisualizerClient from './DbVisualizerClient';
         An interactive diagram of your database schema. If the visual is missing or outdated, scan the database to regenerate it.
       </p>
     </div>
-    <form method="POST" action="/dashboard#db-visualizer-panel" class="flex-shrink-0">
-      <input type="hidden" name="_action" value="scan_db_schema" />
+    <div class="flex-shrink-0">
       <button
-        type="submit"
+        type="button"
+        id="scan-db-btn"
         class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
       >
         Scan Database Schema
       </button>
-    </form>
+    </div>
   </div>
   
   <div id="visualizer-container-wrapper" style="height: 600px; width: 100%;" class="relative rounded-lg border border-gray-200 bg-gray-50/50 dark:border-gray-700 dark:bg-gray-800/50">
     <DbVisualizerClient client:idle />
   </div>
-</div> 
+</div>
+
+<script>
+  document.addEventListener('astro:page-load', () => {
+    const scanButton = document.getElementById('scan-db-btn') as HTMLButtonElement | null;
+    
+    scanButton?.addEventListener('click', async () => {
+      scanButton.disabled = true;
+      scanButton.textContent = 'Scanning...';
+
+      try {
+        const response = await fetch('/api/db/scan', { method: 'POST' });
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.message || 'An unknown error occurred.');
+        }
+
+        alert('Database scan successful! The visualizer will now reload.');
+        // Dispatch a custom event to tell the visualizer to reload its data
+        document.dispatchEvent(new CustomEvent('db-schema-loaded'));
+
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Scan failed:', errorMessage);
+        alert(`Database scan failed: ${errorMessage}`);
+      } finally {
+        scanButton.disabled = false;
+        scanButton.textContent = 'Scan Database Schema';
+      }
+    });
+  });
+</script> 
