@@ -1,12 +1,11 @@
 // src/lib/convertkit-config.ts
 // Unified ConvertKit configuration for consistent tagging across all entry points
+import type { KitSubscriber } from '~/types';
 
-export interface ConvertKitSubscribePayload {
-  api_key: string;
-  email: string;
+export interface SubscriberUpdatePayload {
   first_name?: string;
-  fields?: Record<string, string>;
-  tags?: number[];
+  email_address?: string;
+  fields?: Record<string, string | number | boolean | null>;
 }
 
 export interface ConvertKitConfig {
@@ -104,6 +103,14 @@ export const convertKitConfig: ConvertKitConfig = {
   },
 };
 
+// This payload is created by our helper and sent to the /forms/:id/subscribe endpoint
+export interface FormSubscribePayload {
+  email_address: string;
+  first_name?: string;
+  fields?: Record<string, string>;
+  tags?: number[];
+}
+
 // Helper function to create ConvertKit payload
 export function createConvertKitPayload(
   email: string,
@@ -116,9 +123,7 @@ export function createConvertKitPayload(
     referralId?: string;
     customFields?: Record<string, string>;
   } = {}
-): ConvertKitSubscribePayload {
-  const apiKey = import.meta.env.CONVERTKIT_API_KEY || import.meta.env.SECRET;
-  
+): FormSubscribePayload {
   // Collect all tags
   const sourceTags = convertKitConfig.getSourceTags(source);
   const resultTags = options.resultType ? convertKitConfig.getResultTags(options.resultType) : [];
@@ -155,8 +160,7 @@ export function createConvertKitPayload(
   }
   
   return {
-    api_key: apiKey,
-    email: email.toLowerCase().trim(),
+    email_address: email.toLowerCase().trim(),
     first_name: options.firstName,
     fields,
     tags: allTags.length > 0 ? allTags : undefined,
@@ -165,24 +169,28 @@ export function createConvertKitPayload(
 
 // Helper function to submit to ConvertKit
 export async function submitToConvertKit(
-  payload: ConvertKitSubscribePayload,
+  payload: FormSubscribePayload,
   formId?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const convertKitFormId = formId || import.meta.env.PUBLIC_CONVERTKIT_FORM_ID;
-    
-    if (!convertKitFormId) {
-      throw new Error('ConvertKit form ID not configured');
+    const apiKey = import.meta.env.CONVERTKIT_API_KEY;
+
+    if (!convertKitFormId || !apiKey) {
+      throw new Error('ConvertKit form ID or API Key not configured');
     }
     
-    const convertKitApiUrl = `https://api.convertkit.com/v3/forms/${convertKitFormId}/subscribe`;
+    const convertKitApiUrl = `https://api.kit.com/v4/forms/${convertKitFormId}/subscribe`;
     
     // Log the payload being sent to ConvertKit
     console.log('[ConvertKit] Submitting to form ' + convertKitFormId + ' with payload:', JSON.stringify(payload, null, 2));
     
     const response = await fetch(convertKitApiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-Kit-Api-Key': apiKey
+      },
       body: JSON.stringify(payload),
     });
     
@@ -204,28 +212,15 @@ export async function submitToConvertKit(
   }
 }
 
-export interface ConvertKitSubscriber {
-  id: number;
-  first_name: string | null;
-  email_address: string;
-  state: string; // e.g., "active", "inactive"
-  created_at: string; // ISO date string
-  fields: { // Custom fields
-    [key: string]: string | number | boolean | null;
-  };
-  // Add other fields as needed based on ConvertKit API response
-}
+export async function getConvertKitSubscriberByEmail(email: string): Promise<{ success: boolean; data?: KitSubscriber; error?: string }> {
+  const apiKey = import.meta.env.CONVERTKIT_API_KEY;
 
-export async function getConvertKitSubscriberByEmail(email: string): Promise<{ success: boolean; data?: ConvertKitSubscriber; error?: string }> {
-  const apiKey = import.meta.env.CONVERTKIT_API_KEY || import.meta.env.SECRET;
-  const apiSecret = import.meta.env.CONVERTKIT_API_SECRET || apiKey; // Fallback to API_KEY if SECRET specifically for subscribers isn't set
-
-  if (!apiSecret) {
-    console.error('[ConvertKit] API Secret or API Key not found. Cannot fetch subscriber.');
+  if (!apiKey) {
+    console.error('[ConvertKit] API Key not found. Cannot fetch subscriber.');
     return { success: false, error: 'API credentials not configured.' };
   }
 
-  const url = `https://api.convertkit.com/v3/subscribers?api_secret=${apiSecret}&email_address=${encodeURIComponent(email)}`;
+  const url = `https://api.kit.com/v4/subscribers?email_address=${encodeURIComponent(email)}`;
 
   try {
     console.log(`[ConvertKit] Fetching subscriber data for: ${email}`);
@@ -233,6 +228,7 @@ export async function getConvertKitSubscriberByEmail(email: string): Promise<{ s
       method: 'GET',
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
+        'X-Kit-Api-Key': apiKey
       },
     });
 
@@ -248,23 +244,20 @@ export async function getConvertKitSubscriberByEmail(email: string): Promise<{ s
     }
     
     // The API returns an array of subscribers, even when querying by unique email.
-    // We expect at most one subscriber for a given email.
     if (responseData.subscribers && responseData.subscribers.length > 0) {
-      console.log(`[ConvertKit] Successfully fetched subscriber data for: ${email}`);
-      return { success: true, data: responseData.subscribers[0] };
-    } else if (responseData.subscribers && responseData.subscribers.length === 0) {
-      console.log(`[ConvertKit] No subscriber found with email: ${email}`);
-      return { success: false, error: 'Subscriber not found.', data: responseData };
+      // Assuming the first result is the correct one for a unique email query.
+      const subscriber: KitSubscriber = responseData.subscribers[0];
+      console.log(`[ConvertKit] Successfully fetched subscriber data for ${email}. ID: ${subscriber.id}`);
+      return { success: true, data: subscriber };
     } else {
-      // Should not happen if API schema is consistent
-      console.warn(`[ConvertKit] Unexpected response structure for ${email}:`, responseData);
-      return { success: false, error: 'Unexpected response structure from ConvertKit API.', data: responseData };
+      console.log(`[ConvertKit] Subscriber not found for email: ${email}`);
+      return { success: false, error: 'Subscriber not found.' };
     }
 
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'An unknown error occurred';
-    console.error(`[ConvertKit] Exception fetching subscriber ${email}: ${message}`, error);
-    return { success: false, error: message };
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[ConvertKit] An unexpected error occurred while fetching subscriber ${email}: ${errorMessage}`);
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -275,51 +268,36 @@ export async function getConvertKitSubscriberByEmail(email: string): Promise<{ s
  */
 export async function addTagToSubscriber(
   email: string,
-  tagId: number,
-  firstName?: string // Optional: Pass if you want to update/set first name during this interaction
+  tagId: number
 ): Promise<{ success: boolean; error?: string }> {
-  const apiKey = import.meta.env.CONVERTKIT_API_KEY as string;
-  if (!apiKey) {
-    console.error('[ConvertKit] API Key not configured. Cannot add tag.');
-    return { success: false, error: 'API Key not configured' };
-  }
-  if (!email || !tagId) {
-    return { success: false, error: 'Email and Tag ID are required.' };
-  }
-
-  const url = `https://api.convertkit.com/v3/tags/${tagId}/subscribe`;
-  const payload: { api_key: string; email: string; first_name?: string } = {
-    api_key: apiKey,
-    email: email.toLowerCase().trim(),
-  };
-  if (firstName) {
-    payload.first_name = firstName;
-  }
-
-  console.log(`[ConvertKit] Adding tag ${tagId} to ${email}. Payload:`, JSON.stringify(payload, null, 2));
-
   try {
+    const subscriberResult = await getConvertKitSubscriberByEmail(email);
+    if (!subscriberResult.success || !subscriberResult.data) {
+      return { success: false, error: subscriberResult.error || 'Subscriber not found.' };
+    }
+
+    const subscriberId = subscriberResult.data.id;
+    const apiKey = import.meta.env.CONVERTKIT_API_KEY;
+    // V4: Use POST to /subscribers/:id with api_key in query
+    const url = `https://api.kit.com/v4/tags/${tagId}/subscribers/${subscriberId}`;
+
     const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      method: 'POST', // Body should be empty for this endpoint
+      headers: {
+        'X-Kit-Api-Key': apiKey
+      }
     });
 
     if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({ message: response.statusText }));
-      const errorMessage = errorBody.message || `Failed to add tag ${tagId}`;
-      console.error(`[ConvertKit] Error adding tag ${tagId} to ${email}: ${response.status} - ${errorMessage}`, errorBody);
-      return { success: false, error: errorMessage };
+      const errorBody = await response.text();
+      throw new Error(`ConvertKit API error: ${response.status} ${response.statusText} - ${errorBody}`);
     }
 
-    const result = await response.json();
-    console.log(`[ConvertKit] Successfully added tag ${tagId} to ${email}:`, result);
+    console.log(`[ConvertKit] Successfully tagged subscriber ${email} with tag ${tagId}.`);
     return { success: true };
-
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'An unknown error occurred';
-    console.error(`[ConvertKit] Exception adding tag ${tagId} to ${email}: ${message}`, error);
-    return { success: false, error: message };
+  } catch (error) {
+    console.error('ConvertKit tag addition failed:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -331,45 +309,33 @@ export async function removeTagFromSubscriber(
   email: string,
   tagId: number
 ): Promise<{ success: boolean; error?: string }> {
-  const apiSecret = import.meta.env.CONVERTKIT_API_SECRET as string;
-  if (!apiSecret) {
-    console.error('[ConvertKit] API Secret not configured. Cannot remove tag.');
-    return { success: false, error: 'API Secret not configured' };
-  }
-  if (!email || !tagId) {
-    return { success: false, error: 'Email and Tag ID are required.' };
-  }
-
-  const url = `https://api.convertkit.com/v3/tags/${tagId}/unsubscribe`;
-  const payload = {
-    api_secret: apiSecret,
-    email: email.toLowerCase().trim(),
-  };
-
-  console.log(`[ConvertKit] Removing tag ${tagId} from ${email} using API Secret. Payload:`, JSON.stringify(payload, null, 2));
-
   try {
+    const subscriberResult = await getConvertKitSubscriberByEmail(email);
+    if (!subscriberResult.success || !subscriberResult.data) {
+      return { success: false, error: subscriberResult.error || 'Subscriber not found.' };
+    }
+
+    const subscriberId = subscriberResult.data.id;
+    const apiKey = import.meta.env.CONVERTKIT_API_KEY;
+    const url = `https://api.kit.com/v4/tags/${tagId}/subscribers/${subscriberId}`;
+
     const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      method: 'DELETE',
+      headers: {
+        'X-Kit-Api-Key': apiKey
+      }
     });
 
     if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({ message: response.statusText }));
-      const errorMessage = errorBody.message || `Failed to remove tag ${tagId}`;
-      console.error(`[ConvertKit] Error removing tag ${tagId} from ${email}: ${response.status} - ${errorMessage}`, errorBody);
-      return { success: false, error: errorMessage };
+      const errorBody = await response.text();
+      throw new Error(`ConvertKit API error: ${response.status} ${response.statusText} - ${errorBody}`);
     }
 
-    const result = await response.json();
-    console.log(`[ConvertKit] Successfully removed tag ${tagId} from ${email}:`, result);
+    console.log(`[ConvertKit] Successfully removed tag ${tagId} from subscriber ${email}.`);
     return { success: true };
-
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'An unknown error occurred';
-    console.error(`[ConvertKit] Exception removing tag ${tagId} from ${email}: ${message}`, error);
-    return { success: false, error: message };
+  } catch (error) {
+    console.error('ConvertKit tag removal failed:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -381,61 +347,41 @@ export async function updateSubscriberFirstName(
   email: string,
   firstName: string
 ): Promise<{ success: boolean; error?: string }> {
-  const apiKey = import.meta.env.CONVERTKIT_API_KEY as string;
-  const formId = import.meta.env.PUBLIC_CONVERTKIT_FORM_ID as string;
-
-  if (!apiKey) {
-    console.error('[ConvertKit] API Key not configured. Cannot update first name.');
-    return { success: false, error: 'API Key not configured' };
-  }
-  if (!formId) {
-    console.warn('[ConvertKit] PUBLIC_CONVERTKIT_FORM_ID not configured. Cannot reliably update first name via form subscription. Consider a direct subscriber update endpoint if available or configure form ID.');
-    // Fallback or alternative: Directly update subscriber if we implement that. For now, rely on form.
-    // This might require fetching subscriber ID first then PUT /v3/subscribers/:id
-    // return { success: false, error: 'Default Form ID not configured for updating first name.' };
-    // For now, let's try to proceed if email and first_name are there, using a general subscriber update approach (though less common for just first_name)
-    // However, the most common way to update with just email is via form/tag subscription if it also updates fields.
-    // The `update` subscriber endpoint requires subscriber ID: PUT /v3/subscribers/:subscriber_id
-    // Let's ensure this function relies on the form re-subscription method for simplicity and consistency.
-    console.error('[ConvertKit] PUBLIC_CONVERTKIT_FORM_ID must be set to update first name via form re-subscription.');
-    return { success: false, error: 'PUBLIC_CONVERTKIT_FORM_ID not configured.' };
-  }
-  if (!email || !firstName) {
-    return { success: false, error: 'Email and First Name are required.' };
-  }
-
-  const url = `https://api.convertkit.com/v3/forms/${formId}/subscribe`;
-  const payload = {
-    api_key: apiKey,
-    email: email.toLowerCase().trim(),
-    first_name: firstName,
-  };
-
-  console.log(`[ConvertKit] Updating first name for ${email} to "${firstName}" via form ${formId}. Payload:`, JSON.stringify(payload, null, 2));
-
   try {
+    const subscriberResult = await getConvertKitSubscriberByEmail(email);
+    if (!subscriberResult.success || !subscriberResult.data) {
+      return { success: false, error: subscriberResult.error || 'Subscriber not found.' };
+    }
+
+    const subscriberId = subscriberResult.data.id;
+    const apiKey = import.meta.env.CONVERTKIT_API_KEY;
+    // V4: Use PUT with api_key in query string
+    const url = `https://api.kit.com/v4/subscribers/${subscriberId}`;
+
+    const payload: { first_name: string } = {
+      first_name: firstName,
+    };
+
     const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'PUT',
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-Kit-Api-Key': apiKey
+      },
       body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({ message: response.statusText }));
-      const errorMessage = errorBody.message || 'Failed to update first name';
-      console.error(`[ConvertKit] Error updating first name for ${email} via form ${formId}: ${response.status} - ${errorMessage}`, errorBody);
-      return { success: false, error: errorMessage };
+      const errorBody = await response.text();
+      throw new Error(`ConvertKit API error: ${response.status} ${response.statusText} - ${errorBody}`);
     }
 
-    const result = await response.json();
-    console.log(`[ConvertKit] Successfully updated first name for ${email} via form ${formId}:`, result);
+    console.log(`[ConvertKit] Successfully updated first name for subscriber ${email}.`);
     return { success: true };
-
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'An unknown error occurred';
-    console.error(`[ConvertKit] Exception updating first name for ${email} via form ${formId}: ${message}`, error);
-    return { success: false, error: message };
+  } catch (error) {
+    console.error('ConvertKit first name update failed:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
-// NEW ConvertKit Helper Functions End 
+// NEW ConvertKit Helper Functions End

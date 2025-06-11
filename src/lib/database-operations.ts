@@ -555,81 +555,74 @@ export async function tableExists(tableName: string): Promise<{ exists: boolean;
 // NEW FUNCTIONS START
 
 export async function findOrCreateUserForVerification(email: string): Promise<FindOrCreateUserResult> {
-  if (!email || !email.includes('@')) { // Basic email validation
-    return { user: null, isNewUser: false, isAlreadyVerified: false, error: 'Invalid email format provided.' };
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // First, try to find an existing user by email
+  const { data: existingUser, error: findError } = await supabase
+    .from('user_profiles')
+    .select('*')
+    .eq('email', normalizedEmail)
+    .single();
+
+  if (findError && findError.code !== 'PGRST116') { // PGRST116 = 'single' query returned no rows
+    console.error(`[DB] Error finding user by email ${normalizedEmail}:`, findError);
+    return { user: null, isNewUser: false, isAlreadyVerified: false, error: findError };
   }
 
-  try {
-    // 1. Check if user exists
-    const { data: existingUsers, error: findError } = await supabase
+  // Case 1: User exists and is soft-deleted
+  if (existingUser && existingUser.deleted_at) {
+    console.log(`[DB] Found soft-deleted user ${normalizedEmail}. Reactivating...`);
+    const { data: reactivatedUser, error: updateError } = await supabase
       .from('user_profiles')
+      .update({ deleted_at: null })
+      .eq('id', existingUser.id)
       .select('*')
-      .eq('email', email.toLowerCase().trim())
-      .limit(1);
-
-    if (findError) {
-      console.error('Error finding user:', findError);
-      return { user: null, isNewUser: false, isAlreadyVerified: false, error: findError };
-    }
-
-    if (existingUsers && existingUsers.length > 0) {
-      const existingUser = existingUsers[0] as UserProfile;
-      
-      // Ensure insight_gems is populated
-      existingUser.insight_gems = existingUser.insight_gems ?? 100; // Default if null/undefined
-
-      // Check and generate referral_code if missing for existing user
-      if (!existingUser.referral_code) {
-        console.log(`[DB Ops] Existing user ${existingUser.email} missing referral_code. Generating one.`);
-        const newReferralCode = crypto.randomUUID();
-        const { data: updatedUser, error: updateError } = await supabase
-          .from('user_profiles')
-          .update({ referral_code: newReferralCode, updated_at: new Date().toISOString() })
-          .eq('id', existingUser.id)
-          .select('*')
-          .single();
-
-        if (updateError) {
-          console.warn(`[DB Ops] Failed to update referral_code for existing user ${existingUser.email}:`, updateError.message);
-          // Proceed with the original existingUser data, referral_code will be null
-        } else if (updatedUser) {
-          console.log(`[DB Ops] Successfully generated and saved new referral_code for existing user ${existingUser.email}.`);
-          // Update existingUser with the newly fetched data including the referral code and other potentially updated fields
-          Object.assign(existingUser, updatedUser);
-        }
-      }
-
-      if (existingUser.is_email_verified) {
-        return { user: existingUser, isNewUser: false, isAlreadyVerified: true, error: null };
-      }
-      // User exists but is not verified
-      return { user: existingUser, isNewUser: false, isAlreadyVerified: false, error: null };
-    }
-
-    // If user doesn't exist, create them.
-    console.log(`[DB Ops] User with email ${email} does not exist. Creating new profile.`);
-    const { data: newUser, error: createError } = await supabase
-      .from('user_profiles')
-      .insert({ email: email })
-      .select('*, action_token') // Ensure we select the new action_token on creation
       .single();
 
-    if (createError || !newUser) {
-      console.error('[DB Ops] Error creating new user profile:', createError);
-      return { user: null, isNewUser: false, isAlreadyVerified: false, error: createError };
+    if (updateError) {
+      console.error(`[DB] Error reactivating user ${normalizedEmail}:`, updateError);
+      return { user: null, isNewUser: false, isAlreadyVerified: false, error: updateError };
     }
     
-    // Ensure the newUser object has insight_gems, defaulting if somehow not returned by DB (though it should be)
-    if (newUser) {
-      (newUser as UserProfile).insight_gems = (newUser as UserProfile).insight_gems ?? 100;
-    }
-
-    return { user: newUser as UserProfile, isNewUser: true, isAlreadyVerified: false, error: null };
-
-  } catch (err) {
-    console.error('Error finding or creating user:', err);
-    return { user: null, isNewUser: false, isAlreadyVerified: false, error: (err as Error).message || 'Unexpected error occurred' };
+    console.log(`[DB] User ${normalizedEmail} reactivated successfully.`);
+    return {
+      user: reactivatedUser,
+      isNewUser: false, // They are a returning user
+      isAlreadyVerified: reactivatedUser?.is_email_verified || false,
+      error: null,
+    };
   }
+  
+  // Case 2: User exists and is active
+  if (existingUser) {
+    console.log(`[DB] Found active user for ${normalizedEmail}. ID: ${existingUser.id}`);
+    return {
+      user: existingUser,
+      isNewUser: false,
+      isAlreadyVerified: existingUser.is_email_verified,
+      error: null,
+    };
+  }
+
+  // Case 3: User does not exist, create a new one
+  console.log(`[DB] No user found for ${normalizedEmail}. Creating a new user profile...`);
+  const referralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+  const { data: newUser, error: createError } = await supabase
+    .from('user_profiles')
+    .insert({
+      id: crypto.randomUUID(),
+      email: normalizedEmail,
+      referral_code: referralCode,
+    })
+    .select('*')
+    .single();
+
+  if (createError) {
+    console.error(`[DB] Error creating new user for ${normalizedEmail}:`, createError);
+    return { user: null, isNewUser: false, isAlreadyVerified: false, error: createError };
+  }
+
+  return { user: newUser, isNewUser: true, isAlreadyVerified: false, error: null };
 }
 
 export async function generateAndStoreVerificationToken(

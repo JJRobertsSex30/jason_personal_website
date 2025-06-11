@@ -7,10 +7,10 @@ dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const convertKitApiSecret = process.env.CONVERTKIT_API_SECRET;
+const convertKitApiKey = process.env.CONVERTKIT_API_KEY;
 
-if (!supabaseUrl || !supabaseServiceKey || !convertKitApiSecret) {
-    console.error("Missing required environment variables.");
+if (!supabaseUrl || !supabaseServiceKey || !convertKitApiKey) {
+    console.error("Missing required environment variables (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CONVERTKIT_API_KEY).");
     process.exit(1);
 }
 
@@ -18,12 +18,12 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 interface KitSubscriber {
     id: number;
-    state: 'active' | 'inactive' | 'cancelled' | 'bounced' | 'complained';
+    state: 'active' | 'inactive' | 'unconfirmed' | 'cancelled' | 'complained' | 'bounced' | 'cold' | 'blocked';
 }
 
 async function getKitSubscriber(email: string): Promise<KitSubscriber | null> {
     const normalizedEmail = email.toLowerCase().trim();
-    const url = `https://api.convertkit.com/v3/subscribers?api_secret=${convertKitApiSecret}&email_address=${encodeURIComponent(normalizedEmail)}`;
+    const url = `https://api.kit.com/v4/subscribers?api_key=${convertKitApiKey}&email_address=${encodeURIComponent(normalizedEmail)}`;
     
     try {
         const response = await fetch(url);

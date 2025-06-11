@@ -126,6 +126,12 @@ const statusInfo = userProfile?.kit_state ? (statusMap[userProfile.kit_state] ||
                                     <div class="flex justify-between"><dt class="font-medium text-slate-500 dark:text-slate-400">ConvertKit ID</dt><dd class="text-slate-700 dark:text-slate-300">{kitData.id}</dd></div>
                                     <div class="flex justify-between"><dt class="font-medium text-slate-500 dark:text-slate-400">First Name</dt><dd class="text-slate-700 dark:text-slate-300">{kitData.first_name || 'N/A'}</dd></div>
                                     <div class="flex justify-between"><dt class="font-medium text-slate-500 dark:text-slate-400">Subscribed At</dt><dd class="text-slate-700 dark:text-slate-300">{kitData.created_at ? new Date(kitData.created_at).toLocaleString() : 'N/A'}</dd></div>
+                                    {kitData.fields && Object.entries(kitData.fields).map(([key, value]) => (
+                                        <div class="flex justify-between">
+                                            <dt class="font-medium text-slate-500 dark:text-slate-400 capitalize">{key.replace(/_/g, ' ')}</dt>
+                                            <dd class="text-slate-700 dark:text-slate-300">{String(value) || 'N/A'}</dd>
+                                        </div>
+                                    ))}
                                 </dl>
                             </div>
                         )}

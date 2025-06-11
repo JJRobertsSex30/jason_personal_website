@@ -3,12 +3,17 @@ import { supabase } from '~/lib/supabaseClient';
 import type { UserProfile, KitSubscriber, GemTransaction, UserEngagement } from '~/types';
 
 async function getKitSubscriber(email: string): Promise<KitSubscriber | null> {
-  const apiSecret = import.meta.env.CONVERTKIT_API_SECRET;
-  if (!apiSecret || !email) return null;
+  const apiKey = import.meta.env.CONVERTKIT_API_KEY;
+  if (!apiKey || !email) return null;
 
   try {
-    const url = `https://api.convertkit.com/v3/subscribers?api_secret=${apiSecret}&email_address=${encodeURIComponent(email)}`;
-    const response = await fetch(url);
+    const url = `https://api.kit.com/v4/subscribers?email_address=${encodeURIComponent(email)}`;
+    const response = await fetch(url, {
+      headers: {
+        'X-Kit-Api-Key': apiKey,
+        'Accept': 'application/json'
+      }
+    });
     if (!response.ok) {
       console.error(`ConvertKit API error for ${email}: ${response.statusText}`);
       return null;

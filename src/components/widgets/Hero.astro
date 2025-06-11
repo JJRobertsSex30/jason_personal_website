@@ -45,9 +45,7 @@ console.log(`[Hero SSR] Destructured values: headline="${headline ? headline.sub
         
         <form 
           id="email-capture-form"
-          class="w-full max-w-md mx-auto"
-          method="POST" 
-          action="/api/subscribe"
+          class="w-full max-w-md mx-auto flex flex-col sm:flex-row gap-4"
         >
           <input type="hidden" name="ab_user_id" id="ab-user-id-input" value="" />
           <input type="hidden" name="source" value="hero_email_capture" />
@@ -119,8 +117,8 @@ console.log(`[Hero SSR] Destructured values: headline="${headline ? headline.sub
         console.log('[Hero Client] New ab_user_id generated and stored:', userId);
       }
       const hiddenInput = form.querySelector('input[name="ab_user_id"]');
-      if (hiddenInput) {
-        (hiddenInput as HTMLInputElement).value = userId;
+      if (hiddenInput instanceof HTMLInputElement) {
+        hiddenInput.value = userId;
       }
     }
     ensureAbUserIdentifier();

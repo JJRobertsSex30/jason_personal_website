@@ -6,7 +6,7 @@ export interface UserProfile {
   email?: string;
   created_at?: string | null;
   updated_at?: string | null;
-  kit_state?: string;
+  kit_state: 'active' | 'inactive' | 'unconfirmed' | 'cancelled' | 'complained' | 'bounced' | 'cold' | 'blocked' | null;
   insight_gems?: number;
   [key: string]: unknown;
 }
@@ -63,9 +63,15 @@ export interface KitSubscriber {
   id: number;
   first_name: string | null;
   email_address: string;
-  state: 'active' | 'inactive' | 'cancelled' | 'complained' | 'bounced';
+  state: 'active' | 'inactive' | 'unconfirmed' | 'cancelled' | 'complained' | 'bounced' | 'cold' | 'blocked';
   created_at: string | null;
   fields: Record<string, unknown>;
+}
+
+export interface KitTag {
+  id: number;
+  name: string;
+  tagged_at: string; // V4 uses tagged_at instead of created_at
 }
 
 export interface MetaData {

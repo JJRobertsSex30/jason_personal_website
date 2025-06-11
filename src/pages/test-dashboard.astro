@@ -1,19 +1,24 @@
 ---
 // Type definitions
 type ConvertKitSubscriber = {
-  id: string;
+  id: number;
+  email_address: string;
   state: string;
   created_at: string;
-  subscriber: {
-    email_address: string;
-    fields?: Record<string, unknown>;
-  };
+  fields: Record<string, unknown> | null;
 };
 
 type TableData = {
   tableName: string;
   data: Record<string, unknown>[] | null;
   error: string | null;
+};
+
+type SubscribersResponse = {
+  total_subscribers: number;
+  page: number;
+  total_pages: number;
+  subscribers: ConvertKitSubscriber[];
 };
 
 import Layout from '~/layouts/PageLayout.astro';
@@ -66,18 +71,19 @@ const tableData: TableData[] = await Promise.all(
 const validTables = tableData.filter(table => table.data !== null);
 
 // ConvertKit API key check
-const convertKitApiKey = import.meta.env.SECRET;
+const convertKitApiKey = import.meta.env.CONVERTKIT_API_KEY;
 const convertKitFormId = import.meta.env.PUBLIC_CONVERTKIT_FORM_ID;
-let subscribersData: { subscriptions: ConvertKitSubscriber[] } = { subscriptions: [] };
+let subscribersData: SubscribersResponse = { total_subscribers: 0, page: 1, total_pages: 1, subscribers: [] };
 let convertKitError: string | null = null;
 
 if (convertKitApiKey && convertKitFormId) {
   try {
-    const response = await fetch(`https://api.convertkit.com/v3/forms/${convertKitFormId}/subscriptions?api_secret=${convertKitApiKey}`, {
+    const response = await fetch(`https://api.kit.com/v4/forms/${convertKitFormId}/subscribers`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'X-Kit-Api-Key': convertKitApiKey
       }
     });
 
@@ -108,7 +114,7 @@ if (convertKitApiKey && convertKitFormId) {
         <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded">
           {convertKitError}
         </div>
-      ) : subscribersData.subscriptions?.length > 0 ? (
+      ) : subscribersData.subscribers?.length > 0 ? (
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead class="bg-gray-50 dark:bg-slate-700">
@@ -120,10 +126,10 @@ if (convertKitApiKey && convertKitFormId) {
               </tr>
             </thead>
             <tbody class="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {subscribersData.subscriptions.map((sub) => (
+              {subscribersData.subscribers.map((sub) => (
                 <tr>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{sub.id}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{sub.subscriber.email_address}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{sub.email_address}</td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{sub.state}</td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                     {new Date(sub.created_at).toLocaleString()}

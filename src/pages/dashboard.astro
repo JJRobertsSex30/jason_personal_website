@@ -255,13 +255,71 @@ if (Astro.request.method === 'POST') {
           const userId = formData.get('user_id')?.toString();
           if (!userId) throw new Error('User ID is required for deletion.');
 
-          const { error: deleteUserError } = await supabase.from('user_profiles').delete().eq('id', userId);
-
-          if (deleteUserError) {
-            console.error('Error deleting user:', deleteUserError);
-            throw new Error(`Failed to delete user: ${deleteUserError.message}`);
+          const supabaseUrl = import.meta.env.SUPABASE_URL;
+          const supabaseServiceKey = import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
+          if (!supabaseUrl || !supabaseServiceKey) {
+            throw new Error('Admin Supabase credentials not found. Cannot delete auth user.');
           }
 
+          // First, get the user's email from our database. This is still needed for ConvertKit.
+          const { data: userProfile, error: profileError } = await supabase
+            .from('user_profiles')
+            .select('email')
+            .eq('id', userId)
+            .single();
+          
+          if (profileError || !userProfile) {
+            console.warn(`[DASHBOARD] User profile not found for ID ${userId}. The user might already be partially deleted. Proceeding with remaining cleanup.`);
+          }
+          
+          // 1. Unsubscribe from ConvertKit (do this first)
+          if (userProfile?.email) {
+              const apiKey = import.meta.env.CONVERTKIT_API_KEY;
+              if (apiKey) {
+                  console.log(`[DASHBOARD] Unsubscribing ${userProfile.email} from ConvertKit using V4 API...`);
+                  // This is a fire-and-forget for the UI, but we'll await it to ensure it completes.
+                  try {
+                      // Find subscriber
+                      const findUrl = `https://api.kit.com/v4/subscribers?email_address=${encodeURIComponent(userProfile.email)}`;
+                      const findResponse = await fetch(findUrl, {
+                        headers: { 'X-Kit-Api-Key': apiKey }
+                      });
+                      if (findResponse.ok) {
+                          const findData = await findResponse.json();
+                          if (findData.subscribers && findData.subscribers.length > 0) {
+                              const subscriberId = findData.subscribers[0].id;
+                              // Unsubscribe
+                              const unsubscribeUrl = `https://api.kit.com/v4/subscribers/${subscriberId}/unsubscribe`;
+                              await fetch(unsubscribeUrl, { 
+                                method: 'POST',
+                                headers: { 'X-Kit-Api-Key': apiKey }
+                              });
+                          }
+                      }
+                  } catch (error) {
+                      console.error('[DASHBOARD] Background ConvertKit unsubscribe failed. This will not block user deactivation.', error);
+                  }
+              }
+          }
+          
+          // 2. Soft-delete from our user_profiles table
+          console.log(`[DASHBOARD] Soft-deleting user ${userId} from user_profiles table...`);
+          const { error: softDeleteError } = await supabase
+            .from('user_profiles')
+            .update({ deleted_at: new Date().toISOString() })
+            .eq('id', userId);
+
+          if (softDeleteError) {
+            console.error(`[DASHBOARD] CRITICAL: Failed to soft-delete user profile. User ID: ${userId}. Error: ${softDeleteError.message}`);
+            throw new Error(`Failed to deactivate user profile: ${softDeleteError.message}`);
+          } else {
+            console.log(`[DASHBOARD] Successfully soft-deleted user ${userId}.`);
+          }
+
+          // NOTE: We are NO LONGER deleting from auth.users. 
+          // The user can log back in and their account will be restored.
+          
+          generalMessage = `User account (ID: ${userId}) has been deactivated. They can reactivate it by signing up again.`;
           return Astro.redirect(Astro.url.pathname + '#users-panel', 303);
         }
       } catch (e: unknown) {
@@ -599,9 +657,21 @@ if (Astro.request.method === 'GET') {
     confirmButtonText="Yes, Delete User"
   />
 
+  <ConfirmationModal
+    id="soft-delete-user-modal"
+    title="Archive User (Soft Delete)"
+    message="This will unsubscribe the user from emails and hide them from active lists. Their data will be kept for historical purposes and they can be restored later. Are you sure?"
+    confirmButtonText="Yes, Archive User"
+  />
+
   <form method="POST" action="#users-panel" id="delete-user-form" class="hidden">
     <input type="hidden" name="_action" value="delete_user" />
     <input type="hidden" name="user_id" id="user-id-to-delete" value="" />
+  </form>
+
+  <form method="POST" action="#users-panel" id="soft-delete-user-form" class="hidden">
+    <input type="hidden" name="_action" value="soft_delete_user" />
+    <input type="hidden" name="user_id" id="user-id-to-soft-delete" value="" />
   </form>
 </Layout>
 
@@ -737,4 +807,43 @@ if (Astro.request.method === 'GET') {
       deleteModal.classList.add('hidden');
     });
   }
-</script> 
+
+  // Handle Soft Delete User Modal
+  const softDeleteModal = document.getElementById('soft-delete-user-modal');
+  const softDeleteModalBackdrop = document.getElementById('soft-delete-user-modal-backdrop');
+  const softDeleteModalConfirmBtn = document.getElementById('soft-delete-user-modal-confirm-btn');
+  const softDeleteModalCancelBtn = document.getElementById('soft-delete-user-modal-cancel-btn');
+  const softDeleteUserForm = document.getElementById('soft-delete-user-form');
+  const userIdToSoftDeleteInput = document.getElementById('user-id-to-soft-delete');
+
+  if (softDeleteModal && softDeleteUserForm && userIdToSoftDeleteInput) {
+    document.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-action="open-soft-delete-modal"]');
+      if (button) {
+        const userId = button.getAttribute('data-user-id');
+        const userEmail = button.getAttribute('data-user-email');
+        const modalMessage = softDeleteModal.querySelector('p.text-sm');
+        
+        if (userIdToSoftDeleteInput) userIdToSoftDeleteInput.value = userId;
+
+        if (modalMessage && userEmail) {
+          modalMessage.textContent = `Are you sure you want to archive ${userEmail}? They will be unsubscribed and hidden from active lists, but their data will be preserved.`
+        }
+        
+        softDeleteModal.classList.remove('hidden');
+      }
+    });
+
+    softDeleteModalConfirmBtn?.addEventListener('click', () => {
+      softDeleteUserForm.submit();
+    });
+
+    softDeleteModalCancelBtn?.addEventListener('click', () => {
+      softDeleteModal.classList.add('hidden');
+    });
+
+    softDeleteModalBackdrop?.addEventListener('click', () => {
+      softDeleteModal.classList.add('hidden');
+    });
+  }
+</script>

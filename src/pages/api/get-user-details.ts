@@ -1,32 +1,18 @@
 // This is a new file.
 import type { APIRoute } from 'astro';
 import { supabase } from '~/lib/supabaseClient';
+import type { KitSubscriber, KitTag } from '~/types';
 
 export const prerender = false;
 
-// Define the expected structure for Kit's subscriber data
-interface KitSubscriber {
-    id: number;
-    first_name: string | null;
-    email_address: string;
-    state: 'active' | 'inactive' | 'cancelled';
-    created_at: string;
-    fields: { [key: string]: string | number | boolean | null };
-}
-
-// Define the expected structure for Kit's tag data
-interface KitTag {
-    id: number;
-    name: string;
-    created_at: string;
-}
-
 // Helper to fetch subscriber ID from ConvertKit by email
-async function getKitSubscriberByEmail(email: string, apiSecret: string): Promise<KitSubscriber | null> {
+async function getKitSubscriberByEmail(email: string, apiKey: string): Promise<KitSubscriber | null> {
     const normalizedEmail = email.toLowerCase().trim();
-    const url = `https://api.convertkit.com/v3/subscribers?api_secret=${apiSecret}&email_address=${encodeURIComponent(normalizedEmail)}`;
+    const url = `https://api.kit.com/v4/subscribers?email_address=${encodeURIComponent(normalizedEmail)}`;
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            headers: { 'X-Kit-Api-Key': apiKey, 'Accept': 'application/json' }
+        });
         if (!response.ok) {
             console.error(`Kit API Error (Subscribers): ${response.status} ${await response.text()}`);
             return null;
@@ -41,9 +27,11 @@ async function getKitSubscriberByEmail(email: string, apiSecret: string): Promis
 
 // Helper to fetch subscriber tags from ConvertKit
 async function getKitSubscriberTags(subscriberId: number, apiKey: string): Promise<KitTag[]> {
-    const url = `https://api.convertkit.com/v3/subscribers/${subscriberId}/tags?api_key=${apiKey}`;
+    const url = `https://api.kit.com/v4/subscribers/${subscriberId}/tags`;
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            headers: { 'X-Kit-Api-Key': apiKey, 'Accept': 'application/json' }
+        });
         if (!response.ok) {
             console.error(`Kit API Error (Tags): ${response.status} ${await response.text()}`);
             return [];
@@ -60,15 +48,14 @@ async function getKitSubscriberTags(subscriberId: number, apiKey: string): Promi
 export const GET: APIRoute = async ({ request }) => {
     const url = new URL(request.url);
     const userId = url.searchParams.get('id');
-    const kitApiSecret = import.meta.env.CONVERTKIT_API_SECRET;
     const kitApiKey = import.meta.env.CONVERTKIT_API_KEY;
 
     if (!userId) {
         return new Response(JSON.stringify({ message: "User ID is required" }), { status: 400 });
     }
     
-    if (!kitApiSecret || !kitApiKey) {
-        return new Response(JSON.stringify({ message: "ConvertKit API keys are not configured" }), { status: 500 });
+    if (!kitApiKey) {
+        return new Response(JSON.stringify({ message: "ConvertKit API key is not configured" }), { status: 500 });
     }
 
     try {
@@ -96,7 +83,7 @@ export const GET: APIRoute = async ({ request }) => {
         }
 
         // 3. Fetch data from ConvertKit
-        const kitSubscriber = await getKitSubscriberByEmail(userProfile.email, kitApiSecret);
+        const kitSubscriber = await getKitSubscriberByEmail(userProfile.email, kitApiKey);
         let kitTags: KitTag[] = [];
         if (kitSubscriber) {
             kitTags = await getKitSubscriberTags(kitSubscriber.id, kitApiKey);

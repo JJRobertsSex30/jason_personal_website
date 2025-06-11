@@ -1,29 +1,25 @@
 import type { APIRoute } from 'astro';
 import { supabase } from '~/lib/supabaseClient';
-import type { UserProfile } from '~/types';
-
-interface ConvertKitSubscriber {
-  id: number;
-  first_name: string | null;
-  email_address: string;
-  state: 'active' | 'inactive' | 'cancelled' | 'complained' | 'bounced';
-  created_at: string;
-  fields: Record<string, unknown>;
-}
+import type { UserProfile, KitSubscriber } from '~/types';
 
 export const GET: APIRoute = async () => {
   try {
-    const apiSecret = import.meta.env.CONVERTKIT_API_SECRET;
-    if (!apiSecret) {
-      throw new Error('ConvertKit API secret is not set in environment variables.');
+    const apiKey = import.meta.env.CONVERTKIT_API_KEY;
+
+    if (!apiKey) {
+      throw new Error('ConvertKit API key is not set in environment variables.');
     }
 
-    const ckUrl = `https://api.convertkit.com/v3/subscribers?api_secret=${apiSecret}&sort_order=desc&per_page=1000`;
+    const ckUrl = `https://api.kit.com/v4/subscribers`;
 
-    // --- Parallel Data Fetching ---
     const [ckResponse, dbResult] = await Promise.all([
-      fetch(ckUrl),
-      supabase.from('user_profiles').select('id, email, created_at, updated_at'),
+      fetch(ckUrl, {
+        headers: {
+          'X-Kit-Api-Key': apiKey,
+          'Accept': 'application/json'
+        }
+      }),
+      supabase.from('user_profiles').select('id, email, created_at, updated_at, deleted_at'),
     ]);
 
     // --- Error Handling & Data Extraction ---
@@ -33,7 +29,7 @@ export const GET: APIRoute = async () => {
       throw new Error(`Failed to fetch from ConvertKit: ${ckResponse.statusText}`);
     }
     const ckData = await ckResponse.json();
-    const allCkSubscribers: ConvertKitSubscriber[] = ckData.subscribers || [];
+    const allCkSubscribers: KitSubscriber[] = ckData.subscribers || [];
 
     if (dbResult.error) {
       console.error('Supabase DB Error:', dbResult.error);
@@ -41,58 +37,40 @@ export const GET: APIRoute = async () => {
     }
     const dbUsers = dbResult.data || [];
 
-    // 3. Combine and process user data
-    const combinedUsers = new Map<string, UserProfile>();
-    const kitStateMap: { [key: string]: UserProfile['kit_state'] } = {
-      active: 'active',
-      inactive: 'unconfirmed',
-    };
-
-    // Process DB users first
+    // Create a map of real database users, keyed by email.
+    const usersMap = new Map<string, UserProfile>();
     for (const dbUser of dbUsers) {
-      if (!dbUser.id || !dbUser.email) continue;
-      
-      const userProfileData: UserProfile = {
-        id: dbUser.id,
-        email: dbUser.email,
-        created_at: dbUser.created_at || new Date().toISOString(),
-        updated_at: dbUser.updated_at || null,
-        kit_state: null,
-      };
-
-      combinedUsers.set(dbUser.email.toLowerCase(), userProfileData);
-    }
-
-    // Process and merge ConvertKit subscribers
-    for (const ckUser of allCkSubscribers) {
-      const email = ckUser.email_address.toLowerCase();
-      const kit_state = (kitStateMap[ckUser.state] || ckUser.state) as UserProfile['kit_state'];
-      const existingUser = combinedUsers.get(email);
-
-      if (existingUser) {
-        existingUser.kit_state = kit_state;
-      } else {
-        const viewId = `ck-email-${Buffer.from(ckUser.email_address, 'utf8').toString('base64')}`;
-        const userProfileData: UserProfile = {
-          id: `kit-${ckUser.id}`,
-          view_id: viewId,
-          email: ckUser.email_address,
-          created_at: ckUser.created_at,
-          updated_at: null,
-          kit_state: kit_state,
-        };
-        combinedUsers.set(email, userProfileData);
+      if (dbUser.id && dbUser.email) {
+        usersMap.set(dbUser.email.toLowerCase(), {
+          id: dbUser.id,
+          view_id: dbUser.id, // The view_id is the same as the user's actual ID
+          email: dbUser.email,
+          created_at: dbUser.created_at || new Date().toISOString(),
+          updated_at: dbUser.updated_at || null,
+          // If soft-deleted in our DB, their status is 'cancelled'. This is the source of truth.
+          kit_state: dbUser.deleted_at ? 'cancelled' : null, 
+          convertkit_id: null, // Default state
+        });
       }
     }
 
-    // Add view_id to all users for consistent linking
-    combinedUsers.forEach(user => {
-        if (!user.view_id) {
-            user.view_id = user.id;
-        }
-    });
+    // Enrich the real users with data from ConvertKit
+    for (const ckUser of allCkSubscribers) {
+      const email = ckUser.email_address.toLowerCase();
+      const userInDb = usersMap.get(email);
 
-    const usersArray = Array.from(combinedUsers.values());
+      if (userInDb) {
+        // Only update status from Kit if our DB does not consider the user deleted.
+        if (userInDb.kit_state !== 'cancelled') {
+          userInDb.kit_state = ckUser.state;
+        }
+        userInDb.convertkit_id = ckUser.id;
+      }
+      // If the user is in ConvertKit but not in our DB, we IGNORE them.
+      // The dashboard should only show users that exist in our system.
+    }
+
+    const usersArray = Array.from(usersMap.values());
 
     // 4. Calculate summary
     const summary = {

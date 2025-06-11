@@ -26,11 +26,10 @@ export interface HeroSubscribeRequestBody {
 
 // Define a type for ConvertKit payloads for better type safety
 interface ConvertKitPayload {
-  api_key: string;
-  email: string;
+  email_address: string; // V4 uses email_address
   first_name?: string;
   fields?: Record<string, string | number | undefined>;
-  // Add other ConvertKit specific fields here if needed, e.g., tags for direct tagging API if different
+  // api_key is no longer in the payload
 }
 
 // Updated ConvertKit function to include referral_id and insight_gems
@@ -44,14 +43,13 @@ async function updateConvertKitSubscriber(
 ): Promise<{ success: boolean; subscriberId?: string; error?: string }> {
   const CONVERTKIT_API_KEY = import.meta.env.CONVERTKIT_API_KEY as string;
   const PUBLIC_CONVERTKIT_FORM_ID = import.meta.env.PUBLIC_CONVERTKIT_FORM_ID as string;
-  // CONVERTKIT_TAG_ID_NOT_VERIFIED is no longer used here as per user feedback.
 
-  if (!CONVERTKIT_API_KEY) { // Removed CONVERTKIT_TAG_ID_NOT_VERIFIED from this check
+  if (!CONVERTKIT_API_KEY) {
     console.error('ConvertKit API Key not configured.');
     return { success: false, error: 'ConvertKit integration not configured (API Key missing).' };
   }
 
-  const API_BASE_URL = 'https://api.convertkit.com/v3';
+  const API_BASE_URL = 'https://api.kit.com/v4';
   let subscriberId = existingKitId;
 
   // Prepare custom fields payload
@@ -70,53 +68,49 @@ async function updateConvertKitSubscriber(
   }
 
   try {
-    if (PUBLIC_CONVERTKIT_FORM_ID) {
-      const formSubscribeUrl = `${API_BASE_URL}/forms/${PUBLIC_CONVERTKIT_FORM_ID}/subscribe`;
-      console.log(`[ConvertKit] Attempting to subscribe ${email} to form ${PUBLIC_CONVERTKIT_FORM_ID}`);
-      const formPayload: ConvertKitPayload = {
-        api_key: CONVERTKIT_API_KEY,
-        email: email,
-      };
-      if (firstName) formPayload.first_name = firstName;
-      if (Object.keys(customFields).length > 0) formPayload.fields = customFields;
+    const formSubscribeUrl = `${API_BASE_URL}/forms/${PUBLIC_CONVERTKIT_FORM_ID}/subscribers`;
+    console.log(`[ConvertKit] Attempting to subscribe ${email} to form ${PUBLIC_CONVERTKIT_FORM_ID}`);
+      
+    const payload: ConvertKitPayload = {
+      email_address: email,
+    };
+    if (firstName) payload.first_name = firstName;
+    if (Object.keys(customFields).length > 0) payload.fields = customFields;
 
-      console.log(`[ConvertKit] Subscribing to form ${PUBLIC_CONVERTKIT_FORM_ID}. Payload:`, JSON.stringify(formPayload, null, 2)); // Log payload
-      const formResponse = await fetch(formSubscribeUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8',
-        },
-        body: JSON.stringify(formPayload),
-      });
+    console.log(`[ConvertKit] Posting to form subscribers endpoint. Payload:`, JSON.stringify(payload, null, 2));
+      
+    const response = await fetch(formSubscribeUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Accept': 'application/json',
+        'X-Kit-Api-Key': CONVERTKIT_API_KEY
+      },
+      body: JSON.stringify(payload),
+    });
 
-      if (!formResponse.ok) {
-        const errorData = await formResponse.json().catch(() => ({ message: 'Failed to parse error JSON from form subscription' }));
-        console.warn(`[ConvertKit] Failed to subscribe ${email} to form ${PUBLIC_CONVERTKIT_FORM_ID}. Status: ${formResponse.status}. Error: ${errorData.message || formResponse.statusText}`);
-        return { success: false, error: `Failed to subscribe to form: ${errorData.message || formResponse.statusText}` };
-
-      } else {
-        const formJson = await formResponse.json();
-        if (formJson.subscription && formJson.subscription.subscriber && formJson.subscription.subscriber.id && !subscriberId) {
-            subscriberId = formJson.subscription.subscriber.id.toString();
-        }
-        console.log(`[ConvertKit] Successfully subscribed/updated ${email} on form ${PUBLIC_CONVERTKIT_FORM_ID}. Subscriber ID: ${subscriberId}`);
-        return { success: true, subscriberId: subscriberId ?? undefined };
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = { errors: [`HTTP ${response.status}: ${response.statusText}`] };
       }
+      
+      const errorMessage = errorData.errors ? errorData.errors.join(', ') : errorData.message || response.statusText;
+      console.warn(`[ConvertKit] Failed to subscribe ${email} to form ${PUBLIC_CONVERTKIT_FORM_ID}. Status: ${response.status}. Error: ${errorMessage}`);
+      return { success: false, error: `Failed to subscribe to form: ${errorMessage}` };
     } else {
-      console.warn('[ConvertKit] PUBLIC_CONVERTKIT_FORM_ID is not configured. Cannot subscribe to form.');
-      return { success: false, error: 'ConvertKit form ID not configured for subscription.' };
+      const responseJson = await response.json();
+      if (responseJson.subscriber && responseJson.subscriber.id) {
+        subscriberId = responseJson.subscriber.id.toString();
+      }
+      console.log(`[ConvertKit] Successfully subscribed ${email} to form ${PUBLIC_CONVERTKIT_FORM_ID}. Subscriber ID: ${subscriberId}`);
+      return { success: true, subscriberId: subscriberId ?? undefined };
     }
-
-    // The explicit tagging block for CONVERTKIT_TAG_ID_NOT_VERIFIED has been removed.
-    // ConvertKit's form subscription settings should handle the initial "not verified" state.
-
-  } catch (error: unknown) {
-    console.error('[ConvertKit] Network or other error during API call:', error);
-    let message = 'Network error during ConvertKit interaction.';
-    if (error instanceof Error) {
-        message = error.message;
-    }
-    return { success: false, error: message };
+  } catch (error) {
+    console.error('[ConvertKit] Unexpected error during form subscription:', error);
+    return { success: false, error: 'Unexpected error during subscription' };
   }
 }
 
@@ -170,7 +164,7 @@ export const POST: APIRoute = async ({ request, site: _site }) => {
     const impressionDetails: ImpressionData = {
         experiment_id: experimentId,
         variant_id: variantId,
-        user_identifier: userProfileId,
+        user_id: userProfileId,
         page_url: pageUrl || request.headers.get('referer') || undefined,
         session_identifier: sessionIdentifier,
         device_type: deviceType,
