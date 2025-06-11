@@ -6,10 +6,10 @@ import {
   logHeroImpression
 } from '~/lib/database-operations';
 import type {
-  ImpressionData,
+  ImpressionInsertData,
   ImpressionRecord,
   SingleResult
-} from '~/lib/database-operations'; // UserProfile removed as it's inferred
+} from '~/lib/database-operations';
 
 // Define HeroSubscribeRequestBody here if not imported from a central types file
 export interface HeroSubscribeRequestBody {
@@ -114,6 +114,13 @@ async function updateConvertKitSubscriber(
   }
 }
 
+type DeviceTypeEnum = 'mobile' | 'tablet' | 'desktop' | 'unknown';
+
+function isValidDeviceType(type: string | undefined): type is DeviceTypeEnum {
+  if (!type) return false;
+  return ['mobile', 'tablet', 'desktop', 'unknown'].includes(type);
+}
+
 export const POST: APIRoute = async ({ request, site: _site }) => {
   let requestBody: HeroSubscribeRequestBody;
   try {
@@ -161,13 +168,14 @@ export const POST: APIRoute = async ({ request, site: _site }) => {
 
   // 2. Log A/B Impression (only if not already verified or if it's a new interaction for an unverified user)
   if (!isAlreadyVerified) {
-    const impressionDetails: ImpressionData = {
+    const validatedDeviceType = isValidDeviceType(deviceType) ? deviceType : 'unknown';
+    const impressionDetails: ImpressionInsertData = {
         experiment_id: experimentId,
         variant_id: variantId,
         user_id: userProfileId,
         page_url: pageUrl || request.headers.get('referer') || undefined,
         session_identifier: sessionIdentifier,
-        device_type: deviceType,
+        device_type: validatedDeviceType,
         metadata: { 
             source: 'subscribe-api', 
             userAgent: userAgent || request.headers.get('user-agent') || undefined,
@@ -211,7 +219,7 @@ export const POST: APIRoute = async ({ request, site: _site }) => {
         // Update kit_subscriber_id in DB
         await supabase.from('user_profiles').update({ kit_subscriber_id: kitUpdateResult.subscriberId }).eq('id', userProfileId);
     }
-    return new Response(JSON.stringify({ message: 'This email address is already verified. Profile data updated in ConvertKit if applicable.' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ message: 'This email address is already verified. Your profile is up-to-date.' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
   // 3. Generate and Store Verification Token
@@ -248,30 +256,18 @@ export const POST: APIRoute = async ({ request, site: _site }) => {
           .from('user_profiles')
           .update({ kit_subscriber_id: kitResult.subscriberId })
           .eq('id', userProfileId);
+      
       if (kitIdUpdateError) {
-          console.warn(`[API /subscribe] Failed to update kit_subscriber_id for user ${userProfileId}:`, kitIdUpdateError.message); // Updated log prefix
+          console.error(`[API /subscribe] Failed to update kit_subscriber_id for user ${userProfileId}:`, kitIdUpdateError.message);
       }
   }
 
-  // 5. Create Conversion Record
-  const { error: conversionError } = await supabase.from('conversions').insert({
-      conversion_type: 'subscribed_from_email_capture',
-      user_id: userProfileId,
-      experiment_id: experimentId,
-      variant_id: variantId,
-      session_identifier: sessionIdentifier,
-  });
-
-  if (conversionError) {
-      console.warn(`[API /subscribe] Failed to create conversion record for user ${userProfileId}:`, conversionError.message);
-  }
-
-  // Return the desired success message for new/unverified subscriptions
-  return new Response(JSON.stringify({ 
-    success: true, // Explicitly set success to true
-    message: 'Thank you for subscribing! Please check your email to continue your journey.' 
-  }), { 
-    status: 200, 
-    headers: { 'Content-Type': 'application/json' } 
-  });
+  // 5. Send final response to the client
+  return new Response(
+    JSON.stringify({ 
+        message: 'Subscription successful! Please check your email to verify your address.',
+        userId: userProfileId
+    }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } }
+  );
 }; 

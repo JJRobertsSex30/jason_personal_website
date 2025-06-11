@@ -48,6 +48,16 @@ export interface ImpressionData {
   // e.g., session_identifier, user_agent, etc.
 }
 
+export interface ImpressionInsertData {
+  experiment_id: string; // UUID
+  variant_id: string; // UUID
+  user_id: string; // This will be the user_profiles.id
+  page_url?: string;
+  metadata?: Record<string, unknown>;
+  session_identifier?: string;
+  device_type?: 'mobile' | 'tablet' | 'desktop' | 'unknown';
+}
+
 export interface FindOrCreateUserResult {
   user: UserProfile | null;
   isNewUser: boolean;
@@ -110,7 +120,7 @@ export interface ImpressionRecord {
 }
 
 export interface ConversionInsertData {
-  user_id: string; // text in schema, but typically uuid from user_profiles.id
+  user_id: string; // This is a UUID referencing user_profiles.id
   conversion_type: string;
   experiment_id?: string | null; // uuid
   variant_id?: string | null; // uuid
@@ -554,77 +564,107 @@ export async function tableExists(tableName: string): Promise<{ exists: boolean;
 
 // NEW FUNCTIONS START
 
+/**
+ * Finds a user by email. If the user doesn't exist, it creates a new one.
+ * It's critical this function is called BEFORE attempting to log impressions or conversions.
+ * @param email The user's email address.
+ * @returns An object containing the user profile, whether they are new, and if they were already verified.
+ */
 export async function findOrCreateUserForVerification(email: string): Promise<FindOrCreateUserResult> {
   const normalizedEmail = email.toLowerCase().trim();
 
-  // First, try to find an existing user by email
+  // Step 1: Check if user exists
   const { data: existingUser, error: findError } = await supabase
     .from('user_profiles')
     .select('*')
     .eq('email', normalizedEmail)
     .single();
 
-  if (findError && findError.code !== 'PGRST116') { // PGRST116 = 'single' query returned no rows
-    console.error(`[DB] Error finding user by email ${normalizedEmail}:`, findError);
-    return { user: null, isNewUser: false, isAlreadyVerified: false, error: findError };
-  }
-
-  // Case 1: User exists and is soft-deleted
-  if (existingUser && existingUser.deleted_at) {
-    console.log(`[DB] Found soft-deleted user ${normalizedEmail}. Reactivating...`);
-    const { data: reactivatedUser, error: updateError } = await supabase
-      .from('user_profiles')
-      .update({ deleted_at: null })
-      .eq('id', existingUser.id)
-      .select('*')
-      .single();
-
-    if (updateError) {
-      console.error(`[DB] Error reactivating user ${normalizedEmail}:`, updateError);
-      return { user: null, isNewUser: false, isAlreadyVerified: false, error: updateError };
-    }
-    
-    console.log(`[DB] User ${normalizedEmail} reactivated successfully.`);
-    return {
-      user: reactivatedUser,
-      isNewUser: false, // They are a returning user
-      isAlreadyVerified: reactivatedUser?.is_email_verified || false,
-      error: null,
-    };
+  if (findError && findError.code !== 'PGRST116') { // PGRST116 means no rows found, which is not an error here.
+    console.error('[DB] Error finding user:', findError);
+    return { user: null, isNewUser: false, isAlreadyVerified: false, error: findError.message };
   }
   
-  // Case 2: User exists and is active
+  // If user exists, return their profile
   if (existingUser) {
-    console.log(`[DB] Found active user for ${normalizedEmail}. ID: ${existingUser.id}`);
+    console.log(`[DB] Found existing user: ${existingUser.email}`);
     return {
-      user: existingUser,
+      user: existingUser as UserProfile,
       isNewUser: false,
       isAlreadyVerified: existingUser.is_email_verified,
       error: null,
     };
   }
 
-  // Case 3: User does not exist, create a new one
-  console.log(`[DB] No user found for ${normalizedEmail}. Creating a new user profile...`);
-  const referralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+  // Step 2: User does not exist, so create them.
+  console.log(`[DB] No user found for ${normalizedEmail}. Creating new user...`);
   const { data: newUser, error: createError } = await supabase
     .from('user_profiles')
-    .insert({
-      id: crypto.randomUUID(),
-      email: normalizedEmail,
-      referral_code: referralCode,
-    })
-    .select('*')
+    .insert({ email: normalizedEmail })
+    .select()
     .single();
 
   if (createError) {
-    console.error(`[DB] Error creating new user for ${normalizedEmail}:`, createError);
-    return { user: null, isNewUser: false, isAlreadyVerified: false, error: createError };
+    console.error('[DB] Error creating user:', createError);
+    return { user: null, isNewUser: false, isAlreadyVerified: false, error: createError.message };
   }
 
-  return { user: newUser, isNewUser: true, isAlreadyVerified: false, error: null };
+  console.log(`[DB] Successfully created new user: ${newUser.email}`);
+  return {
+    user: newUser as UserProfile,
+    isNewUser: true,
+    isAlreadyVerified: false,
+    error: null,
+  };
 }
 
+/**
+ * Generates a secure, unique verification token and stores it in the database.
+ * This should only be called for a user who has just been created.
+ * It's called from the frontend immediately after a user signs up.
+ * @param impressionData - The impression data to log.
+ */
+export async function logHeroImpression(impressionData: ImpressionInsertData): Promise<SingleResult<ImpressionRecord>> {
+  try {
+    console.log('[DB] Logging hero impression with data:', impressionData);
+
+    // Ensure user_id is a valid UUID, as it's a foreign key.
+    if (!impressionData.user_id) {
+        throw new Error("Cannot log impression without a valid user_id.");
+    }
+
+    const { data, error } = await supabase
+      .from('impressions')
+      .insert(impressionData)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[DB] Supabase error logging impression:', error);
+      throw error;
+    }
+
+    console.log(`[DB] Impression logged successfully for user ${impressionData.user_id}`);
+    return { data: data as ImpressionRecord, error: null };
+
+  } catch (err: unknown) {
+    console.error('[DB] Unexpected error in logHeroImpression:', err);
+    const message = err instanceof Error ? err.message : 'An unknown error occurred during impression logging.';
+    // Instead of creating a custom error object, we'll just return a standard Postgrest-like error.
+    // The frontend should be robust enough to handle this.
+    return { 
+      data: null, 
+      error: { 
+        message, 
+        details: (err instanceof Error && err.stack) ? err.stack : '', 
+        hint: 'Check database connection or server logs.', 
+        code: 'LHI500' 
+      } 
+    };
+  }
+}
+
+// NEW FUNCTION: generateAndStoreVerificationToken
 export async function generateAndStoreVerificationToken(
   userId: string, 
   email: string,
@@ -632,221 +672,119 @@ export async function generateAndStoreVerificationToken(
   variantId?: string | null,    // Optional variantId, directly matches column
   impressionId?: string | null // Optional impressionId, directly matches column
 ): Promise<GenerateTokenResult> {
-  console.log(`[DB Ops] generateAndStoreVerificationToken called for userId: ${userId}, email: ${email}, experimentId: ${experimentId}, variantId: ${variantId}, impressionId: ${impressionId}`);
-  if (!userId || !email) {
-    return { token: null, error: 'User ID and email are required to generate a token.' };
-  }
-
-  const token = globalThis.crypto.randomUUID(); // Simple UUID token
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // Token expires in 24 hours
-
   try {
-    // Direct mapping to columns as confirmed in the schema
-    const tokenDataToInsert = {
-      user_profile_id: userId,
-      token: token,
-      email: email,
-      expires_at: expiresAt.toISOString(),
-      experiment_id: experimentId, // Can be null
-      variant_id: variantId,     // Can be null
-      impression_id: impressionId  // Can be null
-    };
+    // A secure token is now generated by the database trigger by default (uuid_generate_v4)
+    // We just need to create the record.
 
-    const { error: insertError } = await supabase
+    // The token's expiration is set to 24 hours from now.
+    const expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: tokenRecord, error: tokenError } = await supabase
       .from('email_verification_tokens')
-      .insert(tokenDataToInsert);
+      .insert({
+        user_profile_id: userId,
+        email,
+        expires_at,
+        experiment_id: experimentId,
+        variant_id: variantId,
+        impression_id: impressionId
+      })
+      .select('token')
+      .single();
 
-    if (insertError) {
-      console.error(`[DB Ops] Error inserting verification token for user ${userId}:`, insertError);
-      return { token: null, error: insertError };
+    if (tokenError) {
+      console.error('[DB] Error generating verification token record:', tokenError);
+      return { token: null, error: tokenError.message };
+    }
+    
+    if (!tokenRecord || !tokenRecord.token) {
+        // This case might happen if RLS prevents the insert or if the token column isn't returned.
+        return { token: null, error: 'Failed to retrieve verification token after creation.' };
     }
 
-    // Update last_verification_email_sent_at in user_profiles
-    const { error: updateUserError } = await supabase
-      .from('user_profiles')
-      .update({ last_verification_email_sent_at: new Date().toISOString() })
-      .eq('id', userId);
-
-    if (updateUserError) {
-      console.warn(`[DB Ops] Failed to update last_verification_email_sent_at for user ${userId}:`, updateUserError.message);
-      // Non-critical, so we don't return an error for the whole token generation
-    }
-    console.log(`[DB Ops] Successfully generated and stored verification token for user ${userId}. Token: ${token}`);
-    return { token, error: null };
-
+    console.log(`[DB] Stored verification token for ${email}.`);
+    return { token: tokenRecord.token, error: null };
   } catch (err: unknown) {
-    console.error('[DB Ops] Exception in generateAndStoreVerificationToken:', err);
-    const message = err instanceof Error ? err.message : 'An unexpected error occurred during token generation.';
+    console.error('[DB] Unexpected error in generateAndStoreVerificationToken:', err);
+    const message = err instanceof Error ? err.message : 'An unknown error occurred.';
     return { token: null, error: message };
   }
 }
 
-// NEW FUNCTION: verifyTokenAndLogConversion
+/**
+ * Verifies a token, marks the user as verified, and logs the conversion event.
+ * @param tokenValue The verification token from the URL.
+ * @returns An object indicating success and containing key user/token data.
+ */
 export async function verifyTokenAndLogConversion(tokenValue: string): Promise<VerifiedTokenData> {
-  console.log(`[DB Ops] verifyTokenAndLogConversion called for token: ${tokenValue}`);
-  if (!tokenValue) {
-    return { success: false, message: 'Verification token is required.', error: 'Token not provided' };
-  }
-
   try {
-    // Find the token and associated user profile in one go
-    const { data: tokenRecord, error: findError } = await supabase
+    // Step 1: Find the token in the database
+    const { data: tokenData, error: tokenFindError } = await supabase
       .from('email_verification_tokens')
-      .select('*, user_profiles(*)') // Fetch all from token, and all from user profile
+      .select('*')
       .eq('token', tokenValue)
       .single();
 
-    if (findError || !tokenRecord || !tokenRecord.user_profiles) {
-      console.warn(`[DB Ops] Verification token not found or error fetching: ${tokenValue}`, findError);
-      return { success: false, message: 'Invalid or expired verification link. Please try again.', error: findError || 'Token not found' };
+    if (tokenFindError || !tokenData) {
+      const message = tokenFindError ? `Token find error: ${tokenFindError.message}` : 'Token not found.';
+      console.warn(`[DB] Verification failed: ${message}`);
+      return { success: false, message };
     }
 
-    // 2. Check if already used (used_at is not null OR is_used is true - schema has both, used_at is preferred)
-    // The live schema shows `is_used boolean not null default false` and `used_at timestamptz null`.
-    // Checking `tokenRecord.used_at` is a good way to see if it has been processed.
-    if (tokenRecord.used_at || tokenRecord.is_used) { 
-      console.log(`[DB Ops] Verification token ${tokenValue} has already been used for user ${tokenRecord.user_profile_id}. Used_at: ${tokenRecord.used_at}, is_used: ${tokenRecord.is_used}`);
-      return { 
-        success: false, 
-        message: 'This verification link has already been used.', 
-        userProfileId: tokenRecord.user_profile_id,
-        email: tokenRecord.user_profiles.email,
-        firstName: tokenRecord.user_profiles.first_name,
-        kitSubscriberId: tokenRecord.user_profiles.kit_subscriber_id,
-        experimentId: tokenRecord.experiment_id,
-        variantId: tokenRecord.variant_id,
-        action_token: tokenRecord.user_profiles.action_token,
-        error: 'Token already used' 
-      };
+    // Step 2: Check if token is expired or already used
+    if (tokenData.is_used) {
+      return { success: false, message: 'This verification link has already been used.' };
+    }
+    if (new Date(tokenData.expires_at) < new Date()) {
+      return { success: false, message: 'This verification link has expired. Please request a new one.' };
     }
 
-    // 3. Check if expired
-    if (new Date(tokenRecord.expires_at) < new Date()) {
-      console.log(`[DB Ops] Verification token ${tokenValue} has expired for user ${tokenRecord.user_profile_id}.`);
-      return { success: false, message: 'This verification link has expired. Please request a new one.', error: 'Token expired' };
-    }
-
-    const now = new Date();
-    const nowISO = now.toISOString();
-
-    // 4. Mark token as used (set used_at and is_used to true)
-    const { error: updateTokenError } = await supabase
-      .from('email_verification_tokens')
-      .update({ used_at: nowISO, is_used: true }) 
-      .eq('id', tokenRecord.id);
-
-    if (updateTokenError) {
-      console.error(`[DB Ops] Error marking token ${tokenValue} as used for user ${tokenRecord.user_profile_id}:`, updateTokenError);
-      return { success: false, message: 'Error processing verification. Please try again.', error: updateTokenError };
-    }
-
-    // 5. Update user_profiles table
-    const { data: updatedUserProfile, error: updateUserError } = await supabase
-      .from('user_profiles')
-      .update({ is_email_verified: true, email_verified_at: nowISO })
-      .eq('id', tokenRecord.user_profile_id)
-      .select('first_name, email, kit_subscriber_id')
-      .single();
-
-    if (updateUserError || !updatedUserProfile) {
-      console.error(`[DB Ops] Error updating user profile ${tokenRecord.user_profile_id} to verified:`, updateUserError);
-      return { success: false, message: 'Error finalizing email verification. Please try again.', error: updateUserError || 'Failed to retrieve updated user profile' };
-    }
-    console.log(`[DB Ops] User profile ${tokenRecord.user_profile_id} marked as verified.`);
-
-    // 6. Log conversion
-    let impressionRecord: ImpressionRecord | null = null;
-    const directImpressionId = tokenRecord.impression_id as string | undefined;
-
-    if (directImpressionId) {
-      const { data: impData, error: impError } = await supabase
-        .from('impressions')
-        .select('*')
-        .eq('id', directImpressionId)
-        .single();
-      if (impError || !impData) {
-        console.warn(`[DB Ops] Could not fetch impression record ${directImpressionId} for token ${tokenValue}:`, impError?.message || 'Not found');
-      } else {
-        impressionRecord = impData;
-      }
-    } else {
-        console.warn(`[DB Ops] No impression_id found on token record ${tokenRecord.id} for token value ${tokenValue}. Conversion will lack some details for calculation.`);
+    // Step 3: Mark user as verified and token as used in a transaction
+    const { data: userProfile, error: verificationError } = await supabase.rpc('verify_user_and_token', {
+      p_token_id: tokenData.id,
+      p_user_id: tokenData.user_profile_id,
+    });
+    
+    if (verificationError || !userProfile) {
+        throw new Error(verificationError?.message || "Failed to call user verification RPC.");
     }
     
-    const conversionDetails: Record<string, unknown> = {
-      verification_method: "email_link_click",
-      token_id: tokenRecord.id,
-      token_created_at: tokenRecord.created_at
-    };
-
-    if (impressionRecord) {
-        conversionDetails.original_impression_details = {
-            page_url: impressionRecord.page_url, 
-            user_agent: impressionRecord.user_agent,
-            ip_address: impressionRecord.ip_address, 
-            geo_country: impressionRecord.country_code,
-            geo_region: impressionRecord.region,
-            geo_city: impressionRecord.city
-        };
-    }
-
-    // Constructing the object for the 'conversions' table
-    // Ensuring all keys match the snake_case column names from database-schema.md
-    const conversionData: ConversionInsertData = {
-      user_id: tokenRecord.user_profile_id,
+    // Step 4: Log the conversion event
+    const conversionDetails: ConversionInsertData = {
+      user_id: userProfile.id,
       conversion_type: 'email_verified',
-      experiment_id: tokenRecord.experiment_id,
-      variant_id: tokenRecord.variant_id,
-      created_at: nowISO,
-      session_identifier: impressionRecord?.session_identifier || null,
-      details: conversionDetails,
-      conversion_value: 1, // Defaulting to 1 for 'email_verified' type
-      device_type: impressionRecord?.device_type || null,
-      time_to_convert: (impressionRecord && impressionRecord.impression_at)
-        ? Math.round((now.getTime() - new Date(impressionRecord.impression_at).getTime()) / 1000)
-        : null,
-      conversion_context: {
-        source: 'email_verification_link_click',
-        notes: impressionRecord ? 'Linked to original impression for context.' : 'Original impression not found or not linked.',
-        token_id_used: tokenRecord.id // Storing token_id in context
+      experiment_id: tokenData.experiment_id,
+      variant_id: tokenData.variant_id,
+      created_at: new Date().toISOString(),
+      details: { 
+          source: 'email_verification_link',
+          impression_id_linked: tokenData.impression_id 
       },
-      metadata: {
-          email_used_for_verification: tokenRecord.email,
-          related_impression_id: directImpressionId || null // Storing related impression_id in metadata for audit
-      }
+      metadata: { verified_email: userProfile.email },
     };
-    
-    // Clean undefined properties before insert. Null properties are fine.
-    // Object.keys(conversionData).forEach(key => {
-    //   if (conversionData[key as keyof ConversionInsertData] === undefined) {
-    //     delete conversionData[key as keyof ConversionInsertData];
-    //   }
-    // });
 
-    const { error: conversionError } = await supabase.from('conversions').insert(conversionData);
-    
+    const { error: conversionError } = await supabase.from('conversions').insert(conversionDetails);
+
     if (conversionError) {
-      console.warn(`[DB Ops] Failed to log 'email_verified' conversion for user ${tokenRecord.user_profile_id}, experiment ${tokenRecord.experiment_id || 'N/A'}:`, conversionError.message);
+      // Log the error but don't fail the entire process, as verification was successful.
+      console.error('[DB] Failed to log email verification conversion:', conversionError);
     } else {
-      console.log(`[DB Ops] 'email_verified' conversion logged for user ${tokenRecord.user_profile_id}, experiment ${tokenRecord.experiment_id || 'N/A'}.`);
+      console.log(`[DB] Email verification conversion logged for user ${userProfile.id}`);
     }
 
     return {
       success: true,
       message: 'Email successfully verified!',
-      userProfileId: tokenRecord.user_profile_id,
-      email: updatedUserProfile.email,
-      firstName: updatedUserProfile.first_name,
-      kitSubscriberId: updatedUserProfile.kit_subscriber_id,
-      experimentId: tokenRecord.experiment_id,
-      variantId: tokenRecord.variant_id,
-      action_token: tokenRecord.user_profiles.action_token,
-      error: null,
+      userProfileId: userProfile.id,
+      email: userProfile.email,
+      firstName: userProfile.first_name,
+      kitSubscriberId: userProfile.kit_subscriber_id,
+      action_token: userProfile.action_token,
     };
 
   } catch (err: unknown) {
-    console.error('[DB Ops] Exception in verifyTokenAndLogConversion:', err);
-    const message = err instanceof Error ? err.message : 'An unexpected server error occurred during verification.';
+    console.error('[DB] Unexpected error during token verification:', err);
+    const message = err instanceof Error ? err.message : 'An unknown server error occurred.';
     return { success: false, message, error: message };
   }
 }
@@ -882,51 +820,7 @@ export async function updateUserFirstName(userId: string, firstName: string): Pr
   }
 }
 
-export async function logHeroImpression(impressionData: ImpressionData): Promise<SingleResult<ImpressionRecord>> {
-    if (!impressionData.experiment_id || !impressionData.variant_id || !impressionData.user_id) {
-        // Ensure the error object matches PostgrestError structure if possible, or a simple error object
-        return { 
-            data: null, 
-            error: { 
-                message: 'Experiment ID, Variant ID, and User Identifier are required for impression logging.', 
-                details: 'Missing required fields for logHeroImpression', 
-                hint: 'Provide all required IDs.', 
-                code: '400' 
-            } as PostgrestError // Cast to PostgrestError; be mindful if this structure isn't exact for custom errors
-        };
-    }
-    try {
-        const payload: Record<string, unknown> = {
-            experiment_id: impressionData.experiment_id,
-            variant_id: impressionData.variant_id,
-            user_id: impressionData.user_id,
-            impression_at: new Date().toISOString(),
-            page_url: impressionData.page_url,
-            session_identifier: impressionData.session_identifier,
-            device_type: impressionData.device_type,
-            metadata: impressionData.metadata || {},
-            // Ensure all other NOT NULL columns from your 'impressions' table 
-            // without DB defaults are handled here or passed in impressionData.
-            // Based on your schema, 'user_eligibility_status', 'is_first_exposure', 'user_was_eligible'
-            // might need default values or to be passed.
-            // For now, assuming they have DB defaults or are nullable.
-        };
-        
-        Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
-
-        const { data, error } = await supabase
-            .from('impressions')
-            .insert(payload)
-            .select()
-            .single();
-
-        return { data: data as ImpressionRecord | null, error }; // Cast data to ImpressionRecord
-    } catch (err) {
-        console.error('Error logging hero impression:', err);
-        return { data: null, error: err as PostgrestError };
-    }
-}
-// NEW FUNCTIONS END
+// Quiz-related Operations
 
 // Interface for the parameters of callHandleQuizSubmissionRpc
 export interface HandleQuizSubmissionParams {
@@ -1009,17 +903,17 @@ export async function callHandleQuizSubmissionRpc(
       // This case might happen if the RPC is defined to return VOID but we expect structured data.
       // Or if the RPC executed but semantically didn't "succeed" in a way that returns our expected structure.
       console.warn('[DB Ops] handle_quiz_submission RPC returned null data without an error. This might indicate an issue with the RPC logic or return type.');
-      return { data: null, error: { message: 'RPC returned null data without error.', details: '', hint: '', code: '500'} as PostgrestError };
+      return { data: null, error: { name: 'CustomError', message: 'RPC returned null data without error.', details: '', hint: '', code: '500'} };
     }
      // If data is not null and not the expected object, it's an unexpected response type.
     console.error('[DB Ops] Unexpected data structure from handle_quiz_submission RPC:', data);
-    return { data: null, error: { message: 'Unexpected data structure from RPC.', details: String(data), hint: '', code: '500'} as PostgrestError };
+    return { data: null, error: { name: 'CustomError', message: 'Unexpected data structure from RPC.', details: String(data), hint: '', code: '500'} };
 
 
   } catch (err: unknown) {
     console.error('[DB Ops] Exception in callHandleQuizSubmissionRpc:', err);
     const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
-    return { data: null, error: { message, details: '', hint: '', code: '500' } as PostgrestError };
+    return { data: null, error: { name: 'CustomError', message, details: '', hint: '', code: '500' } };
   }
 }
 
