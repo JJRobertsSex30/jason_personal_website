@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import type { PostgrestError } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 
 /**
  * Database Operations for Cursor AI
@@ -62,12 +63,12 @@ export interface FindOrCreateUserResult {
   user: UserProfile | null;
   isNewUser: boolean;
   isAlreadyVerified: boolean;
-  error: PostgrestError | string | null;
+  error: PostgrestError | null;
 }
 
 export interface GenerateTokenResult {
   token: string | null;
-  error: PostgrestError | string | null;
+  error: PostgrestError | null;
 }
 
 // NEW INTERFACE for verifyTokenAndLogConversion result
@@ -565,29 +566,31 @@ export async function tableExists(tableName: string): Promise<{ exists: boolean;
 // NEW FUNCTIONS START
 
 /**
- * Finds a user by email. If the user doesn't exist, it creates a new one.
- * It's critical this function is called BEFORE attempting to log impressions or conversions.
- * @param email The user's email address.
- * @returns An object containing the user profile, whether they are new, and if they were already verified.
+ * Finds a user by email in user_profiles. If the user does not exist, it creates a new
+ * user in both auth.users and user_profiles, ensuring data integrity.
+ * This function now requires Admin privileges to create an auth user.
+ *
+ * @param email The email address to find or create a user for.
+ * @returns An object containing the user profile, whether they were new, and their verification status.
  */
 export async function findOrCreateUserForVerification(email: string): Promise<FindOrCreateUserResult> {
-  const normalizedEmail = email.toLowerCase().trim();
-
-  // Step 1: Check if user exists
+  console.log(`[DB Ops] findOrCreateUserForVerification called for email: ${email}`);
+  
+  // First, check if a user profile already exists with this email.
   const { data: existingUser, error: findError } = await supabase
     .from('user_profiles')
     .select('*')
-    .eq('email', normalizedEmail)
+    .eq('email', email)
     .single();
 
   if (findError && findError.code !== 'PGRST116') { // PGRST116 means no rows found, which is not an error here.
-    console.error('[DB] Error finding user:', findError);
-    return { user: null, isNewUser: false, isAlreadyVerified: false, error: findError.message };
+    console.error(`[DB Ops] Error finding user by email ${email}:`, findError);
+    return { user: null, isNewUser: false, isAlreadyVerified: false, error: findError };
   }
-  
-  // If user exists, return their profile
+
+  // If user exists, return their profile and status.
   if (existingUser) {
-    console.log(`[DB] Found existing user: ${existingUser.email}`);
+    console.log(`[DB Ops] Existing user found for ${email}. ID: ${existingUser.id}`);
     return {
       user: existingUser as UserProfile,
       isNewUser: false,
@@ -596,22 +599,62 @@ export async function findOrCreateUserForVerification(email: string): Promise<Fi
     };
   }
 
-  // Step 2: User does not exist, so create them.
-  console.log(`[DB] No user found for ${normalizedEmail}. Creating new user...`);
-  const { data: newUser, error: createError } = await supabase
+  // --- User does NOT exist, so create them in auth and then in profiles ---
+  console.log(`[DB Ops] No existing user for ${email}. Proceeding to create a new user.`);
+
+  // Admin client is required to create a user in auth.users
+  const supabaseAdmin = createClient(
+    import.meta.env.SUPABASE_URL!,
+    import.meta.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  // 1. Create the user in auth.users
+  const { data: authUserResponse, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email: email,
+    email_confirm: false, // User will confirm their email via our custom flow
+    password: `password-${crypto.randomUUID()}` // Assign a secure, random password
+  });
+
+  if (authError || !authUserResponse?.user) {
+    console.error(`[DB Ops] CRITICAL: Failed to create auth user for ${email}:`, authError);
+    // Manually construct a PostgrestError-like object from the AuthError.
+    const errorToReturn: PostgrestError = {
+      message: authError?.message || 'Failed to create auth user and no error was provided.',
+      details: `Full error: ${JSON.stringify(authError, null, 2)}`,
+      hint: 'This typically happens if the user already exists in auth.users but not user_profiles, or if there are network issues with Supabase.',
+      code: authError?.code || '500',
+      name: authError?.name || 'AuthError',
+    };
+    return { user: null, isNewUser: false, isAlreadyVerified: false, error: errorToReturn };
+  }
+
+  const newAuthUser = authUserResponse.user;
+  console.log(`[DB Ops] Successfully created user in auth.users. New User ID: ${newAuthUser.id}`);
+
+  // 2. Now, create the corresponding user_profiles record using the SAME ID.
+  const { data: newUserProfile, error: createProfileError } = await supabase
     .from('user_profiles')
-    .insert({ email: normalizedEmail })
+    .insert({
+      id: newAuthUser.id, // Use the ID from the auth user
+      email: email,
+      // Default values are set by the database, but we can be explicit.
+      insight_gems: 100, 
+      is_email_verified: false,
+    })
     .select()
     .single();
 
-  if (createError) {
-    console.error('[DB] Error creating user:', createError);
-    return { user: null, isNewUser: false, isAlreadyVerified: false, error: createError.message };
+  if (createProfileError) {
+    console.error(`[DB Ops] CRITICAL: Failed to create user profile for ${email} after creating auth user. Auth User ID: ${newAuthUser.id}. Error:`, createProfileError);
+    // This is a critical state. The auth user exists but the profile doesn't.
+    // Manual intervention might be required.
+    return { user: null, isNewUser: true, isAlreadyVerified: false, error: createProfileError };
   }
 
-  console.log(`[DB] Successfully created new user: ${newUser.email}`);
+  console.log(`[DB Ops] Successfully created new user profile for ${email}. ID: ${newUserProfile.id}`);
+  
   return {
-    user: newUser as UserProfile,
+    user: newUserProfile as UserProfile,
     isNewUser: true,
     isAlreadyVerified: false,
     error: null,
@@ -619,10 +662,9 @@ export async function findOrCreateUserForVerification(email: string): Promise<Fi
 }
 
 /**
- * Generates a secure, unique verification token and stores it in the database.
- * This should only be called for a user who has just been created.
- * It's called from the frontend immediately after a user signs up.
- * @param impressionData - The impression data to log.
+ * Logs an impression for a user viewing a specific A/B test variant.
+ * @param impressionData The impression data to log.
+ * @returns The logged impression record.
  */
 export async function logHeroImpression(impressionData: ImpressionInsertData): Promise<SingleResult<ImpressionRecord>> {
   try {
@@ -658,7 +700,8 @@ export async function logHeroImpression(impressionData: ImpressionInsertData): P
         message, 
         details: (err instanceof Error && err.stack) ? err.stack : '', 
         hint: 'Check database connection or server logs.', 
-        code: 'LHI500' 
+        code: 'LHI500',
+        name: 'ImpressionError',
       } 
     };
   }
@@ -694,12 +737,18 @@ export async function generateAndStoreVerificationToken(
 
     if (tokenError) {
       console.error('[DB] Error generating verification token record:', tokenError);
-      return { token: null, error: tokenError.message };
+      return { token: null, error: tokenError };
     }
     
     if (!tokenRecord || !tokenRecord.token) {
         // This case might happen if RLS prevents the insert or if the token column isn't returned.
-        return { token: null, error: 'Failed to retrieve verification token after creation.' };
+        return { token: null, error: {
+            message: 'Failed to retrieve verification token after creation.',
+            details: 'The tokenRecord or tokenRecord.token was null or undefined.',
+            hint: 'Check RLS policies and that the "token" column is selected.',
+            code: 'DB-TOKEN-404',
+            name: 'TokenRetrievalError',
+        } };
     }
 
     console.log(`[DB] Stored verification token for ${email}.`);
@@ -707,7 +756,13 @@ export async function generateAndStoreVerificationToken(
   } catch (err: unknown) {
     console.error('[DB] Unexpected error in generateAndStoreVerificationToken:', err);
     const message = err instanceof Error ? err.message : 'An unknown error occurred.';
-    return { token: null, error: message };
+    return { token: null, error: {
+        message,
+        details: err instanceof Error ? err.stack ?? '' : '',
+        hint: 'An unexpected error occurred in the generateAndStoreVerificationToken function.',
+        code: 'DB-TOKEN-500',
+        name: 'UnexpectedTokenError',
+    } };
   }
 }
 
@@ -917,6 +972,74 @@ export async function callHandleQuizSubmissionRpc(
   }
 }
 
+// =================================================================
+// A/B TESTING DATA STITCHING
+// =================================================================
+
+export interface StitchResult {
+  success: boolean;
+  impressionsUpdated: number;
+  participationsUpdated: number;
+  error?: string;
+}
+
+/**
+ * Associates anonymous A/B testing data with a newly created user profile.
+ * This is the "stitching" process that connects pre-conversion activity to a user.
+ * @param userProfileId The permanent UUID of the new user profile.
+ * @param anonymousUserId The temporary, client-side ID used to track the user before conversion.
+ * @returns A result object indicating the outcome and number of rows updated.
+ */
+export async function stitchAnonymousUserToProfile(userProfileId: string, anonymousUserId: string): Promise<StitchResult> {
+  if (!userProfileId || !anonymousUserId) {
+    return { success: false, impressionsUpdated: 0, participationsUpdated: 0, error: 'User Profile ID and Anonymous User ID are required.' };
+  }
+
+  let impressionsUpdated = 0;
+  let participationsUpdated = 0;
+
+  try {
+    // Step 1: Update the user_experiment_participation table
+    const { count: participationCount, error: participationError } = await supabase
+      .from('user_experiment_participation')
+      .update({ user_profile_id: userProfileId })
+      .eq('anonymous_user_id', anonymousUserId)
+      .is('user_profile_id', null); // IMPORTANT: Only update records that haven't been stitched yet
+
+    if (participationError) {
+      throw new Error(`Error updating user_experiment_participation: ${participationError.message}`);
+    }
+    participationsUpdated = participationCount || 0;
+
+
+    // Step 2: Update the impressions table
+    const { count: impressionCount, error: impressionError } = await supabase
+      .from('impressions')
+      .update({ user_profile_id: userProfileId })
+      .eq('anonymous_user_id', anonymousUserId)
+      .is('user_profile_id', null);
+
+    if (impressionError) {
+      throw new Error(`Error updating impressions: ${impressionError.message}`);
+    }
+    impressionsUpdated = impressionCount || 0;
+    
+    // Also update any conversions that might have been logged with the anonymous ID
+    await supabase
+        .from('conversions')
+        .update({ user_profile_id: userProfileId })
+        .eq('anonymous_user_id', anonymousUserId)
+        .is('user_profile_id', null);
+
+
+    return { success: true, impressionsUpdated, participationsUpdated };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred during stitching.';
+    console.error(`[DB Ops] Stitching Error for anon ID ${anonymousUserId}:`, errorMessage);
+    return { success: false, impressionsUpdated, participationsUpdated, error: errorMessage };
+  }
+}
+
 export default {
   executeQuery,
   getRecords,
@@ -941,5 +1064,6 @@ export default {
   verifyTokenAndLogConversion,
   updateUserFirstName,
   logHeroImpression,
-  callHandleQuizSubmissionRpc
+  callHandleQuizSubmissionRpc,
+  stitchAnonymousUserToProfile
 }; 

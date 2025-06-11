@@ -1,7 +1,7 @@
 console.log('[abTester.ts] Module loading/starting...');
 
 import { supabase } from './supabaseClient'; // Ensure this path is correct
-import { checkUserEligibilityForABTesting, trackIneligibleUserEngagement } from './userEligibility';
+import { checkUserEligibilityForABTesting } from './userEligibility';
 
 export interface ABVariant {
   id: string; 
@@ -15,7 +15,8 @@ export interface ABVariant {
 // Payload for the 'impressions' table
 interface ImpressionPayload {
   variant_id: string;
-  user_id: string;
+  user_profile_id: string | null;
+  anonymous_user_id: string | null;
   experiment_id: string;
   session_identifier?: string | null;
   page_url?: string | null;
@@ -48,40 +49,6 @@ interface ImpressionPayload {
   user_context?: Record<string, unknown> | null;
   metadata?: Record<string, unknown> | null;
   // created_at is typically handled by DB default (e.g., DEFAULT NOW())
-}
-
-// Payload for the 'conversions' table
-interface ConversionPayload {
-  variant_id: string;
-  experiment_id: string;
-  user_id: string;
-  conversion_type: string;
-  details?: Record<string, unknown> | null;
-  session_identifier?: string | null;
-  // Enhanced fields to match conversions table schema
-  country_code?: string | null;
-  device_type?: 'desktop' | 'mobile' | 'tablet' | null;
-  referrer_source?: string | null;
-  time_to_convert?: number | null;
-  conversion_value?: number | null;
-  conversion_eligibility_verified?: boolean | null;
-  conversion_context?: Record<string, unknown> | null;
-  metadata?: Record<string, unknown> | null;
-  original_exposure_date?: string | null; // ISO string
-  // Additional comprehensive fields
-  page_url?: string | null;
-  user_agent?: string | null;
-  region?: string | null;
-  city?: string | null;
-  language_code?: string | null;
-  time_zone?: string | null;
-  screen_resolution?: string | null;
-  viewport_size?: string | null;
-  connection_type?: 'slow-2g' | '2g' | '3g' | '4g' | 'wifi' | 'ethernet' | null;
-  utm_source?: string | null;
-  utm_medium?: string | null;
-  utm_campaign?: string | null;
-  // created_at is typically handled by DB default
 }
 
 function parseVariantConfig(config: Record<string, unknown> | null | undefined, variantName: string): { headline: string, subheadline: string } {
@@ -149,18 +116,18 @@ async function fetchExperimentVariants(experimentName: string): Promise<ABVarian
   });
 }
 
-function getClientUserIdentifier(): string {
+function getAnonymousUserId(): string {
   if (typeof localStorage === 'undefined') {
-    console.warn("[abTester] Client user identifier requested in non-browser environment. Generating transient ID.");
-    return 'client_anon_ssr_' + crypto.randomUUID(); 
+    // Return a transient ID for SSR contexts, ensuring it's unique per request
+    return 'anon_ssr_' + crypto.randomUUID();
   }
-  let userId = localStorage.getItem('ab_user_id');
-  if (!userId) {
-    userId = crypto.randomUUID();
-    localStorage.setItem('ab_user_id', userId);
-    console.log('[abTester] New client user identifier generated and stored:', userId);
+  let anonId = localStorage.getItem('anonymous_user_id');
+  if (!anonId) {
+    anonId = crypto.randomUUID();
+    localStorage.setItem('anonymous_user_id', anonId);
+    console.log('[abTester] New anonymous user ID generated and stored:', anonId);
   }
-  return userId;
+  return anonId;
 }
 
 // This function will be exposed on window
@@ -420,14 +387,10 @@ function getBrowserMetadata(): Record<string, unknown> {
 }
 
 // Global variables for engagement tracking
-let pageLoadStartTime: number | null = null;
 let hasUserInteracted = false;
 
 // Initialize engagement tracking
 if (typeof window !== 'undefined') {
-  pageLoadStartTime = Date.now();
-  
-  // Track user interactions to detect bounce
   const interactionEvents = ['click', 'keydown', 'scroll', 'mousemove', 'touchstart'];
   const markInteraction = () => {
     if (!hasUserInteracted) {
@@ -491,6 +454,7 @@ export async function getVariant(experimentName: string): Promise<ABVariant> {
 
 export async function logClientImpression(variant: ABVariant | null, experimentNameFromContext?: string): Promise<string | null> {
   if (typeof window === 'undefined') {
+    console.log("[abTester] Impression logging skipped: Not in a browser environment.");
     return null;
   }
   if (!variant || variant.id === 'fallback_no_variants') {
@@ -503,99 +467,40 @@ export async function logClientImpression(variant: ABVariant | null, experimentN
       return null;
   }
 
-  const userIdentifier = getClientUserIdentifier();
+  const anonymousUserId = getAnonymousUserId();
+  const { data: { session } } = await supabase.auth.getSession();
+  const userProfileId = session?.user?.id || null;
+
+  // Business Rule #2: Don't log new impressions for users that have already converted.
+  if (userProfileId) {
+      const eligibility = await checkUserEligibilityForABTesting(userProfileId);
+      if (!eligibility.isEligible) {
+          console.log(`[abTester] 🚫 IMPRESSION BLOCKED - User ${userProfileId} not eligible for new experiments: ${eligibility.reason}`);
+          return null; // Stop impression logging for returning converters.
+      }
+  }
+
+  // If we reach here, the user is either anonymous or an eligible authenticated user.
+  // We can proceed with logging the impression.
+  console.log(`[abTester] ✅ IMPRESSION ELIGIBLE - proceeding with impression logging. User Profile ID: ${userProfileId}, Anonymous ID: ${anonymousUserId}`);
+
   const sessionIdentifier = getClientSessionIdentifier();
-  
-  // ALWAYS ensure first exposure timestamp is set, regardless of eligibility or deduplication
-  // This is critical for time_to_convert calculations
-  console.log(`[abTester] logClientImpression: Ensuring first exposure timestamp for experiment ${variant.experiment_id}`);
   const isFirstExposure = checkIsFirstExposure(variant.experiment_id);
-  
-  // Check user eligibility for A/B testing
-  const eligibility = await checkUserEligibilityForABTesting(userIdentifier, variant.experiment_id);
-  
-  console.log(`[abTester] IMPRESSION ELIGIBILITY CHECK: User: ${userIdentifier}, Experiment: ${variant.experiment_id}, Eligible: ${eligibility.isEligible}, Reason: ${eligibility.reason}`);
-  
-  if (!eligibility.isEligible) {
-    console.log(`[abTester] 🚫 IMPRESSION BLOCKED - User ${userIdentifier} not eligible for A/B testing: ${eligibility.reason}`);
-    
-    // Track engagement separately for analytics purposes
-    await trackIneligibleUserEngagement(
-      userIdentifier,
-      experimentNameFromContext || 'unknown_experiment',
-      variant.name,
-      window.location.href,
-      'page_view'
-    );
-    
-    return null; // Don't log impression or assign to experiment
-  }
-  
-  console.log(`[abTester] ✅ IMPRESSION ELIGIBLE - proceeding with impression logging for user ${userIdentifier}`);
-  
-  // Short-term deduplication (2 minutes) to prevent rapid refresh spam only
-  const shortTermKey = `impression_recent_${variant.experiment_id}_${variant.id}_${Math.floor(Date.now() / 120000)}`; // 2-minute windows
-  
-  if (sessionStorage.getItem(shortTermKey)) {
-    console.log(`[abTester] Impression for variant "${variant.name}" (ID: ${variant.id}) already logged in the last 2 minutes. Skipping to prevent spam.`);
-    return null;
-  }
-
-  console.log(`[abTester] Logging CLIENT IMPRESSION: Experiment ID: '${variant.experiment_id}', Variant ID: '${variant.id}', Name: '${variant.name}', User: '${userIdentifier}', Session: '${sessionIdentifier || 'N/A'}'`);
-  
-  // Collect comprehensive analytics data
   const utmParams = getUTMParameters();
-  const timeOnPage = pageLoadStartTime ? Math.round((Date.now() - pageLoadStartTime) / 1000) : null;
-  
-  // Fetch geolocation data
-  let geoData = {
-    country_code: null as string | null,
-    region: null as string | null,
-    city: null as string | null
-  };
 
-  try {
-    console.log('[abTester] Fetching geolocation data...');
-    const geoResponse = await fetch('/api/geolocation', {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (geoResponse.ok) {
-      const geoResult = await geoResponse.json();
-      if (geoResult.success && geoResult.data) {
-        geoData = {
-          country_code: geoResult.data.country_code || null,
-          region: geoResult.data.region || null,
-          city: geoResult.data.city || null
-        };
-        console.log('[abTester] Geolocation data retrieved:', geoData);
-      } else {
-        console.log('[abTester] Geolocation API returned no data');
-      }
-    } else {
-      console.warn('[abTester] Geolocation API request failed:', geoResponse.status);
-    }
-  } catch (error) {
-    console.warn('[abTester] Failed to fetch geolocation data:', error);
-    // Continue with null values - non-blocking error
-  }
-  
   const impressionData: ImpressionPayload = {
-    // Core A/B testing data
     variant_id: variant.id,
-    user_id: userIdentifier,
-    experiment_id: variant.experiment_id, 
+    experiment_id: variant.experiment_id,
+    user_profile_id: userProfileId,
+    anonymous_user_id: anonymousUserId,
     session_identifier: sessionIdentifier,
     page_url: window.location.href,
     user_agent: navigator.userAgent,
     
     // Geographic & Location (now populated via IP geolocation)
-    country_code: geoData.country_code,
-    region: geoData.region,  
-    city: geoData.city,
+    country_code: null, // Geolocation will be handled server-side if needed
+    region: null,  
+    city: null,
     language_code: getLanguageCode(),
     time_zone: getTimeZone(),
     
@@ -614,25 +519,22 @@ export async function logClientImpression(variant: ABVariant | null, experimentN
     utm_campaign: utmParams.utm_campaign || null,
     
     // Engagement
-    time_on_page: timeOnPage,
+    time_on_page: null, // This is hard to track accurately here now
     scroll_depth_percent: getScrollDepthPercent(),
     bounce: !hasUserInteracted,
     is_first_exposure: isFirstExposure,
     
     // A/B Testing Context
-    user_was_eligible: eligibility.isEligible,
-    user_eligibility_status: {
-      reason: eligibility.reason,
-      details: eligibility.details || {}
-    },
+    user_was_eligible: true, // If we got this far, they were eligible at the time of impression
+    user_eligibility_status: { reason: 'eligible_at_impression_time' },
     user_context: {
       experiment_name: experimentNameFromContext,
       variant_name: variant.name,
-      user_identifier_type: 'ab_user_id'
+      user_identifier_type: userProfileId ? 'user_profile_id' : 'anonymous_user_id'
     },
     metadata: {
       ...getBrowserMetadata(),
-      geolocation_source: geoData.country_code ? 'ipgeolocation.io' : 'unavailable',
+      geolocation_source: 'unavailable',
       collection_timestamp: new Date().toISOString(),
     }
   };
@@ -640,35 +542,33 @@ export async function logClientImpression(variant: ABVariant | null, experimentN
   const { data: insertedImpression, error: impressionError } = await supabase
     .from('impressions')
     .insert(impressionData)
-    .select('id') // Select the ID of the inserted row
-    .single(); // Expect a single row back
+    .select('id')
+    .single();
 
   if (impressionError) {
-    if (impressionError.message.includes('created_at') && impressionError.message.includes('column') && impressionError.message.includes('does not exist')) {
-        console.error(`[abTester] Supabase error logging client impression: The 'created_at' column might be missing or misconfigured in your 'impressions' table. Please ensure it exists and has a default value like NOW(). Original error:`, impressionError.message);
-    } else {
-        console.error('[abTester] Supabase error logging client impression:', impressionError.message, 'Details:', impressionError.details);
-    }
-    return null; // Return null on error
+    console.error('[abTester] Supabase error logging client impression:', impressionError.message, 'Details:', impressionError.details);
+    return null;
   } else {
-    sessionStorage.setItem(shortTermKey, 'true');
-    console.log('[abTester] Client impression logged successfully to Supabase with comprehensive analytics data. Impression ID:', insertedImpression?.id);
-    return insertedImpression?.id || null; // Return the impression ID
+    sessionStorage.setItem(`impression_logged_${variant.experiment_id}`, 'true'); // More specific key
+    console.log('[abTester] Client impression logged successfully. Impression ID:', insertedImpression?.id);
+    return insertedImpression?.id || null;
   }
 }
 
 export async function trackConversion(
   variantId: string, 
-  userIdentifierString: string, // Changed from userEmail to be more generic
-  conversionType: string = 'generic_conversion',
-  details?: Record<string, unknown>
+  anonymousUserId: string,
+  conversionType: string = 'generic_conversion'
 ): Promise<{ status: 'SUCCESS' | 'DUPLICATE' | 'ERROR' | 'INVALID_INPUT'; message: string }> {
-  const sessionIdentifier = getClientSessionIdentifier();
   
-  console.log(`[abTester] CLIENT CONVERSION ATTEMPT: Variant ID: '${variantId}', User: '${userIdentifierString}', Type: '${conversionType}', Session: '${sessionIdentifier || 'N/A'}', Details:`, details);
+  const { data: { session } } = await supabase.auth.getSession();
+  // The actual user ID is determined by the session on the server, but we check here for logging.
+  const userProfileId = session?.user?.id || null;
+
+  console.log(`[abTester] CONVERSION ATTEMPT: Variant ID: '${variantId}', User Profile ID: '${userProfileId}', Anonymous ID: '${anonymousUserId}', Type: '${conversionType}'`);
   
-  if (!userIdentifierString || userIdentifierString.trim() === '' || !variantId) {
-    const msg = '[abTester] User identifier and variant ID are required for conversion tracking.';
+  if (!anonymousUserId || !variantId) {
+    const msg = '[abTester] Anonymous user ID and variant ID are required for conversion tracking.';
     console.error(msg);
     return { status: 'INVALID_INPUT', message: msg };
   }
@@ -678,244 +578,27 @@ export async function trackConversion(
     .from('variants')
     .select('experiment_id') 
     .eq('id', variantId)
-    .single(); // Use single() as variantId should be unique and exist
+    .single();
 
   if (variantError || !variantRecord || !variantRecord.experiment_id) {
-    const msg = `[abTester] Could not find a valid variant or its experiment_id for variant_id: ${variantId}. Conversion not logged. Error: ${variantError?.message || 'Variant not found or experiment_id missing'}`;
+    const msg = `[abTester] Could not find a valid variant or its experiment_id for variant_id: ${variantId}.`;
     console.error(msg);
     return { status: 'ERROR', message: msg };
   }
-  const associatedExperimentId: string = variantRecord.experiment_id;
 
-  // Check if user is eligible for A/B testing (FIXED: Use same logic as impressions)
-  const eligibility = await checkUserEligibilityForABTesting(userIdentifierString, associatedExperimentId);
-  
-  console.log(`[abTester] CONVERSION ELIGIBILITY CHECK: User: ${userIdentifierString}, Experiment: ${associatedExperimentId}, Eligible: ${eligibility.isEligible}, Reason: ${eligibility.reason}`);
-  
-  if (!eligibility.isEligible) {
-    console.log(`[abTester] 🚫 CONVERSION BLOCKED - user not eligible for A/B testing: ${eligibility.reason}`);
-    
-    // Track engagement separately for analytics purposes (like impressions do)
-    await trackIneligibleUserEngagement(
-      userIdentifierString,
-      'conversion_attempt',
-      variantId,
-      typeof window !== 'undefined' ? window.location.href : 'unknown',
-      'quiz_complete'
-    );
-    
-    return { status: 'SUCCESS', message: `Conversion not tracked as A/B test data: ${eligibility.reason}` };
-  }
-  
-  console.log(`[abTester] ✅ CONVERSION ELIGIBLE - proceeding with conversion tracking for user ${userIdentifierString}`);
-  
-  // Check for existing conversion for this user in this specific experiment, for this variant and type
-  const { data: existingConversion, error: checkError } = await supabase
-    .from('conversions')
-    .select('id')
-    .eq('experiment_id', associatedExperimentId)
-    .eq('variant_id', variantId) 
-    .eq('user_id', userIdentifierString)
-    .eq('conversion_type', conversionType) 
-    .limit(1)
-    .maybeSingle();
+  // NOTE: We no longer check for eligibility or duplicates on the client side for conversions.
+  // This logic is more reliably handled on the server, which can prevent race conditions
+  // and has the final say on user identity.
 
-  if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = "Query result has no rows"
-    const msg = `[abTester] Supabase error checking for existing conversion: ${checkError.message}`;
-    console.error(msg);
-    return { status: 'ERROR', message: msg }; 
-  }
-
-  if (existingConversion) {
-    const msg = `[abTester] Conversion already logged for user '${userIdentifierString}', variant '${variantId}', type '${conversionType}'.`;
-    console.log(msg);
-    return { status: 'DUPLICATE', message: "Conversion already recorded for these parameters." };
-  }
-
-  console.log(`[abTester] Logging new conversion for user '${userIdentifierString}', variant '${variantId}', experiment '${associatedExperimentId}', type '${conversionType}'.`);
-
-  // Collect comprehensive analytics data for conversion (same as impression tracking)
-  const utmParams = getUTMParameters();
+  // We are also not inserting the conversion directly from the client anymore.
+  // We assume the API endpoint that handles the user's form submission will
+  // also handle logging the conversion event after successfully creating the user.
   
-  // Fetch geolocation data
-  let geoData = {
-    country_code: null as string | null,
-    region: null as string | null,
-    city: null as string | null
-  };
-
-  try {
-    console.log('[abTester] Conversion: Fetching geolocation data...');
-    const geoResponse = await fetch('/api/geolocation', {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (geoResponse.ok) {
-      const geoResult = await geoResponse.json();
-      if (geoResult.success && geoResult.data) {
-        geoData = {
-          country_code: geoResult.data.country_code || null,
-          region: geoResult.data.region || null,
-          city: geoResult.data.city || null
-        };
-        console.log('[abTester] Conversion: Geolocation data retrieved:', geoData);
-      } else {
-        console.log('[abTester] Conversion: Geolocation API returned no data');
-      }
-    } else {
-      console.warn('[abTester] Conversion: Geolocation API request failed:', geoResponse.status);
-    }
-  } catch (error) {
-    console.warn('[abTester] Conversion: Failed to fetch geolocation data:', error);
-    // Continue with null values - non-blocking error
-  }
-
-  const conversionData: ConversionPayload = {
-    variant_id: variantId, 
-    experiment_id: associatedExperimentId,
-    user_id: userIdentifierString,
-    conversion_type: conversionType,
-    details: details,
-    session_identifier: sessionIdentifier,
-    
-    // Only fields that exist in conversions table schema
-    country_code: geoData.country_code,
-    device_type: getDeviceType(),
-    referrer_source: getReferrerSource(),
-    time_to_convert: calculateTimeToConvert(userIdentifierString, associatedExperimentId),
-    conversion_value: details?.conversion_value as number || 1, // Default to 1 if not specified
-    conversion_eligibility_verified: eligibility.isEligible,
-    conversion_context: {
-      variant_id: variantId,
-      experiment_id: associatedExperimentId,
-      user_identifier_type: 'ab_user_id',
-      conversion_timestamp: new Date().toISOString(),
-      client_info: {
-        page_url: typeof window !== 'undefined' ? window.location.href : null,
-        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null
-      }
-    },
-    utm_source: utmParams.utm_source || null,
-    utm_medium: utmParams.utm_medium || null,
-    utm_campaign: utmParams.utm_campaign || null,
-    original_exposure_date: new Date().toISOString(),
-    
-    // Store additional data in metadata instead of non-existent columns
-    metadata: {
-      ...getBrowserMetadata(),
-      geolocation_source: geoData.country_code ? 'ipgeolocation.io' : 'unavailable',
-      collection_timestamp: new Date().toISOString(),
-      // Store data that doesn't have dedicated columns in metadata
-      region: geoData.region,
-      city: geoData.city,
-      page_url: window.location.href,
-      user_agent: navigator.userAgent,
-      language_code: getLanguageCode(),
-      time_zone: getTimeZone(),
-      screen_resolution: getScreenResolution(),
-      viewport_size: getViewportSize(),
-      connection_type: getConnectionType(),
-    },
-  };
-
-  const { error: conversionError } = await supabase
-    .from('conversions')
-    .insert(conversionData);
-
-  if (conversionError) {
-    const msg = `[abTester] Supabase error logging conversion: ${conversionError.message}`;
-    console.error(msg);
-    return { status: 'ERROR', message: msg };
-  } else {
-    const msg = `[abTester] Conversion logged successfully for variant ${variantId}, user '${userIdentifierString}' in experiment ${associatedExperimentId}`;
-    console.log(msg);
-    return { status: 'SUCCESS', message: "Conversion recorded successfully." };
-  }
-}
-
-function calculateTimeToConvert(userIdentifier: string, experimentId: string): number | null {
-  if (typeof localStorage === 'undefined') return null;
+  console.log('[abTester] Conversion data prepared for server. Server-side logic will handle the final logging and user stitching.');
   
-  const timestampKey = `ab_first_exposure_time_${experimentId}`;
-  const exposureKey = `ab_first_exposure_${experimentId}`;
-  
-  console.log(`[abTester] calculateTimeToConvert: Looking for timestamp key: ${timestampKey}`);
-  
-  // Check if we have a stored timestamp for first exposure
-  const firstExposureTime = localStorage.getItem(timestampKey);
-  
-  console.log(`[abTester] calculateTimeToConvert: Found timestamp: ${firstExposureTime}`);
-  
-  if (firstExposureTime) {
-    try {
-      const exposureTimestamp = parseInt(firstExposureTime);
-      const currentTime = Date.now();
-      const timeToConvertSeconds = Math.round((currentTime - exposureTimestamp) / 1000);
-      
-      console.log(`[abTester] calculateTimeToConvert: Exposure timestamp: ${exposureTimestamp}, Current: ${currentTime}, Time to convert: ${timeToConvertSeconds} seconds`);
-      
-      return timeToConvertSeconds; // Return seconds
-    } catch (error) {
-      console.warn('[abTester] Error parsing first exposure timestamp:', error);
-      return null;
-    }
-  }
-  
-  // Simple fallback: if no timestamp exists, this might be immediate conversion
-  // Set timestamp now and return 0 (immediate conversion)
-  if (!localStorage.getItem(exposureKey)) {
-    const now = Date.now();
-    localStorage.setItem(exposureKey, 'true');
-    localStorage.setItem(timestampKey, now.toString());
-    return 0; // Immediate conversion
-  }
-  
-  // FALLBACK: If no first exposure timestamp found, check if we can set one now
-  // This handles cases where conversion happens before impression logging
-  console.log(`[abTester] calculateTimeToConvert: No timestamp found for experiment ${experimentId}. Checking for fallback options.`);
-  
-  // Check if this is the user's first time with this experiment
-  const hasBeenExposed = localStorage.getItem(exposureKey);
-  
-  if (!hasBeenExposed) {
-    // This is their first exposure, set timestamp now as a fallback
-    const currentTimestamp = Date.now();
-    localStorage.setItem(exposureKey, 'true');
-    localStorage.setItem(timestampKey, currentTimestamp.toString());
-    
-    console.log(`[abTester] calculateTimeToConvert: Set fallback timestamp for first exposure: ${currentTimestamp}`);
-    
-    // Return 0 seconds since this is the moment of first exposure
-    return 0;
-  }
-  
-  console.log(`[abTester] calculateTimeToConvert: User has been exposed before but no timestamp found. Returning null.`);
-  return null;
-}
-
-function getReferrerSource(): string | null {
-  if (typeof document === 'undefined') return null;
-  
-  // First try UTM source if available
-  const utmParams = getUTMParameters();
-  if (utmParams.utm_source) {
-    return utmParams.utm_source;
-  }
-  
-  // Fall back to document referrer
-  if (document.referrer) {
-    try {
-      const referrerUrl = new URL(document.referrer);
-      return referrerUrl.hostname;
-    } catch {
-      return document.referrer;
-    }
-  }
-  
-  return null;
+  // This function can now return a success message, assuming the data will be passed
+  // to a server-side handler. The actual success of the conversion is determined there.
+  return { status: 'SUCCESS', message: 'Conversion initiated. Final processing occurs on the server.' };
 }
 
 // Debug utility function to inspect localStorage AB data
@@ -953,7 +636,7 @@ function debugABLocalStorage(): void {
 // Declare global window interface extensions
 declare global {
   interface Window {
-    trackConversion?: (variantId: string, userIdentifierString: string, conversionType?: string, details?: Record<string, unknown>) => Promise<{ status: 'SUCCESS' | 'DUPLICATE' | 'ERROR' | 'INVALID_INPUT'; message: string }>;
+    trackConversion?: (variantId: string, anonymousUserId: string, conversionType?: string) => Promise<{ status: 'SUCCESS' | 'DUPLICATE' | 'ERROR' | 'INVALID_INPUT'; message: string }>;
     logClientImpression?: (variant: ABVariant | null, experimentNameFromContext?: string) => Promise<string | null>;
     getClientSessionIdentifier?: () => string | null;
     getDeviceType?: () => 'desktop' | 'mobile' | 'tablet' | null;
@@ -968,12 +651,12 @@ if (typeof window !== 'undefined') {
   window.logClientImpression = logClientImpression; 
   window.getClientSessionIdentifier = getClientSessionIdentifier;
   window.getDeviceType = getDeviceType;
-  (window as unknown as Window & { debugABLocalStorage: typeof debugABLocalStorage }).debugABLocalStorage = debugABLocalStorage;
+  window.debugABLocalStorage = debugABLocalStorage;
   console.log('[abTester.ts] window.trackConversion assigned:', !!window.trackConversion);
   console.log('[abTester.ts] window.logClientImpression assigned:', !!window.logClientImpression);
   console.log('[abTester.ts] window.getClientSessionIdentifier assigned:', !!window.getClientSessionIdentifier);
   console.log('[abTester.ts] window.getDeviceType assigned:', !!window.getDeviceType);
-  console.log('[abTester.ts] window.debugABLocalStorage assigned:', !!(window as unknown as Window & { debugABLocalStorage: typeof debugABLocalStorage }).debugABLocalStorage);
+  console.log('[abTester.ts] window.debugABLocalStorage assigned:', !!window.debugABLocalStorage);
 }
 
 // Dummy export to ensure this file is treated as a module

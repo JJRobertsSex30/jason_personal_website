@@ -9,7 +9,8 @@ import {
   findOrCreateUserForVerification,
   generateAndStoreVerificationToken,
   updateRecord,
-  callHandleQuizSubmissionRpc // IMPORTED for actual RPC call
+  callHandleQuizSubmissionRpc, // IMPORTED for actual RPC call
+  stitchAnonymousUserToProfile // NEWLY IMPORTED for A/B data stitching
 } from '~/lib/database-operations';
 import type { 
   FindOrCreateUserResult, 
@@ -20,18 +21,16 @@ import type {
 import { 
   createConvertKitPayload, 
   submitToConvertKit, 
-  getConvertKitSubscriberByEmail, // ADDED
-  addTagToSubscriber, // ADDED
-  removeTagFromSubscriber, // ADDED
-  type ConvertKitSubscribePayload, 
-  type SubscriptionSource, // This is a string literal union
-  type ConvertKitSubscriber // ADDED
-} from '~/lib/convertkit-config'; // Keep ConvertKit logic
+  getConvertKitSubscriberByEmail,
+  addTagToSubscriber,
+  removeTagFromSubscriber,
+  type FormSubscribePayload
+} from '~/lib/convertkit-config';
 
-interface ClientVariantData { // Renamed to distinguish from any potential server-side VariantData type
-  experimentName?: string;   // Experiment NAME from client (may need mapping to UUID if experimentId is not sent)
-  experimentId?: string;    // Experiment UUID from client (preferred)
-  variantId: string;        // Variant UUID from client (this should always be a UUID)
+interface ClientVariantData {
+  experimentName?: string;
+  experimentId?: string;
+  variantId: string;
   variantName: string;
   quizPath?: string;
   quizName?: string;
@@ -74,6 +73,7 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
     
     // A/B Testing & Context Data from Client
     const variantInfoString = formData.get('variantInfo')?.toString();
+    const anonymousUserId = formData.get('anonymous_user_id')?.toString() || null; // The anonymous ID from client localStorage
     const browserIdentifier = formData.get('browser_identifier')?.toString() || null; // This is user_id from client localStorage (ab_user_id)
     const sessionIdentifier = formData.get('session_identifier')?.toString() || null;
     const pageUrlAtSubmission = formData.get('page_url_at_submission')?.toString() || request.headers.get('referer') || null;
@@ -81,7 +81,7 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
     const deviceType = formData.get('device_type')?.toString() || 'unknown'; // New field
 
     console.log(`[API Quiz Submit ${requestTimestamp}] Form Data: email=${email}, firstName=${firstName}, score=${scoreString}, resultType=${resultType}, referralUsed=${referralCodeUsedBySubmitter}`);
-    console.log(`[API Quiz Submit ${requestTimestamp}] A/B Context: variantInfoPresent=${!!variantInfoString}, browserId=${browserIdentifier}, sessionId=${sessionIdentifier}, pageUrl=${pageUrlAtSubmission}, clientImpressionId=${clientSideImpressionId}, deviceType=${deviceType}`);
+    console.log(`[API Quiz Submit ${requestTimestamp}] A/B Context: variantInfoPresent=${!!variantInfoString}, anonymousId=${anonymousUserId}, sessionId=${sessionIdentifier}, pageUrl=${pageUrlAtSubmission}, clientImpressionId=${clientSideImpressionId}, deviceType=${deviceType}`);
 
     // Basic Validation
     if (!email || !email.includes('@')) {
@@ -126,7 +126,6 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
         console.warn(`[API Quiz Submit ${requestTimestamp}] Missing actualExperimentUUID or actualVariantUUID from parsed client variant data. This will affect A/B linking. ExperimentID: ${actualExperimentUUID}, VariantID: ${actualVariantUUID}`);
     }
 
-    const actualSource: SubscriptionSource = parsedClientVariantData?.quizName ? `Quiz: ${parsedClientVariantData.quizName}` as SubscriptionSource : "Quiz: General" as SubscriptionSource;
     const score = scoreString ? parseInt(scoreString, 10) : 0;
 
     console.log(`[API Quiz Submit ${requestTimestamp}] Processing email: ${email} with new user identification flow.`);
@@ -144,6 +143,24 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
     }
     
     console.log(`[API Quiz Submit ${requestTimestamp}] User profile data for ${email}: ID=${userProfileForSubmittedEmail.id}, NewUser=${isNewUserForSubmittedEmail}, Verified=${isAlreadyVerifiedForSubmittedEmail}`);
+
+    // --- A/B Test Data Stitching ---
+    // If this is a new user and we have an anonymous ID from the client,
+    // we need to "stitch" their anonymous impression history to their new user profile.
+    if (isNewUserForSubmittedEmail && anonymousUserId) {
+      console.log(`[API Quiz Submit ${requestTimestamp}] New user detected with anonymous ID. Stitching A/B data for user profile ${userProfileForSubmittedEmail.id} and anonymous ID ${anonymousUserId}.`);
+      try {
+        const stitchResult = await stitchAnonymousUserToProfile(userProfileForSubmittedEmail.id, anonymousUserId);
+        if (stitchResult.success) {
+          console.log(`[API Quiz Submit ${requestTimestamp}] Successfully stitched A/B data. Impressions updated: ${stitchResult.impressionsUpdated}, Participations updated: ${stitchResult.participationsUpdated}.`);
+        } else {
+          // Non-critical error. Log it but don't fail the request.
+          console.error(`[API Quiz Submit ${requestTimestamp}] Failed to stitch A/B data for user ${userProfileForSubmittedEmail.id}. Error: ${stitchResult.error}`);
+        }
+      } catch (stitchError) {
+        console.error(`[API Quiz Submit ${requestTimestamp}] Unexpected error during A/B data stitching for user ${userProfileForSubmittedEmail.id}:`, stitchError);
+      }
+    }
 
     // --- Impression & Token Logic --- 
     const impressionIdForTokenGeneration: string | null = clientSideImpressionId; // Default to client-side one if present
@@ -201,9 +218,7 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
     const EMAIL_VERIFIED_TAG_ID = 6400311; // Defined from existing code
     const EMAIL_NOT_VERIFIED_TAG_ID = 6400312; // Defined from existing code
     const quizResultTagName = resultType ? `quiz_result_${resultType.toLowerCase().replace(/\s+/g, '_')}` : null;
-    const quizResultTagId: number | null = null; // CHANGED to const
-
-    // TODO: In the future, quiz result tag IDs (like `TAG_ID_QUIZ_RESULT_TYPE_A`) should be dynamically fetched or stored in a config
+    
     if (quizResultTagName) {
       console.log(`[API Quiz Submit ${requestTimestamp}] Quiz result tag name determined as: ${quizResultTagName}. Actual ID needs to be mapped.`);
     }
@@ -228,9 +243,9 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
 
         const optionsForNewUser = {...basePayloadOptions, customFields: customFieldsForNew};
         
-        const payload: ConvertKitSubscribePayload = createConvertKitPayload(
+        const payload: FormSubscribePayload = createConvertKitPayload(
           email,
-          actualSource,
+          'quiz',
           optionsForNewUser
         );
         
@@ -238,88 +253,81 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
         payload.tags.push(EMAIL_NOT_VERIFIED_TAG_ID);
 
         try {
-          const ckResponse = await submitToConvertKit(payload, convertKitFormId);
+          const ckResponse = await submitToConvertKit(payload);
           console.log(`[API Quiz Submit ${requestTimestamp}] ConvertKit submission response for new subscription of ${email}:`, ckResponse);
-          if (ckResponse.success && (ckResponse as { subscription?: { subscriber?: { id?: number } } })?.subscription?.subscriber?.id) { 
-            kitSubscriberId = (ckResponse as unknown as { subscription: { subscriber: { id: number } } }).subscription.subscriber.id; // REFINED TYPE ASSERTION to unknown first
-            console.log(`[API Quiz Submit ${requestTimestamp}] Successfully subscribed ${email} to ConvertKit, new CK ID: ${kitSubscriberId}. Updating user profile.`);
-            await updateRecord('user_profiles', userProfileForSubmittedEmail.id, { kit_subscriber_id: String(kitSubscriberId) });
+          if (ckResponse.success) {
+            // After successful submission, fetch the subscriber to get their ID
+            const { data: subscriberData } = await getConvertKitSubscriberByEmail(email);
+            if (subscriberData) {
+              kitSubscriberId = subscriberData.id;
+              console.log(`[API Quiz Submit ${requestTimestamp}] Successfully subscribed ${email} to ConvertKit, new CK ID: ${kitSubscriberId}. Updating user profile.`);
+              await updateRecord('user_profiles', userProfileForSubmittedEmail.id, { kit_subscriber_id: String(kitSubscriberId) });
+            } else {
+              console.warn(`[API Quiz Submit ${requestTimestamp}] ConvertKit submission for ${email} succeeded, but could not fetch subscriber data afterwards.`);
+            }
           } else {
-             console.warn(`[API Quiz Submit ${requestTimestamp}] ConvertKit submission for ${email} did not return subscriber ID. Payload:`, payload);
+             console.warn(`[API Quiz Submit ${requestTimestamp}] ConvertKit submission for ${email} did not succeed. Payload:`, payload);
           }
         } catch (error) {
           console.error(`[API Quiz Submit ${requestTimestamp}] Error submitting new subscriber ${email} to ConvertKit:`, error);
         }
 
       } else { // actionNeededForVerification is FALSE (email already verified or other no-action scenario)
-        console.log(`[API Quiz Submit ${requestTimestamp}] Action for verification FALSE for ${email}. Fetching existing CK subscriber to update tags/fields.`);
-        try {
-          const getSubResult = await getConvertKitSubscriberByEmail(email); // CORRECTED ARGUMENTS
-          const existingSubscriber: ConvertKitSubscriber | null = (getSubResult.success && getSubResult.data) ? getSubResult.data : null; // CORRECTED ASSIGNMENT
+        console.log(`[API Quiz Submit ${requestTimestamp}] Email ${email} already verified. Checking ConvertKit status.`);
+        
+        const { success: fetchSuccess, data: subscriberData } = await getConvertKitSubscriberByEmail(email);
+
+        if (fetchSuccess && subscriberData) {
+          kitSubscriberId = subscriberData.id;
+          console.log(`[API Quiz Submit ${requestTimestamp}] Found existing ConvertKit subscriber for ${email}. CK ID: ${kitSubscriberId}. Ensuring tags are correct.`);
+
+          // Ensure our database has the correct ID
+          if (String(kitSubscriberId) !== userProfileForSubmittedEmail.kit_subscriber_id) {
+            console.log(`[API Quiz Submit ${requestTimestamp}] Updating user profile ${userProfileForSubmittedEmail.id} with correct Kit ID ${kitSubscriberId}.`);
+            await updateRecord('user_profiles', userProfileForSubmittedEmail.id, { kit_subscriber_id: String(kitSubscriberId) });
+          }
           
-          if (existingSubscriber?.id) {
-            kitSubscriberId = existingSubscriber.id;
-            console.log(`[API Quiz Submit ${requestTimestamp}] Found existing ConvertKit subscriber for ${email}, CK ID: ${kitSubscriberId}.`);
+          // Since we cannot get tag information directly from the subscriber object,
+          // we will just re-apply the correct tags. This is idempotent.
+          console.log(`[API Quiz Submit ${requestTimestamp}] Re-applying 'Email Verified' tag and removing 'Email Not Verified' tag for subscriber ${kitSubscriberId}.`);
+          await addTagToSubscriber(email, EMAIL_VERIFIED_TAG_ID);
+          await removeTagFromSubscriber(email, EMAIL_NOT_VERIFIED_TAG_ID);
 
-            // Ensure kit_subscriber_id is up-to-date in our DB
-            if (userProfileForSubmittedEmail.kit_subscriber_id !== String(kitSubscriberId)) { // CORRECTED COMPARISON
-                console.log(`[API Quiz Submit ${requestTimestamp}] Updating user_profiles.kit_subscriber_id for ${userProfileForSubmittedEmail.id} to ${String(kitSubscriberId)}`);
+          // TODO: Add quiz result tag once mapping from name to ID is available.
+
+        } else {
+          // This case is tricky. The user is verified in our DB, but not in ConvertKit.
+          // This could happen if they were manually added or deleted from CK.
+          // We should re-subscribe them.
+          console.warn(`[API Quiz Submit ${requestTimestamp}] User ${email} is verified locally but not found in ConvertKit. Re-subscribing.`);
+          
+          const optionsForVerifiedUser = { ...basePayloadOptions, customFields: {
+             ...(userProfileForSubmittedEmail.action_token && { action_token: userProfileForSubmittedEmail.action_token }),
+          }};
+          
+          const payload: FormSubscribePayload = createConvertKitPayload(
+            email,
+            'quiz',
+            optionsForVerifiedUser
+          );
+          
+          if (!payload.tags) payload.tags = [];
+          payload.tags.push(EMAIL_VERIFIED_TAG_ID); // They are verified, so use the verified tag
+
+          try {
+            const ckResponse = await submitToConvertKit(payload);
+            console.log(`[API Quiz Submit ${requestTimestamp}] ConvertKit re-submission response for ${email}:`, ckResponse);
+            if (ckResponse.success) {
+              const { data: subscriberData } = await getConvertKitSubscriberByEmail(email);
+              if (subscriberData) {
+                kitSubscriberId = subscriberData.id;
+                console.log(`[API Quiz Submit ${requestTimestamp}] Successfully re-subscribed ${email} to ConvertKit, new CK ID: ${kitSubscriberId}. Updating user profile.`);
                 await updateRecord('user_profiles', userProfileForSubmittedEmail.id, { kit_subscriber_id: String(kitSubscriberId) });
-            }
-
-            // Manage tags: Add EMAIL_VERIFIED_TAG_ID, remove EMAIL_NOT_VERIFIED_TAG_ID
-            // Add current quiz result tag
-            const tagsToAdd = [EMAIL_VERIFIED_TAG_ID];
-            if (quizResultTagId) tagsToAdd.push(quizResultTagId);
-            
-            for (const tagId of tagsToAdd) {
-              try {
-                await addTagToSubscriber(String(kitSubscriberId), tagId, convertKitApiKey); // Revert to using convertKitApiKey
-                console.log(`[API Quiz Submit ${requestTimestamp}] Added tag ${tagId} to CK subscriber ${kitSubscriberId}`);
-              } catch (tagError) {
-                console.error(`[API Quiz Submit ${requestTimestamp}] Error adding tag ${tagId} to CK subscriber ${kitSubscriberId}:`, tagError);
               }
             }
-            
-            try { // Remove "not verified" tag
-              await removeTagFromSubscriber(String(kitSubscriberId), EMAIL_NOT_VERIFIED_TAG_ID); // ADJUSTED ARGUMENTS
-              console.log(`[API Quiz Submit ${requestTimestamp}] Removed tag ${EMAIL_NOT_VERIFIED_TAG_ID} from CK subscriber ${kitSubscriberId}`);
-            } catch (tagError) {
-              console.error(`[API Quiz Submit ${requestTimestamp}] Error removing tag ${EMAIL_NOT_VERIFIED_TAG_ID} from CK subscriber ${kitSubscriberId}:`, tagError);
-            }
-
-            // Update custom fields by re-submitting (CK API v3 doesn't have a direct field update endpoint without re-subscribing)
-             console.log(`[API Quiz Submit ${requestTimestamp}] Updating custom fields for existing subscriber ${email} (CK ID: ${kitSubscriberId})`);
-            
-            // Prepare custom fields for the update
-            const customFieldsForUpdate: Record<string, string> = {
-                quiz_name: parsedClientVariantData?.quizName || 'general',
-                ...(verificationTokenForKit && { app_confirmation_token: verificationTokenForKit }),
-                ...(userProfileForSubmittedEmail.action_token && { action_token: userProfileForSubmittedEmail.action_token }),
-            };
-
-            const optionsForUpdate = {...basePayloadOptions, customFields: customFieldsForUpdate};
-
-            const updatePayload: ConvertKitSubscribePayload = createConvertKitPayload(
-              email,
-              actualSource, 
-              optionsForUpdate
-            );
-
-            try {
-              const ckUpdateResponse = await submitToConvertKit(updatePayload, convertKitFormId);
-              console.log(`[API Quiz Submit ${requestTimestamp}] ConvertKit field update response for ${email}:`, ckUpdateResponse);
-            } catch (error) {
-              console.error(`[API Quiz Submit ${requestTimestamp}] Error updating custom fields for ${email} in ConvertKit:`, error);
-            }
-
-          } else {
-            console.warn(`[API Quiz Submit ${requestTimestamp}] Email ${email} was marked as verified/no action, but no existing ConvertKit subscriber found. This might indicate an inconsistency.`);
-            // Optionally, attempt to subscribe them as a new user here if that's desired fallback behavior.
-            // For now, just logging.
+          } catch (error) {
+            console.error(`[API Quiz Submit ${requestTimestamp}] Error re-subscribing verified user ${email} to ConvertKit:`, error);
           }
-        } catch (error) {
-          console.error(`[API Quiz Submit ${requestTimestamp}] Error handling existing ConvertKit subscriber for ${email}:`, error);
         }
       }
     } else {

@@ -5,74 +5,79 @@ import type { UserProfile, KitSubscriber } from '~/types';
 export const GET: APIRoute = async () => {
   try {
     const apiKey = import.meta.env.CONVERTKIT_API_KEY;
-
     if (!apiKey) {
-      throw new Error('ConvertKit API key is not set in environment variables.');
+      throw new Error('ConvertKit API key is not set.');
     }
 
-    const ckUrl = `https://api.kit.com/v4/subscribers`;
-
+    // 1. Fetch ALL data from both sources
     const [ckResponse, dbResult] = await Promise.all([
-      fetch(ckUrl, {
-        headers: {
-          'X-Kit-Api-Key': apiKey,
-          'Accept': 'application/json'
-        }
-      }),
-      supabase.from('user_profiles').select('id, email, created_at, updated_at, deleted_at'),
+      fetch('https://api.kit.com/v4/subscribers', { headers: { 'X-Kit-Api-Key': apiKey, 'Accept': 'application/json' } }),
+      supabase.from('user_profiles').select('id, email, created_at, updated_at, deleted_at, kit_state'),
     ]);
 
-    // --- Error Handling & Data Extraction ---
-    if (!ckResponse.ok) {
-      const errorText = await ckResponse.text();
-      console.error('ConvertKit API Error:', errorText);
-      throw new Error(`Failed to fetch from ConvertKit: ${ckResponse.statusText}`);
-    }
+    if (!ckResponse.ok) throw new Error(`Failed to fetch from ConvertKit: ${ckResponse.statusText}`);
     const ckData = await ckResponse.json();
     const allCkSubscribers: KitSubscriber[] = ckData.subscribers || [];
 
-    if (dbResult.error) {
-      console.error('Supabase DB Error:', dbResult.error);
-      throw dbResult.error;
-    }
+    if (dbResult.error) throw dbResult.error;
     const dbUsers = dbResult.data || [];
-
-    // Create a map of real database users, keyed by email.
-    const usersMap = new Map<string, UserProfile>();
+    
+    // 2. Create a map of DB users for efficient lookup
+    const dbUsersMap = new Map<string, UserProfile>();
     for (const dbUser of dbUsers) {
-      if (dbUser.id && dbUser.email) {
-        usersMap.set(dbUser.email.toLowerCase(), {
-          id: dbUser.id,
-          view_id: dbUser.id, // The view_id is the same as the user's actual ID
-          email: dbUser.email,
-          created_at: dbUser.created_at || new Date().toISOString(),
-          updated_at: dbUser.updated_at || null,
-          // If soft-deleted in our DB, their status is 'cancelled'. This is the source of truth.
-          kit_state: dbUser.deleted_at ? 'cancelled' : null, 
-          convertkit_id: null, // Default state
+      if (dbUser.email) {
+        dbUsersMap.set(dbUser.email.toLowerCase(), dbUser as UserProfile);
+      }
+    }
+
+    // 3. Build the final user list, starting with ConvertKit as the base
+    const combinedUsersMap = new Map<string, UserProfile>();
+
+    for (const ckUser of allCkSubscribers) {
+      const email = ckUser.email_address.toLowerCase();
+      const dbProfile = dbUsersMap.get(email);
+
+      if (dbProfile) {
+        // User exists in both systems. DB is the source of truth for ID and deletion status.
+        combinedUsersMap.set(email, {
+          ...dbProfile,
+          id: dbProfile.id,
+          view_id: dbProfile.id,
+          email: dbProfile.email,
+          kit_state: dbProfile.deleted_at ? 'cancelled' : ckUser.state, // DB soft-delete overrides Kit state
+          convertkit_id: ckUser.id,
+        });
+        // Remove from db map so we know who is left (DB only)
+        dbUsersMap.delete(email);
+      } else {
+        // User is only in ConvertKit. Treat them as valid but potentially 'cancelled'.
+        combinedUsersMap.set(email, {
+          id: `kit-${ckUser.id}`,
+          view_id: `ck-email-${Buffer.from(email).toString('base64')}`,
+          email: ckUser.email_address,
+          created_at: ckUser.created_at,
+          updated_at: null,
+          kit_state: ckUser.state === 'cancelled' ? 'cancelled' : 'unconfirmed', // Or another default
+          convertkit_id: ckUser.id,
         });
       }
     }
-
-    // Enrich the real users with data from ConvertKit
-    for (const ckUser of allCkSubscribers) {
-      const email = ckUser.email_address.toLowerCase();
-      const userInDb = usersMap.get(email);
-
-      if (userInDb) {
-        // Only update status from Kit if our DB does not consider the user deleted.
-        if (userInDb.kit_state !== 'cancelled') {
-          userInDb.kit_state = ckUser.state;
-        }
-        userInDb.convertkit_id = ckUser.id;
-      }
-      // If the user is in ConvertKit but not in our DB, we IGNORE them.
-      // The dashboard should only show users that exist in our system.
+    
+    // 4. Add any remaining users who are only in the DB
+    for (const [email, dbProfile] of dbUsersMap.entries()) {
+        combinedUsersMap.set(email, {
+            ...dbProfile,
+            id: dbProfile.id,
+            view_id: dbProfile.id,
+            email: dbProfile.email,
+            kit_state: dbProfile.deleted_at ? 'cancelled' : (dbProfile.kit_state || 'unconfirmed'),
+            convertkit_id: null
+        });
     }
 
-    const usersArray = Array.from(usersMap.values());
+    const usersArray = Array.from(combinedUsersMap.values());
 
-    // 4. Calculate summary
+    // 5. Calculate summary
     const summary = {
       total: usersArray.length,
       confirmed: usersArray.filter((u) => u.kit_state === 'active').length,
@@ -80,7 +85,6 @@ export const GET: APIRoute = async () => {
       cancelled: usersArray.filter((u) => u.kit_state === 'cancelled').length,
       bounced: usersArray.filter((u) => u.kit_state === 'bounced').length,
       complained: usersArray.filter((u) => u.kit_state === 'complained').length,
-      // Cold and Blocked are not standard states from CK, so we report 0 for now.
       cold: 0,
       blocked: 0,
     };
@@ -91,7 +95,8 @@ export const GET: APIRoute = async () => {
     });
   } catch (error) {
     console.error('Error in /api/users:', error);
-    return new Response(JSON.stringify({ message: error instanceof Error ? error.message : 'An unexpected error occurred' }), {
+    const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+    return new Response(JSON.stringify({ message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });

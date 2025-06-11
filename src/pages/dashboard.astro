@@ -1,4 +1,5 @@
 ---
+import { createClient } from '@supabase/supabase-js';
 import Layout from '~/layouts/PageLayout.astro';
 import { supabase } from '~/lib/supabaseClient';
 import type { Session } from '@supabase/supabase-js';
@@ -251,75 +252,95 @@ if (Astro.request.method === 'POST') {
           const { error: deleteVarError } = await supabase.from('variants').delete().eq('id', variantId);
           if (deleteVarError) throw deleteVarError;
           return Astro.redirect(Astro.url.pathname + `?openExperiment=${experimentId}#ab-testing-panel`, 303);
-        } else if (action === 'delete_user') {
+        } else if (action === 'hard_delete_user') {
           const userId = formData.get('user_id')?.toString();
           if (!userId) throw new Error('User ID is required for deletion.');
 
-          const supabaseUrl = import.meta.env.SUPABASE_URL;
-          const supabaseServiceKey = import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
-          if (!supabaseUrl || !supabaseServiceKey) {
-            throw new Error('Admin Supabase credentials not found. Cannot delete auth user.');
-          }
+          const supabaseAdmin = createClient(
+            import.meta.env.SUPABASE_URL!,
+            import.meta.env.SUPABASE_SERVICE_ROLE_KEY!
+          );
 
-          // First, get the user's email from our database. This is still needed for ConvertKit.
           const { data: userProfile, error: profileError } = await supabase
             .from('user_profiles')
-            .select('email')
+            .select('email, kit_subscriber_id')
             .eq('id', userId)
             .single();
-          
-          if (profileError || !userProfile) {
-            console.warn(`[DASHBOARD] User profile not found for ID ${userId}. The user might already be partially deleted. Proceeding with remaining cleanup.`);
+
+          if (profileError && profileError.code !== 'PGRST116') {
+            throw new Error(`Failed to get user profile: ${profileError.message}`);
           }
-          
-          // 1. Unsubscribe from ConvertKit (do this first)
-          if (userProfile?.email) {
-              const apiKey = import.meta.env.CONVERTKIT_API_KEY;
-              if (apiKey) {
-                  console.log(`[DASHBOARD] Unsubscribing ${userProfile.email} from ConvertKit using V4 API...`);
-                  // This is a fire-and-forget for the UI, but we'll await it to ensure it completes.
-                  try {
-                      // Find subscriber
-                      const findUrl = `https://api.kit.com/v4/subscribers?email_address=${encodeURIComponent(userProfile.email)}`;
-                      const findResponse = await fetch(findUrl, {
-                        headers: { 'X-Kit-Api-Key': apiKey }
-                      });
-                      if (findResponse.ok) {
-                          const findData = await findResponse.json();
-                          if (findData.subscribers && findData.subscribers.length > 0) {
-                              const subscriberId = findData.subscribers[0].id;
-                              // Unsubscribe
-                              const unsubscribeUrl = `https://api.kit.com/v4/subscribers/${subscriberId}/unsubscribe`;
-                              await fetch(unsubscribeUrl, { 
-                                method: 'POST',
-                                headers: { 'X-Kit-Api-Key': apiKey }
-                              });
-                          }
-                      }
-                  } catch (error) {
-                      console.error('[DASHBOARD] Background ConvertKit unsubscribe failed. This will not block user deactivation.', error);
-                  }
+
+          if (userProfile?.email && import.meta.env.CONVERTKIT_API_KEY) {
+            try {
+              const findUrl = `https://api.kit.com/v4/subscribers?email_address=${encodeURIComponent(userProfile.email)}`;
+              const findResponse = await fetch(findUrl, { headers: { 'X-Kit-Api-Key': import.meta.env.CONVERTKIT_API_KEY } });
+              if (findResponse.ok) {
+                const findData = await findResponse.json();
+                if (findData.subscribers && findData.subscribers.length > 0) {
+                  const subscriberId = findData.subscribers[0].id;
+                  const unsubscribeUrl = `https://api.kit.com/v4/subscribers/${subscriberId}/unsubscribe`;
+                  await fetch(unsubscribeUrl, { method: 'POST', headers: { 'X-Kit-Api-Key': import.meta.env.CONVERTKIT_API_KEY } });
+                }
               }
+            } catch (error) {
+              console.error('[DASHBOARD] Background ConvertKit unsubscribe failed during hard delete.', error);
+            }
+          }
+
+          const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+          if (deleteAuthError && deleteAuthError.message !== 'User not found') {
+            throw new Error(`Failed to delete auth user: ${deleteAuthError.message}`);
+          }
+
+          // MUST use the admin client to bypass RLS
+          const { error: deleteProfileError } = await supabaseAdmin.from('user_profiles').delete().eq('id', userId);
+          if (deleteProfileError) {
+            throw new Error(`Failed to delete user profile: ${deleteProfileError.message}`);
+          }
+
+          generalMessage = `User (ID: ${userId}) has been permanently deleted.`;
+          return Astro.redirect(Astro.url.pathname + '#users-panel', 303);
+
+        } else if (action === 'soft_delete_user') {
+          const userId = formData.get('user_id')?.toString();
+          if (!userId) throw new Error('User ID is required for soft deletion.');
+
+          const { data: userProfile, error: profileError } = await supabase
+            .from('user_profiles')
+            .select('email, kit_subscriber_id')
+            .eq('id', userId)
+            .single();
+
+          if (profileError) throw new Error(`Failed to get user profile: ${profileError.message}`);
+
+          if (userProfile?.email && import.meta.env.CONVERTKIT_API_KEY) {
+             try {
+              const findUrl = `https://api.kit.com/v4/subscribers?email_address=${encodeURIComponent(userProfile.email)}`;
+              const findResponse = await fetch(findUrl, { headers: { 'X-Kit-Api-Key': import.meta.env.CONVERTKIT_API_KEY } });
+              if (findResponse.ok) {
+                const findData = await findResponse.json();
+                if (findData.subscribers && findData.subscribers.length > 0) {
+                  const subscriberId = findData.subscribers[0].id;
+                  const unsubscribeUrl = `https://api.kit.com/v4/subscribers/${subscriberId}/unsubscribe`;
+                  await fetch(unsubscribeUrl, { method: 'POST', headers: { 'X-Kit-Api-Key': import.meta.env.CONVERTKIT_API_KEY } });
+                }
+              }
+            } catch (error) {
+              console.error('[DASHBOARD] Background ConvertKit unsubscribe failed during soft delete.', error);
+            }
           }
           
-          // 2. Soft-delete from our user_profiles table
-          console.log(`[DASHBOARD] Soft-deleting user ${userId} from user_profiles table...`);
           const { error: softDeleteError } = await supabase
             .from('user_profiles')
-            .update({ deleted_at: new Date().toISOString() })
+            .update({ deleted_at: new Date().toISOString(), kit_state: 'cancelled' })
             .eq('id', userId);
 
           if (softDeleteError) {
-            console.error(`[DASHBOARD] CRITICAL: Failed to soft-delete user profile. User ID: ${userId}. Error: ${softDeleteError.message}`);
-            throw new Error(`Failed to deactivate user profile: ${softDeleteError.message}`);
-          } else {
-            console.log(`[DASHBOARD] Successfully soft-deleted user ${userId}.`);
+            throw new Error(`Failed to soft-delete user: ${softDeleteError.message}`);
           }
-
-          // NOTE: We are NO LONGER deleting from auth.users. 
-          // The user can log back in and their account will be restored.
           
-          generalMessage = `User account (ID: ${userId}) has been deactivated. They can reactivate it by signing up again.`;
+          generalMessage = `User (ID: ${userId}) has been archived.`;
           return Astro.redirect(Astro.url.pathname + '#users-panel', 303);
         }
       } catch (e: unknown) {
@@ -665,7 +686,7 @@ if (Astro.request.method === 'GET') {
   />
 
   <form method="POST" action="#users-panel" id="delete-user-form" class="hidden">
-    <input type="hidden" name="_action" value="delete_user" />
+    <input type="hidden" name="_action" value="hard_delete_user" />
     <input type="hidden" name="user_id" id="user-id-to-delete" value="" />
   </form>
 

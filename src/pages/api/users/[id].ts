@@ -99,9 +99,14 @@ export const GET: APIRoute = async ({ params }) => {
             created_at: kitData.created_at,
             kit_state: kitData.state
         };
-    } else if (userProfile && kitData) {
-        // Sync kit_state if we have both
-        userProfile.kit_state = kitData.state;
+    } else if (userProfile) {
+        // If the user is soft-deleted in our DB, that's the canonical status.
+        if (userProfile.deleted_at) {
+            userProfile.kit_state = 'cancelled';
+        } else if (kitData) {
+            // Otherwise, sync the state from ConvertKit.
+            userProfile.kit_state = kitData.state;
+        }
     }
 
     if (!userProfile) {

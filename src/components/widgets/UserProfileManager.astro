@@ -114,7 +114,7 @@ const statusMap: Record<string, { text: string; color: string }> = {
                 const statusInfo = statusMap[statusKey] || statusMap['unknown'];
 
                 return (
-                  <tr data-state={statusKey} data-href={`/dashboard/user/${profile.id}`} class="user-row cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                  <tr data-state={statusKey} data-href={`/dashboard/user/${profile.view_id}`} class="user-row cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50">
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900 dark:text-slate-100">
                       {profile.email}
                     </td>

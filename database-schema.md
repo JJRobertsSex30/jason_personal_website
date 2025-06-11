@@ -4,9 +4,52 @@
 ## 🏗️ Database Overview
 This document provides a detailed overview of the PostgreSQL database schema for the application. It is generated from the DDL (`db4_ddl.sql`) to ensure it reflects the most current structure, including tables for A/B testing, user management, gamification, and analytics.
 
+## 📈 A/B Testing Data Flow
+This section explains how the database tables work together to provide a robust A/B testing framework that accurately tracks both anonymous and authenticated users.
+
+### Core Challenge: Tracking Anonymous Users
+The primary goal is to track which variant of an experiment an anonymous user sees and to attribute their potential future conversion to that variant. This is challenging because an anonymous user does not have a `user_profile_id` until the moment they convert (e.g., sign up).
+
+Our schema solves this with a "delayed attribution" or "stitching" model, using two parallel identifiers:
+- `anonymous_user_id` (TEXT): A temporary, client-side ID stored in the user's browser `localStorage`. It identifies a unique browser session.
+- `user_profile_id` (UUID): The permanent, canonical user ID created upon conversion.
+
+### The Lifecycle of an A/B Test Participant
+
+**Step 1: The First Impression (Anonymous User)**
+1.  A new, anonymous user visits the site. The client-side `abTester.ts` script generates a unique `anonymous_user_id` and stores it in `localStorage`.
+2.  The user is assigned a variant for an active experiment.
+3.  An entry is created in the `impressions` table. This entry has:
+    - A valid `anonymous_user_id`.
+    - `NULL` for `user_profile_id`.
+4.  A database trigger automatically creates a corresponding summary record in the `user_experiment_participation` table, also using the `anonymous_user_id`. This table holds the state of the user for that specific experiment (e.g., which variant they are assigned to).
+
+**Step 2: The Conversion (User Becomes Known)**
+1.  The user decides to convert (e.g., completes the quiz, submits a form).
+2.  The client-side code sends the conversion payload (e.g., email address) **along with the `anonymous_user_id`** from `localStorage` to the server.
+3.  The server-side API endpoint performs the "stitching":
+    a. Creates a new user in `auth.users` and `user_profiles`, which generates a permanent `user_profile_id`.
+    b. Creates an entry in the `conversions` table, linking it to the new `user_profile_id`.
+    c. **Crucially, it runs an `UPDATE` query on `impressions` and `user_experiment_participation` to set the `user_profile_id` for all records matching the `anonymous_user_id` it received.**
+
+**Step 3: Returning User (Authenticated)**
+1.  When a known user returns to the site, the `abTester.ts` script can identify them via their active session.
+2.  The `checkUserEligibilityForABTesting` logic checks if this user has already converted in the past.
+3.  If they have, no new "impression" is logged for A/B testing purposes. This is critical for preventing data skew—a returning customer should not count as a new, non-converting impression. This ensures conversion rates remain accurate.
+
+### How the Tables Work Together
+
+- **`experiments`**: Defines the A/B test itself (e.g., "New Homepage Headline").
+- **`variants`**: Defines the different versions within an experiment (e.g., Variant A, Variant B).
+- **`impressions`**: An **event log** of every time a variant is shown to a user. It's the raw data.
+- **`conversions`**: An **event log** of every time a user completes a goal.
+- **`user_experiment_participation`**: A **stateful summary table**. It contains one row per user per experiment, acting as the single source of truth for which variant a user belongs to and whether they have converted. This table is the key to efficient and accurate analytics. Instead of expensive queries on the `impressions` table, we can query this summary table to determine conversion rates quickly.
+
+This model ensures that every impression is captured, data remains accurate, and the system can scale efficiently.
+
 ---
 
-## 📋 Table of Contents
+## 📄 Table of Contents
 - [experiments](#experiments)
 - [user_profiles](#user_profiles)
 - [engagement_rewards](#engagement_rewards)
@@ -48,7 +91,7 @@ Stores A/B test experiment definitions.
 Core user account information, including authentication and gamification details.
 | Column | Type | Nullable | Default | Comment |
 |---|---|---|---|---|
-| `id` | uuid | NO | `uuid_generate_v4()` | PRIMARY KEY |
+| `id` | uuid | NO | `uuid_generate_v4()` | PRIMARY KEY. This is the `user_profile_id` used in other tables. |
 | `email` | text | NO | | UNIQUE |
 | `insight_gems` | int4 | NO | `100` | |
 | `referral_code` | text | YES | | UNIQUE |
@@ -68,7 +111,8 @@ Tracks gems awarded to users for specific, non-transactional engagements like da
 | Column | Type | Nullable | Default | Constraints |
 |---|---|---|---|---|
 | `id` | uuid | NO | `uuid_generate_v4()` | PRIMARY KEY |
-| `user_id` | uuid | NO | | FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
+| `user_profile_id` | uuid | NO | | FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
+| `anonymous_user_id` | text | YES | | Temporary client-side ID for anonymous users |
 | `reward_type` | text | NO | | |
 | `reward_amount` | int4 | NO | | |
 | `created_at` | timestamptz | YES | `now()` | |
@@ -78,7 +122,8 @@ An immutable ledger of all gem credits and debits for a user, with cascade delet
 | Column | Type | Nullable | Default | Constraints |
 |---|---|---|---|---|
 | `id` | uuid | NO | `uuid_generate_v4()` | PRIMARY KEY |
-| `user_id` | uuid | NO | | FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
+| `user_profile_id` | uuid | NO | | FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
+| `anonymous_user_id` | text | YES | | Temporary client-side ID for anonymous users |
 | `source_engagement_id` | uuid | YES | | |
 | `transaction_type` | text | NO | | CHECK ((transaction_type = ANY (ARRAY['CREDIT'::text, 'DEBIT'::text]))) |
 | `amount` | int4 | NO | | CHECK ((amount > 0)) |
@@ -90,7 +135,8 @@ Logs every quiz attempt by a user, including scores and any gems earned.
 | Column | Type | Nullable | Default | Constraints |
 |---|---|---|---|---|
 | `id` | uuid | NO | `uuid_generate_v4()` | PRIMARY KEY |
-| `user_id` | uuid | NO | | FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
+| `user_profile_id` | uuid | NO | | FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
+| `anonymous_user_id` | text | YES | | Temporary client-side ID for anonymous users |
 | `quiz_name` | text | NO | | |
 | `score` | int4 | YES | | |
 | `result_type` | text | YES | | |
@@ -102,7 +148,8 @@ Stores detailed results from user-submitted quizzes.
 | Column | Type | Nullable | Default | Constraints |
 |---|---|---|---|---|
 | `id` | uuid | NO | `uuid_generate_v4()` | PRIMARY KEY |
-| `user_id` | uuid | NO | | FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
+| `user_profile_id` | uuid | NO | | FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
+| `anonymous_user_id` | text | YES | | Temporary client-side ID for anonymous users |
 | `attempt_timestamp` | timestamp | YES | `now()` | |
 | `quiz_type` | text | NO | | |
 | `quiz_version` | text | YES | `'1.0'::text` | CHECK ((quiz_version ~ '^[0-9]+\.[0-9]+(\.[0-9]+)?$'::text)) |
@@ -141,7 +188,8 @@ Tracks user engagement events for analytics.
 | Column | Type | Nullable | Default | Constraints |
 |---|---|---|---|---|
 | `id` | uuid | NO | `gen_random_uuid()` | PRIMARY KEY |
-| `user_id` | uuid | NO | | FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
+| `user_profile_id` | uuid | NO | | FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
+| `anonymous_user_id` | text | YES | | Temporary client-side ID for anonymous users |
 | `engagement_type` | text | NO | | |
 | `experiment_context` | text | YES | | |
 | `variant_context` | text | YES | | |
@@ -154,7 +202,8 @@ A central log for all significant user actions.
 | Column | Type | Nullable | Default | Constraints |
 |---|---|---|---|---|
 | `id` | uuid | NO | `uuid_generate_v4()` | PRIMARY KEY |
-| `user_id` | uuid | NO | | FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
+| `user_profile_id` | uuid | NO | | FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
+| `anonymous_user_id` | text | YES | | Temporary client-side ID for anonymous users |
 | `event_type` | text | NO | | |
 | `event_metadata` | jsonb | YES | | |
 | `created_at` | timestamptz | NO | `now()` | |
@@ -176,7 +225,8 @@ Tracks user conversion events.
 | Column | Type | Nullable | Default | Constraints |
 |---|---|---|---|---|
 | `id` | uuid | NO | `uuid_generate_v4()` | PRIMARY KEY |
-| `user_id` | uuid | NO | | FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
+| `user_profile_id` | uuid | NO | | FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
+| `anonymous_user_id` | text | YES | | Temporary client-side ID for anonymous users |
 | `variant_id` | uuid | NO | | FOREIGN KEY to variants(id) ON DELETE CASCADE |
 | `experiment_id` | uuid | NO | | FOREIGN KEY to experiments(id) ON DELETE CASCADE |
 | `session_identifier` | text | YES | | |
@@ -220,7 +270,8 @@ Tracks user impressions for A/B tests.
 | Column | Type | Nullable | Default | Constraints |
 |---|---|---|---|---|
 | `id` | uuid | NO | `uuid_generate_v4()` | PRIMARY KEY |
-| `user_id` | uuid | NO | | FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
+| `user_profile_id` | uuid | NO | | FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
+| `anonymous_user_id` | text | YES | | Temporary client-side ID for anonymous users |
 | `variant_id` | uuid | NO | | FOREIGN KEY to variants(id) ON DELETE CASCADE |
 | `session_identifier` | text | YES | | |
 | `impression_at` | timestamptz | NO | `now()` | |
@@ -254,8 +305,9 @@ Tracks user participation in experiments to prevent double-counting and for calc
 | Column | Type | Nullable | Default | Constraints |
 |---|---|---|---|---|
 | `id` | uuid | NO | `gen_random_uuid()` | PRIMARY KEY |
-| `user_id` | uuid | NO | | UNIQUE with experiment_id, FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
-| `experiment_id` | uuid | NO | | UNIQUE with user_id, FOREIGN KEY to experiments(id) ON DELETE CASCADE |
+| `user_profile_id` | uuid | NO | | UNIQUE with experiment_id, FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
+| `anonymous_user_id` | text | YES | | Temporary client-side ID for anonymous users |
+| `experiment_id` | uuid | NO | | UNIQUE with user_profile_id, FOREIGN KEY to experiments(id) ON DELETE CASCADE |
 | `variant_id` | uuid | NO | | FOREIGN KEY to variants(id) ON DELETE CASCADE |
 | `first_exposure_date` | timestamptz | NO | `now()` | |
 | `was_eligible_at_exposure` | bool | NO | `true` | |
@@ -266,13 +318,17 @@ Tracks user participation in experiments to prevent double-counting and for calc
 | `conversion_within_window` | bool | YES | `false` | |
 | `created_at` | timestamptz | YES | `timezone('utc'::text, now())` | |
 | `updated_at` | timestamptz | YES | `now()` | |
+| `user_experiment_participation_check` | | | | CHECK ((first_conversion_date IS NULL) OR (first_conversion_date >= first_exposure_date)) |
+| | | | | UNIQUE (user_profile_id, experiment_id) WHERE user_profile_id IS NOT NULL |
+| | | | | UNIQUE (anonymous_user_id, experiment_id) WHERE user_profile_id IS NULL AND anonymous_user_id IS NOT NULL |
 
 ### **conversion_attribution**
-Detailed attribution for conversions to specific experiments.
+Links a specific conversion event back to the experiment and variant that influenced it.
 | Column | Type | Nullable | Default | Constraints |
 |---|---|---|---|---|
 | `id` | uuid | NO | `gen_random_uuid()` | PRIMARY KEY |
-| `user_id` | uuid | NO | | FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
+| `user_profile_id` | uuid | YES | | The permanent user ID after conversion. |
+| `anonymous_user_id` | text | YES | | The anonymous ID associated with the conversion. |
 | `conversion_id` | uuid | NO | | UNIQUE, FOREIGN KEY to conversions(id) ON DELETE CASCADE |
 | `experiment_id` | uuid | NO | | FOREIGN KEY to experiments(id) ON DELETE CASCADE |
 | `variant_id` | uuid | NO | | FOREIGN KEY to variants(id) ON DELETE CASCADE |

@@ -30,44 +30,33 @@ export interface UserEligibilityResult {
  * Fails gracefully on network errors to ensure A/B testing continues working
  */
 export async function checkUserEligibilityForABTesting(
-  user_id: string,
-  experiment_id?: string
+  userProfileId: string,
 ): Promise<UserEligibilityResult> {
+  // This check is only for authenticated users. Anonymous users are always considered eligible for their first impression.
+  if (!userProfileId) {
+      // This case should ideally not be hit if called correctly, but as a safeguard:
+      return { isEligible: true, reason: 'eligible' };
+  }
+
   try {
-    // 1. Check for ANY site-wide conversions for this user
+    // Check for ANY site-wide conversions for this user. If a user has ever converted,
+    // they are no longer eligible for any new A/B test impressions.
     const { data: siteWideConversions, error: conversionError } = await supabase
       .from('conversions')
       .select('experiment_id, variant_id, conversion_type, created_at')
-      .eq('user_id', user_id)
-      .limit(5); // Limit for performance, we just need to know if ANY exist
+      .eq('user_profile_id', userProfileId)
+      .limit(1); // We only need to know if at least one conversion exists.
 
     if (conversionError) {
       console.error('[UserEligibility] Error checking site-wide conversions:', conversionError);
-      
-      // Check if this is a network connectivity issue
-      if (conversionError.message?.includes('NetworkError') || 
-          conversionError.message?.includes('fetch') ||
-          conversionError.message?.includes('network') ||
-          conversionError.code === '' || conversionError.code === 'NETWORK_ERROR') {
-        console.warn('[UserEligibility] Network connectivity issue detected. Allowing A/B testing to continue to prevent service disruption.');
-        // On network error, default to eligible to avoid blocking legitimate users
-        return {
-          isEligible: true,
-          reason: 'eligible'
-        };
-      }
-      
-      // For other types of errors, also default to eligible
-      console.warn('[UserEligibility] Database error occurred, defaulting to eligible to maintain service availability.');
-      return {
-        isEligible: true,
-        reason: 'eligible'
-      };
+      // On network or database error, default to eligible to avoid blocking legitimate users.
+      // It's better to have slightly imprecise A/B data than a broken user experience.
+      return { isEligible: true, reason: 'eligible' };
     }
 
-    // If user has ANY conversions site-wide, they're ineligible for ALL future experiments
+    // If user has ANY conversions site-wide, they're ineligible for ALL future experiments.
     if (siteWideConversions && siteWideConversions.length > 0) {
-      console.log(`[UserEligibility] User ${user_id} ineligible: already converted site-wide`);
+      console.log(`[UserEligibility] User ${userProfileId} ineligible: already converted site-wide.`);
       return {
         isEligible: false,
         reason: 'already_converted_site_wide',
@@ -77,51 +66,13 @@ export async function checkUserEligibilityForABTesting(
       };
     }
 
-    // 2. If checking for specific experiment, also check recent impressions to prevent spam
-    if (experiment_id) {
-      try {
-        const { data: recentImpressions, error: impressionError } = await supabase
-          .from('impressions')
-          .select('impression_at')  // Fix: Use impression_at instead of created_at
-          .eq('user_id', user_id)
-          .eq('experiment_id', experiment_id)
-          .gte('impression_at', new Date(Date.now() - 2 * 60 * 1000).toISOString()) // Last 2 minutes
-          .limit(1);
-
-        if (impressionError) {
-          console.error('[UserEligibility] Error checking recent impressions:', impressionError);
-          // Don't fail the entire eligibility check for impression errors
-        } else if (recentImpressions && recentImpressions.length > 0) {
-          return {
-            isEligible: false,
-            reason: 'duplicate_impression',
-            details: {
-              lastImpressionAt: recentImpressions[0].impression_at
-            }
-          };
-        }
-      } catch (impressionCheckError) {
-        console.warn('[UserEligibility] Failed to check recent impressions, continuing with eligibility check:', impressionCheckError);
-        // Don't fail entire eligibility check for this
-      }
-    }
-
-    // User is eligible
-    return {
-      isEligible: true,
-      reason: 'eligible'
-    };
+    // If no conversions are found, the user is eligible for new experiments.
+    return { isEligible: true, reason: 'eligible' };
 
   } catch (error) {
     console.error('[UserEligibility] Unexpected error in eligibility check:', error);
-    console.warn('[UserEligibility] Defaulting to eligible to maintain A/B testing service availability.');
-    
-    // On any unexpected error, default to eligible to avoid blocking legitimate users
-    // It's better to have slightly less precise A/B testing than broken A/B testing
-    return {
-      isEligible: true,
-      reason: 'eligible'
-    };
+    // On any unexpected error, default to eligible to maintain service availability.
+    return { isEligible: true, reason: 'eligible' };
   }
 }
 
