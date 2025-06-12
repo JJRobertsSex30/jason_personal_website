@@ -271,16 +271,22 @@ if (Astro.request.method === 'POST') {
             throw new Error(`Failed to get user profile: ${profileError.message}`);
           }
 
-          if (userProfile?.email && import.meta.env.CONVERTKIT_API_KEY) {
+          if (userProfile?.email && import.meta.env.CONVERTKIT_API_KEY && import.meta.env.CONVERTKIT_API_SECRET) {
             try {
-              const findUrl = `https://api.kit.com/v4/subscribers?email_address=${encodeURIComponent(userProfile.email)}`;
-              const findResponse = await fetch(findUrl, { headers: { 'X-Kit-Api-Key': import.meta.env.CONVERTKIT_API_KEY } });
+              // v3: Find subscriber by email using API secret
+              const findUrl = `https://api.convertkit.com/v3/subscribers?api_secret=${import.meta.env.CONVERTKIT_API_SECRET}&email_address=${encodeURIComponent(userProfile.email)}`;
+              const findResponse = await fetch(findUrl);
               if (findResponse.ok) {
                 const findData = await findResponse.json();
                 if (findData.subscribers && findData.subscribers.length > 0) {
                   const subscriberId = findData.subscribers[0].id;
-                  const unsubscribeUrl = `https://api.kit.com/v4/subscribers/${subscriberId}/unsubscribe`;
-                  await fetch(unsubscribeUrl, { method: 'POST', headers: { 'X-Kit-Api-Key': import.meta.env.CONVERTKIT_API_KEY } });
+                  // v3: Unsubscribe using API key in the payload
+                  const unsubscribeUrl = `https://api.convertkit.com/v3/unsubscribe`;
+                  await fetch(unsubscribeUrl, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ api_key: import.meta.env.CONVERTKIT_API_KEY, email: userProfile.email })
+                  });
                 }
               }
             } catch (error) {
@@ -314,16 +320,21 @@ if (Astro.request.method === 'POST') {
 
           if (profileError) throw new Error(`Failed to get user profile: ${profileError.message}`);
 
-          if (userProfile?.email && import.meta.env.CONVERTKIT_API_KEY) {
+          if (userProfile?.email && import.meta.env.CONVERTKIT_API_KEY && import.meta.env.CONVERTKIT_API_SECRET) {
              try {
-              const findUrl = `https://api.kit.com/v4/subscribers?email_address=${encodeURIComponent(userProfile.email)}`;
-              const findResponse = await fetch(findUrl, { headers: { 'X-Kit-Api-Key': import.meta.env.CONVERTKIT_API_KEY } });
+              // v3: Find subscriber by email using API secret
+              const findUrl = `https://api.convertkit.com/v3/subscribers?api_secret=${import.meta.env.CONVERTKIT_API_SECRET}&email_address=${encodeURIComponent(userProfile.email)}`;
+              const findResponse = await fetch(findUrl);
               if (findResponse.ok) {
                 const findData = await findResponse.json();
                 if (findData.subscribers && findData.subscribers.length > 0) {
-                  const subscriberId = findData.subscribers[0].id;
-                  const unsubscribeUrl = `https://api.kit.com/v4/subscribers/${subscriberId}/unsubscribe`;
-                  await fetch(unsubscribeUrl, { method: 'POST', headers: { 'X-Kit-Api-Key': import.meta.env.CONVERTKIT_API_KEY } });
+                   // v3: Unsubscribe using API key in the payload
+                  const unsubscribeUrl = `https://api.convertkit.com/v3/unsubscribe`;
+                  await fetch(unsubscribeUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ api_key: import.meta.env.CONVERTKIT_API_KEY, email: userProfile.email })
+                  });
                 }
               }
             } catch (error) {

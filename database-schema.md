@@ -301,26 +301,29 @@ Tracks user impressions for A/B tests.
 | `user_context` | jsonb | YES | `'{}'::jsonb` | |
 
 ### **user_experiment_participation**
-Tracks user participation in experiments to prevent double-counting and for calculating conversion rates.
-| Column | Type | Nullable | Default | Constraints |
-|---|---|---|---|---|
-| `id` | uuid | NO | `gen_random_uuid()` | PRIMARY KEY |
-| `user_profile_id` | uuid | NO | | UNIQUE with experiment_id, FOREIGN KEY to user_profiles(id) ON DELETE CASCADE |
-| `anonymous_user_id` | text | YES | | Temporary client-side ID for anonymous users |
-| `experiment_id` | uuid | NO | | UNIQUE with user_profile_id, FOREIGN KEY to experiments(id) ON DELETE CASCADE |
-| `variant_id` | uuid | NO | | FOREIGN KEY to variants(id) ON DELETE CASCADE |
-| `first_exposure_date` | timestamptz | NO | `now()` | |
-| `was_eligible_at_exposure` | bool | NO | `true` | |
-| `eligibility_criteria` | jsonb | YES | `'{}'::jsonb` | |
-| `total_impressions` | int4 | YES | `1` | |
-| `has_converted` | bool | YES | `false` | |
-| `first_conversion_date` | timestamptz | YES | | CHECK ((first_conversion_date IS NULL) OR (first_conversion_date >= first_exposure_date)) |
-| `conversion_within_window` | bool | YES | `false` | |
-| `created_at` | timestamptz | YES | `timezone('utc'::text, now())` | |
-| `updated_at` | timestamptz | YES | `now()` | |
-| `user_experiment_participation_check` | | | | CHECK ((first_conversion_date IS NULL) OR (first_conversion_date >= first_exposure_date)) |
-| | | | | UNIQUE (user_profile_id, experiment_id) WHERE user_profile_id IS NOT NULL |
-| | | | | UNIQUE (anonymous_user_id, experiment_id) WHERE user_profile_id IS NULL AND anonymous_user_id IS NOT NULL |
+A stateful summary table tracking which variant a user is assigned to for a given experiment, whether they have converted, and when. It is the single source of truth for A/B testing analytics.
+| Column | Type | Nullable | Default | Constraints | Comment |
+|---|---|---|---|---|---|
+| `id` | uuid | NO | `gen_random_uuid()` | PRIMARY KEY | |
+| `user_profile_id` | uuid | YES | | FOREIGN KEY to user_profiles(id) ON DELETE CASCADE | Foreign key to user_profiles.id. |
+| `experiment_id` | uuid | NO | | FOREIGN KEY to experiments(id) ON DELETE CASCADE | |
+| `variant_id` | uuid | NO | | FOREIGN KEY to variants(id) ON DELETE CASCADE | |
+| `first_exposure_date` | timestamptz | NO | `now()` | | |
+| `was_eligible_at_exposure` | bool | NO | `true` | | |
+| `eligibility_criteria` | jsonb | YES | `'{}'::jsonb` | | |
+| `total_impressions` | int4 | YES | `1` | | |
+| `has_converted` | bool | YES | `false` | | |
+| `first_conversion_date` | timestamptz | YES | | | |
+| `conversion_within_window` | bool | YES | `false` | | |
+| `created_at` | timestamptz | YES | `timezone('utc'::text, now())` | | |
+| `updated_at` | timestamptz | YES | `now()` | | |
+| `anonymous_user_id` | text | YES | | | Temporary client-side ID for anonymous users. |
+
+**Indexes:**
+- `uidx_participation_anonymous_id` (UNIQUE, btree): ON (anonymous_user_id, experiment_id) WHERE ((user_profile_id IS NULL) AND (anonymous_user_id IS NOT NULL))
+- `uidx_participation_profile_id` (UNIQUE, btree): ON (user_profile_id, experiment_id) WHERE (user_profile_id IS NOT NULL)
+- `idx_user_experiment_participation_anonymous_user_id` (btree): ON (anonymous_user_id)
+- `idx_user_exp_participation_user_id` (btree): ON (user_profile_id)
 
 ### **conversion_attribution**
 Links a specific conversion event back to the experiment and variant that influenced it.

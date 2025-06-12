@@ -99,7 +99,7 @@ export const GET: APIRoute = async ({ request: _request }) => {
       supabase.from('conversions').select('country_code').not('country_code', 'is', null),
       supabase.from('impressions').select('device_type, user_agent').not('device_type', 'is', null),
       supabase.from('impressions').select('scroll_depth_percent, time_on_page').not('scroll_depth_percent', 'is', null),
-      supabase.from('impressions').select('user_id').not('user_id', 'is', null),
+      supabase.from('impressions').select('user_profile_id').not('user_profile_id', 'is', null),
       supabase.from('impressions').select('utm_source, utm_medium, utm_campaign').not('utm_source', 'is', null)
     ]);
 
@@ -193,7 +193,7 @@ export const GET: APIRoute = async ({ request: _request }) => {
     
     const sessionData = sessionDataResult.data || [];
     const userCounts = sessionData.reduce((acc, item) => {
-      const user = item.user_id;
+      const user = item.user_profile_id;
       if(user) acc[user] = (acc[user] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
@@ -231,12 +231,12 @@ export const GET: APIRoute = async ({ request: _request }) => {
     // Get all impressions with UTM data
     const { data: allImpressions, error: impressionsError } = await supabase
       .from('impressions')
-      .select('utm_source, utm_medium, utm_campaign, time_on_page, scroll_depth_percent, user_id, impression_at');
+      .select('utm_source, utm_medium, utm_campaign, time_on_page, scroll_depth_percent, user_profile_id, impression_at');
 
     // Get all conversions with UTM data
     const { data: allConversions, error: conversionsError } = await supabase
       .from('conversions')
-      .select('utm_source, utm_medium, utm_campaign, user_id, created_at');
+      .select('utm_source, utm_medium, utm_campaign, user_profile_id, created_at');
 
     if (impressionsError) throw new Error(`Impressions fetch error: ${impressionsError.message}`);
     if (conversionsError) throw new Error(`Conversions fetch error: ${conversionsError.message}`);
@@ -250,15 +250,12 @@ export const GET: APIRoute = async ({ request: _request }) => {
         sourceStats.set(source, { impressions: 0, conversions: 0, timeOnPage: [], bounces: 0 });
       }
       const stats = sourceStats.get(source)!;
-      stats.impressions++;
-      
+      stats.impressions += 1;
       if (imp.time_on_page) {
         stats.timeOnPage.push(imp.time_on_page);
       }
-      
-      // Count as bounce if low engagement
-      if ((imp.scroll_depth_percent || 0) < 30 && (imp.time_on_page || 0) < 30) {
-        stats.bounces++;
+      if ((imp.scroll_depth_percent || 0) < 10 && (imp.time_on_page || 0) < 5) {
+        stats.bounces += 1;
       }
     });
 
@@ -266,7 +263,7 @@ export const GET: APIRoute = async ({ request: _request }) => {
     allConversions?.forEach(conv => {
       const source = conv.utm_source || 'direct';
       if (sourceStats.has(source)) {
-        sourceStats.get(source)!.conversions++;
+        sourceStats.get(source)!.conversions += 1;
       }
     });
 
@@ -290,20 +287,13 @@ export const GET: APIRoute = async ({ request: _request }) => {
     });
 
     // Campaign Analysis (source + medium + campaign)
-    const campaignStats = new Map<string, { 
-      source: string; 
-      medium: string; 
-      impressions: number; 
-      conversions: number; 
-      timeOnPage: number[]; 
-      bounces: number; 
-    }>();
+    const campaignStats = new Map<string, { source: string; medium: string; impressions: number; conversions: number; timeOnPage: number[]; bounceCount: number }>();
     
     allImpressions?.forEach(imp => {
-      const campaign = imp.utm_campaign || 'no-campaign';
+      const campaign = imp.utm_campaign || 'N/A';
       const source = imp.utm_source || 'direct';
-      const medium = imp.utm_medium || 'none';
-      const key = `${campaign}|${source}|${medium}`;
+      const medium = imp.utm_medium || 'direct';
+      const key = `${campaign}-${source}-${medium}`;
       
       if (!campaignStats.has(key)) {
         campaignStats.set(key, { 
@@ -312,7 +302,7 @@ export const GET: APIRoute = async ({ request: _request }) => {
           impressions: 0, 
           conversions: 0, 
           timeOnPage: [], 
-          bounces: 0 
+          bounceCount: 0 
         });
       }
       
@@ -323,86 +313,81 @@ export const GET: APIRoute = async ({ request: _request }) => {
         stats.timeOnPage.push(imp.time_on_page);
       }
       
-      if ((imp.scroll_depth_percent || 0) < 30 && (imp.time_on_page || 0) < 30) {
-        stats.bounces++;
+      if ((imp.scroll_depth_percent || 0) < 20 && (imp.time_on_page || 0) < 10) {
+        stats.bounceCount++;
       }
     });
 
     // Match conversions to campaigns
     allConversions?.forEach(conv => {
-      const campaign = conv.utm_campaign || 'no-campaign';
+      const campaign = conv.utm_campaign || 'N/A';
       const source = conv.utm_source || 'direct';
-      const medium = conv.utm_medium || 'none';
-      const key = `${campaign}|${source}|${medium}`;
+      const medium = conv.utm_medium || 'direct';
+      const key = `${campaign}-${source}-${medium}`;
       
       if (campaignStats.has(key)) {
         campaignStats.get(key)!.conversions++;
       }
     });
 
-    const sources = Array.from(sourceStats.entries()).map(([source, stats]) => ({
+    const campaignPerformanceSources = Array.from(sourceStats.entries()).map(([source, stats]) => ({
       source,
       impressions: stats.impressions,
       conversions: stats.conversions,
       conversionRate: stats.impressions > 0 ? (stats.conversions / stats.impressions) * 100 : 0,
-      roi: stats.conversions * 10 // Assuming $10 value per conversion for ROI calculation
-    })).sort((a, b) => b.conversions - a.conversions);
+      roi: 0, // Placeholder
+    }));
 
-    const mediums = Array.from(mediumStats.entries()).map(([medium, stats]) => ({
-      medium,
-      impressions: stats.impressions,
-      conversions: stats.conversions,
-      conversionRate: stats.impressions > 0 ? (stats.conversions / stats.impressions) * 100 : 0
-    })).sort((a, b) => b.conversions - a.conversions);
-
-    const campaigns = Array.from(campaignStats.entries()).map(([key, stats]) => {
-      const campaign = key.split('|')[0];
-      const avgTimeOnPage = stats.timeOnPage.length > 0 
-        ? stats.timeOnPage.reduce((sum, time) => sum + time, 0) / stats.timeOnPage.length 
-        : 0;
-      const bounceRate = stats.impressions > 0 ? (stats.bounces / stats.impressions) * 100 : 0;
-      
+    const campaignPerformanceCampaigns = Array.from(campaignStats.entries()).map(([key, stats]) => {
+      const campaignName = key.split('-')[0];
+      const avgTime = stats.timeOnPage.length > 0 ? stats.timeOnPage.reduce((a, b) => a + b, 0) / stats.timeOnPage.length : 0;
+      const bounceRate = stats.impressions > 0 ? (stats.bounceCount / stats.impressions) * 100 : 0;
       return {
-        campaign,
+        campaign: campaignName,
         source: stats.source,
         medium: stats.medium,
         impressions: stats.impressions,
         conversions: stats.conversions,
         conversionRate: stats.impressions > 0 ? (stats.conversions / stats.impressions) * 100 : 0,
-        avgTimeOnPage: Math.round(avgTimeOnPage * 10) / 10,
-        bounceRate: Math.round(bounceRate * 10) / 10
+        avgTimeOnPage: avgTime,
+        bounceRate: bounceRate
       };
-    }).sort((a, b) => b.conversions - a.conversions);
+    });
 
-    // Attribution Summary
-    const totalAttributedConversions = allConversions?.filter(conv => conv.utm_source).length || 0;
-    const directConversions = allConversions?.filter(conv => !conv.utm_source || conv.utm_source === 'direct').length || 0;
-    
-    const organicConversions = allConversions?.filter(conv => 
-      conv.utm_source === 'google' && conv.utm_medium === 'organic'
-    ).length || 0;
-    
-    const paidConversions = allConversions?.filter(conv => 
-      conv.utm_medium === 'cpc' || conv.utm_medium === 'paid'
-    ).length || 0;
-    
-    const socialConversions = allConversions?.filter(conv => 
-      ['facebook', 'twitter', 'linkedin', 'instagram', 'tiktok'].includes(conv.utm_source)
-    ).length || 0;
-    
-    const emailConversions = allConversions?.filter(conv => 
-      conv.utm_medium === 'email' || conv.utm_source === 'newsletter'
-    ).length || 0;
+    // Attribution modeling
+    const attribution = {
+      totalAttributedConversions: allConversions?.length || 0,
+      directConversions: 0,
+      organicConversions: 0,
+      paidConversions: 0,
+      socialConversions: 0,
+      emailConversions: 0
+    };
+
+    allConversions?.forEach(conv => {
+      const medium = conv.utm_medium;
+      if (!medium || medium === 'direct') {
+        attribution.directConversions++;
+      } else if (['organic', 'seo'].includes(medium)) {
+        attribution.organicConversions++;
+      } else if (['cpc', 'ppc', 'paid'].includes(medium)) {
+        attribution.paidConversions++;
+      } else if (['social', 'social-media'].includes(medium)) {
+        attribution.socialConversions++;
+      } else if (['email', 'newsletter'].includes(medium)) {
+        attribution.emailConversions++;
+      }
+    });
 
     // Funnel Analysis
-    const topOfFunnel = impressionsCount; // Total impressions
-    const middleOfFunnel = allImpressions?.filter(imp => 
-      (imp.scroll_depth_percent || 0) > 30 || (imp.time_on_page || 0) > 30
-    ).length || 0;
-    const bottomOfFunnel = conversionsCount; // Total conversions
-    
-    const funnelConversionRate = topOfFunnel > 0 ? (bottomOfFunnel / topOfFunnel) * 100 : 0;
-    const dropOffRate = topOfFunnel > 0 ? ((topOfFunnel - bottomOfFunnel) / topOfFunnel) * 100 : 0;
+    const engagedImpressions = allImpressions?.filter(imp => (imp.scroll_depth_percent || 0) > 30 || (imp.time_on_page || 0) > 30).length || 0;
+    const funnel = {
+        topOfFunnel: allImpressions?.length || 0,
+        middleOfFunnel: engagedImpressions,
+        bottomOfFunnel: allConversions?.length || 0,
+        funnelConversionRate: (allImpressions?.length || 0) > 0 ? ((allConversions?.length || 0) / (allImpressions?.length || 0)) * 100 : 0,
+        dropOffRate: (allImpressions?.length || 0) > 0 ? 100 - (((allConversions?.length || 0) / (allImpressions?.length || 0)) * 100) : 100
+    };
 
     const analytics: AnalyticsData = {
       performance: {
@@ -438,24 +423,16 @@ export const GET: APIRoute = async ({ request: _request }) => {
         isSignificant,
       },
       campaignPerformance: {
-        sources: sources,
-        mediums: mediums,
-        campaigns: campaigns,
-        attributionSummary: {
-          totalAttributedConversions,
-          directConversions,
-          organicConversions,
-          paidConversions,
-          socialConversions,
-          emailConversions,
-        },
-        funnelAnalysis: {
-          topOfFunnel,
-          middleOfFunnel,
-          bottomOfFunnel,
-          funnelConversionRate,
-          dropOffRate,
-        },
+        sources: campaignPerformanceSources,
+        mediums: Array.from(mediumStats.entries()).map(([medium, stats]) => ({
+          medium,
+          impressions: stats.impressions,
+          conversions: stats.conversions,
+          conversionRate: stats.impressions > 0 ? (stats.conversions / stats.impressions) * 100 : 0
+        })).sort((a, b) => b.conversions - a.conversions),
+        campaigns: campaignPerformanceCampaigns,
+        attributionSummary: attribution,
+        funnelAnalysis: funnel,
       },
     };
 

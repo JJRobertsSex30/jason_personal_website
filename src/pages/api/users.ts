@@ -4,14 +4,14 @@ import type { UserProfile, KitSubscriber } from '~/types';
 
 export const GET: APIRoute = async () => {
   try {
-    const apiKey = import.meta.env.CONVERTKIT_API_KEY;
-    if (!apiKey) {
-      throw new Error('ConvertKit API key is not set.');
+    const apiSecret = import.meta.env.CONVERTKIT_API_SECRET;
+    if (!apiSecret) {
+      throw new Error('ConvertKit API secret is not set.');
     }
 
     // 1. Fetch ALL data from both sources
     const [ckResponse, dbResult] = await Promise.all([
-      fetch('https://api.kit.com/v4/subscribers', { headers: { 'X-Kit-Api-Key': apiKey, 'Accept': 'application/json' } }),
+      fetch(`https://api.convertkit.com/v3/subscribers?api_secret=${apiSecret}`, { headers: { 'Accept': 'application/json' } }),
       supabase.from('user_profiles').select('id, email, created_at, updated_at, deleted_at, kit_state'),
     ]);
 

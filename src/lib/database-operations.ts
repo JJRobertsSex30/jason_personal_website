@@ -39,7 +39,7 @@ export interface UserProfile {
 export interface ImpressionData {
   experiment_id: string; // UUID
   variant_id: string; // UUID
-  user_id: string; // This will be the user_profiles.id
+  user_profile_id: string; // This will be the user_profiles.id
   page_url?: string;
   metadata?: Record<string, unknown>;
   session_identifier?: string;
@@ -52,7 +52,7 @@ export interface ImpressionData {
 export interface ImpressionInsertData {
   experiment_id: string; // UUID
   variant_id: string; // UUID
-  user_id: string; // This will be the user_profiles.id
+  user_profile_id: string; // This will be the user_profiles.id
   page_url?: string;
   metadata?: Record<string, unknown>;
   session_identifier?: string;
@@ -90,7 +90,7 @@ export interface ImpressionRecord {
   id: string; // uuid
   variant_id: string; // uuid
   experiment_id: string; // uuid
-  user_id: string; // uuid
+  user_profile_id: string; // uuid
   session_identifier?: string | null; // uuid
   impression_at: string; // timestamptz
   page_url?: string | null;
@@ -121,7 +121,7 @@ export interface ImpressionRecord {
 }
 
 export interface ConversionInsertData {
-  user_id: string; // This is a UUID referencing user_profiles.id
+  user_profile_id: string; // This is a UUID referencing user_profiles.id
   conversion_type: string;
   experiment_id?: string | null; // uuid
   variant_id?: string | null; // uuid
@@ -599,45 +599,69 @@ export async function findOrCreateUserForVerification(email: string): Promise<Fi
     };
   }
 
-  // --- User does NOT exist, so create them in auth and then in profiles ---
-  console.log(`[DB Ops] No existing user for ${email}. Proceeding to create a new user.`);
+  // --- User does NOT exist in user_profiles. We need to check auth.users before creating. ---
+  console.log(`[DB Ops] No existing user profile for ${email}. Checking auth.users before creating.`);
 
-  // Admin client is required to create a user in auth.users
+  // Admin client is required to interact with auth.users
   const supabaseAdmin = createClient(
     import.meta.env.SUPABASE_URL!,
     import.meta.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // 1. Create the user in auth.users
-  const { data: authUserResponse, error: authError } = await supabaseAdmin.auth.admin.createUser({
-    email: email,
-    email_confirm: false, // User will confirm their email via our custom flow
-    password: `password-${crypto.randomUUID()}` // Assign a secure, random password
-  });
-
-  if (authError || !authUserResponse?.user) {
-    console.error(`[DB Ops] CRITICAL: Failed to create auth user for ${email}:`, authError);
-    // Manually construct a PostgrestError-like object from the AuthError.
-    const errorToReturn: PostgrestError = {
-      message: authError?.message || 'Failed to create auth user and no error was provided.',
-      details: `Full error: ${JSON.stringify(authError, null, 2)}`,
-      hint: 'This typically happens if the user already exists in auth.users but not user_profiles, or if there are network issues with Supabase.',
-      code: authError?.code || '500',
-      name: authError?.name || 'AuthError',
-    };
-    return { user: null, isNewUser: false, isAlreadyVerified: false, error: errorToReturn };
+  // First, try to get the user from auth.users to see if they already exist there.
+  // Note: There is no direct `getUserByEmail`. We list users and filter. This is inefficient
+  // but necessary. It assumes the user base is not enormous.
+  const { data: { users: allUsers }, error: listUsersError } = await supabaseAdmin.auth.admin.listUsers();
+  
+  if (listUsersError) {
+      console.error(`[DB Ops] Error trying to list users from auth.users: ${listUsersError.message}`);
+      return { user: null, isNewUser: false, isAlreadyVerified: false, error: {
+          message: `Failed to list users from auth service: ${listUsersError.message}`,
+          details: `Full error: ${JSON.stringify(listUsersError, null, 2)}`,
+          hint: 'There might be an issue connecting to Supabase auth.',
+          code: '500',
+          name: 'AuthServiceConnectionError',
+      }};
   }
 
-  const newAuthUser = authUserResponse.user;
-  console.log(`[DB Ops] Successfully created user in auth.users. New User ID: ${newAuthUser.id}`);
+  const existingAuthUser = allUsers.find(u => u.email === email);
 
-  // 2. Now, create the corresponding user_profiles record using the SAME ID.
+  let newAuthUser = existingAuthUser;
+  let isNewInAuth = false;
+
+  if (!newAuthUser) {
+    // --- User does NOT exist in auth.users, so create them ---
+    console.log(`[DB Ops] No user in auth.users for ${email}. Creating a new auth user.`);
+    isNewInAuth = true;
+    const { data: authUserResponse, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email: email,
+      email_confirm: false, 
+      password: `password-${crypto.randomUUID()}`
+    });
+
+    if (authError || !authUserResponse?.user) {
+      console.error(`[DB Ops] CRITICAL: Failed to create auth user for ${email}:`, authError);
+      const errorToReturn: PostgrestError = {
+        message: authError?.message || 'Failed to create auth user and no error was provided.',
+        details: `Full error: ${JSON.stringify(authError, null, 2)}`,
+        hint: 'This can happen if there are network issues with Supabase or invalid email format.',
+        code: authError?.code || '500',
+        name: authError?.name || 'AuthError',
+      };
+      return { user: null, isNewUser: false, isAlreadyVerified: false, error: errorToReturn };
+    }
+    newAuthUser = authUserResponse.user;
+    console.log(`[DB Ops] Successfully created user in auth.users. New User ID: ${newAuthUser.id}`);
+  } else {
+    console.log(`[DB Ops] Found existing user in auth.users, but not in user_profiles. ID: ${newAuthUser.id}. Will create profile to match.`);
+  }
+
+  // --- At this point, we have an auth user (either new or existing). Now, create the profile. ---
   const { data: newUserProfile, error: createProfileError } = await supabase
     .from('user_profiles')
     .insert({
       id: newAuthUser.id, // Use the ID from the auth user
       email: email,
-      // Default values are set by the database, but we can be explicit.
       insight_gems: 100, 
       is_email_verified: false,
     })
@@ -645,114 +669,93 @@ export async function findOrCreateUserForVerification(email: string): Promise<Fi
     .single();
 
   if (createProfileError) {
-    console.error(`[DB Ops] CRITICAL: Failed to create user profile for ${email} after creating auth user. Auth User ID: ${newAuthUser.id}. Error:`, createProfileError);
-    // This is a critical state. The auth user exists but the profile doesn't.
-    // Manual intervention might be required.
-    return { user: null, isNewUser: true, isAlreadyVerified: false, error: createProfileError };
+    console.error(`[DB Ops] CRITICAL: Failed to create user profile for ${email} after ensuring auth user exists. Auth User ID: ${newAuthUser.id}. Error:`, createProfileError);
+    return { user: null, isNewUser: isNewInAuth, isAlreadyVerified: false, error: createProfileError };
   }
 
   console.log(`[DB Ops] Successfully created new user profile for ${email}. ID: ${newUserProfile.id}`);
   
   return {
     user: newUserProfile as UserProfile,
-    isNewUser: true,
+    isNewUser: true, // It's a new user for our application's user_profiles table.
     isAlreadyVerified: false,
     error: null,
   };
 }
 
 /**
- * Logs an impression for a user viewing a specific A/B test variant.
- * @param impressionData The impression data to log.
- * @returns The logged impression record.
+ * Logs a hero section impression. This is a specific type of impression
+ * that might have a simplified data structure.
+ * @param impressionData The data for the impression to be logged.
+ * @returns The result of the insertion operation.
  */
 export async function logHeroImpression(impressionData: ImpressionInsertData): Promise<SingleResult<ImpressionRecord>> {
+  console.log('[DB] Logging hero impression with data:', impressionData);
+
   try {
-    console.log('[DB] Logging hero impression with data:', impressionData);
-
-    // Ensure user_id is a valid UUID, as it's a foreign key.
-    if (!impressionData.user_id) {
-        throw new Error("Cannot log impression without a valid user_id.");
-    }
-
     const { data, error } = await supabase
       .from('impressions')
-      .insert(impressionData)
+      .insert(impressionData) // The data should already match the schema
       .select()
       .single();
-
+    
     if (error) {
       console.error('[DB] Supabase error logging impression:', error);
-      throw error;
+      return { data: null, error };
     }
 
-    console.log(`[DB] Impression logged successfully for user ${impressionData.user_id}`);
     return { data: data as ImpressionRecord, error: null };
-
-  } catch (err: unknown) {
-    console.error('[DB] Unexpected error in logHeroImpression:', err);
-    const message = err instanceof Error ? err.message : 'An unknown error occurred during impression logging.';
-    // Instead of creating a custom error object, we'll just return a standard Postgrest-like error.
-    // The frontend should be robust enough to handle this.
+  } catch (err) {
+    const error = err as PostgrestError;
+    console.error('[DB] Unexpected error in logHeroImpression:', error);
     return { 
       data: null, 
       error: { 
-        message, 
-        details: (err instanceof Error && err.stack) ? err.stack : '', 
-        hint: 'Check database connection or server logs.', 
-        code: 'LHI500',
-        name: 'ImpressionError',
+        ...error, 
+        message: error.message || 'An unknown error occurred during impression logging.' 
       } 
     };
   }
 }
 
-// NEW FUNCTION: generateAndStoreVerificationToken
+/**
+ * Generates a secure, unique token, stores it in the database, and associates it with a user.
+ * @param impressionId Optional ID of the impression that led to this token generation.
+ * @returns The generated token or an error object.
+ */
 export async function generateAndStoreVerificationToken(
-  userId: string, 
+  userProfileId: string, 
   email: string,
-  experimentId?: string | null, // Optional experimentId, directly matches column
-  variantId?: string | null,    // Optional variantId, directly matches column
-  impressionId?: string | null // Optional impressionId, directly matches column
+  experimentId?: string | null,
+  variantId?: string | null,
+  impressionId?: string | null
 ): Promise<GenerateTokenResult> {
+  // Generate a cryptographically secure random token
+  const token = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours from now
+
+  const recordToInsert = {
+    user_profile_id: userProfileId,
+    email: email,
+    token: token,
+    expires_at: expiresAt,
+    experiment_id: experimentId,
+    variant_id: variantId,
+    impression_id: impressionId,
+  };
+
+  console.log('[DB] Storing verification token with data:', recordToInsert);
+
   try {
-    // A secure token is now generated by the database trigger by default (uuid_generate_v4)
-    // We just need to create the record.
-
-    // The token's expiration is set to 24 hours from now.
-    const expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
-    const { data: tokenRecord, error: tokenError } = await supabase
+    const { error } = await supabase
       .from('email_verification_tokens')
-      .insert({
-        user_profile_id: userId,
-        email,
-        expires_at,
-        experiment_id: experimentId,
-        variant_id: variantId,
-        impression_id: impressionId
-      })
-      .select('token')
-      .single();
+      .insert(recordToInsert);
 
-    if (tokenError) {
-      console.error('[DB] Error generating verification token record:', tokenError);
-      return { token: null, error: tokenError };
+    if (error) {
+      console.error('[DB] Error generating verification token record:', error);
+      return { token: null, error };
     }
-    
-    if (!tokenRecord || !tokenRecord.token) {
-        // This case might happen if RLS prevents the insert or if the token column isn't returned.
-        return { token: null, error: {
-            message: 'Failed to retrieve verification token after creation.',
-            details: 'The tokenRecord or tokenRecord.token was null or undefined.',
-            hint: 'Check RLS policies and that the "token" column is selected.',
-            code: 'DB-TOKEN-404',
-            name: 'TokenRetrievalError',
-        } };
-    }
-
-    console.log(`[DB] Stored verification token for ${email}.`);
-    return { token: tokenRecord.token, error: null };
+    return { token: token, error: null };
   } catch (err: unknown) {
     console.error('[DB] Unexpected error in generateAndStoreVerificationToken:', err);
     const message = err instanceof Error ? err.message : 'An unknown error occurred.';
@@ -806,7 +809,7 @@ export async function verifyTokenAndLogConversion(tokenValue: string): Promise<V
     
     // Step 4: Log the conversion event
     const conversionDetails: ConversionInsertData = {
-      user_id: userProfile.id,
+      user_profile_id: userProfile.id,
       conversion_type: 'email_verified',
       experiment_id: tokenData.experiment_id,
       variant_id: tokenData.variant_id,
@@ -879,7 +882,7 @@ export async function updateUserFirstName(userId: string, firstName: string): Pr
 
 // Interface for the parameters of callHandleQuizSubmissionRpc
 export interface HandleQuizSubmissionParams {
-  userId: string;
+  user_profile_id: string;
   emailAddress: string;
   userFirstName?: string | null;
   quizScore: number;
@@ -912,12 +915,12 @@ export async function callHandleQuizSubmissionRpc(
   params: HandleQuizSubmissionParams
 ): Promise<SingleResult<HandleQuizSubmissionResultData>> {
   try {
-    console.log('[DB Ops] Calling handle_quiz_submission RPC for user:', params.userId, ', email:', params.emailAddress);
+    console.log('[DB Ops] Calling handle_quiz_submission RPC for user:', params.user_profile_id, ', email:', params.emailAddress);
 
     // Transform params to match expected p_snake_case from the database error log.
     // Ensure all 15 parameters are always sent, mapping undefined to null.
     const rpcPayload = {
-      p_user_id: params.userId,
+      p_user_id: params.user_profile_id,
       p_email: params.emailAddress,
       p_first_name: params.userFirstName !== undefined ? params.userFirstName : null,
       p_score: params.quizScore,

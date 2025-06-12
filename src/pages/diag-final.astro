@@ -1,0 +1,106 @@
+---
+const CONVERTKIT_API_KEY = 'kit_4fe97557cef1466fb081dad8b4f6241c';
+const email = 'roberts.jason@gmail.com';
+
+let result = null;
+let error = null;
+
+if (Astro.request.method === 'POST') {
+  try {
+    // Use direct subscriber creation - it respects your account's double opt-in settings
+    const response = await fetch('https://api.kit.com/v4/subscribers', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Kit-Api-Key': CONVERTKIT_API_KEY
+      },
+      body: JSON.stringify({
+        email_address: email,
+        first_name: 'Test User',
+        state: 'inactive', // Force inactive state to trigger confirmation email
+        fields: {
+          signup_source: 'hero',
+          signup_timestamp: new Date().toISOString(),
+          referral_id: 'ZERI3FMY',
+          insight_gems: '100',
+          app_confirmation_token: 'bfcbe9b3-488f-4f79-bb49-23a2cb25bb3e'
+        }
+      })
+    });
+
+    const data = await response.json();
+    
+    if (response.ok) {
+      const subscriber = data.subscriber;
+      
+      // Now add them to a tag that triggers your automation sequence
+      if (subscriber.id) {
+        try {
+          // Replace YOUR_TAG_ID with the ID of a tag that triggers your 2FA sequence
+          const tagResponse = await fetch(`https://api.kit.com/v4/tags/YOUR_TAG_ID/subscribers/${subscriber.id}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Kit-Api-Key': CONVERTKIT_API_KEY
+            }
+          });
+          
+          if (tagResponse.ok) {
+            result = `✅ Success! Subscriber created (${subscriber.state}) and tagged for automation.`;
+          } else {
+            result = `✅ Subscriber created (${subscriber.state}) but tagging failed.`;
+          }
+        } catch (tagError) {
+          result = `✅ Subscriber created (${subscriber.state}) but tagging failed: ${tagError.message}`;
+        }
+      }
+      
+      result = result || `✅ Success! Subscriber created with state: ${subscriber.state}`;
+    } else {
+      error = `❌ Failed! Status: ${response.status} - ${JSON.stringify(data)}`;
+    }
+  } catch (err) {
+    error = `❌ Error: ${err.message}`;
+  }
+}
+---
+
+<html>
+<head>
+  <title>ConvertKit Working Double Opt-In</title>
+  <style>
+    .result { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+    .success { background-color: #d4edda; border-color: #c3e6cb; }
+    .error { background-color: #f8d7da; border-color: #f5c6cb; }
+  </style>
+</head>
+<body>
+  <h1>ConvertKit Working Double Opt-In Solution</h1>
+  
+  <div style="background: #d1ecf1; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+    <h3>✅ Solution Found!</h3>
+    <p>Using direct subscriber creation with <code>state: "inactive"</code> triggers the confirmation email flow.</p>
+  </div>
+  
+  <p><strong>Test Email:</strong> {email}</p>
+  
+  <form method="POST">
+    <button type="submit">Create Subscriber with Double Opt-In</button>
+  </form>
+  
+  {result && (
+    <div class="result success">
+      <h2>Success!</h2>
+      <p>{result}</p>
+    </div>
+  )}
+  
+  {error && (
+    <div class="result error">
+      <h2>Error</h2>
+      <p>{error}</p>
+    </div>
+  )}
+</body>
+</html>

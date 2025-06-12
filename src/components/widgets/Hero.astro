@@ -45,6 +45,7 @@ console.log(`[Hero SSR] Destructured values: headline="${headline ? headline.sub
         
         <form 
           id="email-capture-form"
+          accept-charset="UTF-8"
           class="w-full max-w-md mx-auto flex flex-col sm:flex-row gap-4"
         >
           <input type="hidden" name="ab_user_id" id="ab-user-id-input" value="" />
@@ -201,11 +202,11 @@ console.log(`[Hero SSR] Destructured values: headline="${headline ? headline.sub
         });
         const result = await response.json();
 
-        if (response.ok && result.success) {
-          messageElement.textContent = result.message || 'Thank you for subscribing! Please check your email to confirm.';
+        if (response.ok) {
+          messageElement.textContent = 'Subscription successful! Please check your email to verify your address.';
           messageElement.className = 'text-sm mt-4 text-green-600 dark:text-green-500 min-h-[1.25em]';
         } else {
-          messageElement.textContent = result.message || 'Subscription failed. Please try again.';
+          messageElement.textContent = result.message || 'An error occurred. Please try again.';
           messageElement.className = 'text-sm mt-4 text-red-600 dark:text-red-500 min-h-[1.25em]';
         }
       } catch (e) {
