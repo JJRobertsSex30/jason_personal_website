@@ -1,7 +1,7 @@
 ---
 import Layout from '~/layouts/Layout.astro';
 import { verifyTokenAndLogConversion, updateUserFirstName } from '~/lib/database-operations';
-import { addTagToSubscriber, removeTagFromSubscriber, updateSubscriberFirstName, CONVERTKIT_TAG_IDS } from '~/lib/convertkit-config';
+import { addTagToSubscriber, removeTagFromSubscriber, updateSubscriberFirstName, CONVERTKIT_TAG_IDS } from '~/lib/convertkit-operations';
 
 // IMPORTANT: Replace 0 with your actual ConvertKit Tag ID for "Email Not Verified"
 const EMAIL_NOT_VERIFIED_TAG_ID = 8139746; // <<< USER: REPLACE THIS WITH YOUR ACTUAL TAG ID

@@ -25,7 +25,7 @@ import {
   addTagToSubscriber,
   removeTagFromSubscriber,
   type FormSubscribePayload
-} from '~/lib/convertkit-config';
+} from '~/lib/convertkit-operations';
 
 interface ClientVariantData {
   experimentName?: string;

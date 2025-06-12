@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { getConvertKitSubscriberByEmail, type ConvertKitSubscriber } from '~/lib/convertkit-config';
+import { getConvertKitSubscriberByEmail, type ConvertKitSubscriber } from '~/lib/convertkit-operations';
 
 export const POST: APIRoute = async ({ request }) => {
   const requestTimestamp = new Date().toISOString();

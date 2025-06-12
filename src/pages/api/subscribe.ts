@@ -10,6 +10,7 @@ import type {
   ImpressionRecord,
   SingleResult
 } from '~/lib/database-operations';
+import { updateConvertKitSubscriber } from '~/lib/convertkit-operations';
 
 // Define HeroSubscribeRequestBody here if not imported from a central types file
 export interface HeroSubscribeRequestBody {
@@ -22,102 +23,6 @@ export interface HeroSubscribeRequestBody {
   sessionIdentifier?: string; // ADDED: To receive session identifier from client
   deviceType?: string;        // ADDED: To receive device type from client
   // Add any other client-side available data you want to pass for impression logging
-}
-
-// Define a type for ConvertKit payloads for better type safety
-interface ConvertKitPayload {
-  api_key: string;
-  email: string;
-  first_name?: string;
-  fields?: Record<string, string | number | undefined>;
-  // Add other ConvertKit specific fields here if needed, e.g., tags for direct tagging API if different
-}
-
-// Updated ConvertKit function to include referral_id and insight_gems
-async function updateConvertKitSubscriber(
-  email: string, 
-  firstName?: string | null, 
-  existingKitId?: string | null,
-  referralCode?: string | null,
-  insightGems?: number,
-  appConfirmationToken?: string | null // New parameter for the verification token
-): Promise<{ success: boolean; subscriberId?: string; error?: string }> {
-  const CONVERTKIT_API_KEY = import.meta.env.CONVERTKIT_API_KEY as string;
-  const PUBLIC_CONVERTKIT_FORM_ID = import.meta.env.PUBLIC_CONVERTKIT_FORM_ID as string;
-  // CONVERTKIT_TAG_ID_NOT_VERIFIED is no longer used here as per user feedback.
-
-  if (!CONVERTKIT_API_KEY) { // Removed CONVERTKIT_TAG_ID_NOT_VERIFIED from this check
-    console.error('ConvertKit API Key not configured.');
-    return { success: false, error: 'ConvertKit integration not configured (API Key missing).' };
-  }
-
-  const API_BASE_URL = 'https://api.convertkit.com/v3';
-  let subscriberId = existingKitId;
-
-  // Prepare custom fields payload
-  const customFields: Record<string, string | number | undefined> = {
-    signup_source: 'hero',
-    signup_timestamp: new Date().toISOString(),
-  };
-  if (referralCode) {
-    customFields.referral_id = referralCode; 
-  }
-  if (typeof insightGems === 'number') {
-    customFields.insight_gems = insightGems;
-  }
-  if (appConfirmationToken) { // Add app_confirmation_token if provided
-    customFields.app_confirmation_token = appConfirmationToken;
-  }
-
-  try {
-    if (PUBLIC_CONVERTKIT_FORM_ID) {
-      const formSubscribeUrl = `${API_BASE_URL}/forms/${PUBLIC_CONVERTKIT_FORM_ID}/subscribe`;
-      console.log(`[ConvertKit] Attempting to subscribe ${email} to form ${PUBLIC_CONVERTKIT_FORM_ID}`);
-      const formPayload: ConvertKitPayload = {
-        api_key: CONVERTKIT_API_KEY,
-        email: email,
-      };
-      if (firstName) formPayload.first_name = firstName;
-      if (Object.keys(customFields).length > 0) formPayload.fields = customFields;
-
-      console.log(`[ConvertKit] Subscribing to form ${PUBLIC_CONVERTKIT_FORM_ID}. Payload:`, JSON.stringify(formPayload, null, 2)); // Log payload
-      const formResponse = await fetch(formSubscribeUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8',
-        },
-        body: JSON.stringify(formPayload),
-      });
-
-      if (!formResponse.ok) {
-        const errorData = await formResponse.json().catch(() => ({ message: 'Failed to parse error JSON from form subscription' }));
-        console.warn(`[ConvertKit] Failed to subscribe ${email} to form ${PUBLIC_CONVERTKIT_FORM_ID}. Status: ${formResponse.status}. Error: ${errorData.message || formResponse.statusText}`);
-        return { success: false, error: `Failed to subscribe to form: ${errorData.message || formResponse.statusText}` };
-
-      } else {
-        const formJson = await formResponse.json();
-        if (formJson.subscription && formJson.subscription.subscriber && formJson.subscription.subscriber.id && !subscriberId) {
-            subscriberId = formJson.subscription.subscriber.id.toString();
-        }
-        console.log(`[ConvertKit] Successfully subscribed/updated ${email} on form ${PUBLIC_CONVERTKIT_FORM_ID}. Subscriber ID: ${subscriberId}`);
-        return { success: true, subscriberId: subscriberId ?? undefined };
-      }
-    } else {
-      console.warn('[ConvertKit] PUBLIC_CONVERTKIT_FORM_ID is not configured. Cannot subscribe to form.');
-      return { success: false, error: 'ConvertKit form ID not configured for subscription.' };
-    }
-
-    // The explicit tagging block for CONVERTKIT_TAG_ID_NOT_VERIFIED has been removed.
-    // ConvertKit's form subscription settings should handle the initial "not verified" state.
-
-  } catch (error: unknown) {
-    console.error('[ConvertKit] Network or other error during API call:', error);
-    let message = 'Network error during ConvertKit interaction.';
-    if (error instanceof Error) {
-        message = error.message;
-    }
-    return { success: false, error: message };
-  }
 }
 
 type DeviceTypeEnum = 'mobile' | 'tablet' | 'desktop' | 'unknown';

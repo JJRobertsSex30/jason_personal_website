@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { supabase } from '~/lib/supabaseClient';
-import type { UserProfile, KitSubscriber } from '~/types';
+import type { UserProfile } from '~/types';
+import { getAllKitSubscribers } from '~/lib/convertkit-operations';
 
 export const GET: APIRoute = async () => {
   try {
@@ -10,14 +11,10 @@ export const GET: APIRoute = async () => {
     }
 
     // 1. Fetch ALL data from both sources
-    const [ckResponse, dbResult] = await Promise.all([
-      fetch(`https://api.convertkit.com/v3/subscribers?api_secret=${apiSecret}`, { headers: { 'Accept': 'application/json' } }),
+    const [allCkSubscribers, dbResult] = await Promise.all([
+      getAllKitSubscribers(apiSecret),
       supabase.from('user_profiles').select('id, email, created_at, updated_at, deleted_at, kit_state'),
     ]);
-
-    if (!ckResponse.ok) throw new Error(`Failed to fetch from ConvertKit: ${ckResponse.statusText}`);
-    const ckData = await ckResponse.json();
-    const allCkSubscribers: KitSubscriber[] = ckData.subscribers || [];
 
     if (dbResult.error) throw dbResult.error;
     const dbUsers = dbResult.data || [];

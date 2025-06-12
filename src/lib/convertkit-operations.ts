@@ -1,5 +1,5 @@
-// src/lib/convertkit-config.ts
-// Unified ConvertKit configuration for consistent tagging across all entry points
+// src/lib/convertkit-operations.ts
+// Centralized ConvertKit API operations for all entry points
 import type { KitSubscriber } from '~/types';
 
 export interface SubscriberUpdatePayload {
@@ -343,5 +343,182 @@ export async function updateSubscriberFirstName(
     const message = error instanceof Error ? error.message : 'An unknown error occurred.';
     console.error(`[ConvertKit] Error updating first name for ${email}:`, message);
     return { success: false, error: message };
+  }
+}
+
+/**
+ * Subscribes or updates a subscriber in ConvertKit using the v3 API.
+ * Adds custom fields such as referral code, insight gems, and app confirmation token.
+ *
+ * @param email The subscriber's email address
+ * @param firstName The subscriber's first name (optional)
+ * @param existingKitId The existing ConvertKit subscriber ID (optional)
+ * @param referralCode The referral code to attach (optional)
+ * @param insightGems The number of gems to attach (optional)
+ * @param appConfirmationToken The app confirmation token for verification (optional)
+ * @returns An object with success, subscriberId, and error (if any)
+ */
+export async function updateConvertKitSubscriber(
+  email: string,
+  firstName?: string | null,
+  existingKitId?: string | null,
+  referralCode?: string | null,
+  insightGems?: number,
+  appConfirmationToken?: string | null
+): Promise<{ success: boolean; subscriberId?: string; error?: string }> {
+  const CONVERTKIT_API_KEY = import.meta.env.CONVERTKIT_API_KEY as string;
+  const PUBLIC_CONVERTKIT_FORM_ID = import.meta.env.PUBLIC_CONVERTKIT_FORM_ID as string;
+
+  if (!CONVERTKIT_API_KEY) {
+    console.error('ConvertKit API Key not configured.');
+    return { success: false, error: 'ConvertKit integration not configured (API Key missing).' };
+  }
+
+  const API_BASE_URL = 'https://api.convertkit.com/v3';
+  let subscriberId = existingKitId;
+
+  // Prepare custom fields payload
+  const customFields: Record<string, string | number | undefined> = {
+    signup_source: 'hero',
+    signup_timestamp: new Date().toISOString(),
+  };
+  if (referralCode) {
+    customFields.referral_id = referralCode;
+  }
+  if (typeof insightGems === 'number') {
+    customFields.insight_gems = insightGems;
+  }
+  if (appConfirmationToken) {
+    customFields.app_confirmation_token = appConfirmationToken;
+  }
+
+  try {
+    if (PUBLIC_CONVERTKIT_FORM_ID) {
+      const formSubscribeUrl = `${API_BASE_URL}/forms/${PUBLIC_CONVERTKIT_FORM_ID}/subscribe`;
+      console.log(`[ConvertKit] Attempting to subscribe ${email} to form ${PUBLIC_CONVERTKIT_FORM_ID}`);
+      const formPayload = {
+        api_key: CONVERTKIT_API_KEY,
+        email: email,
+        first_name: firstName || undefined,
+        fields: customFields,
+      };
+      console.log(`[ConvertKit] Subscribing to form ${PUBLIC_CONVERTKIT_FORM_ID}. Payload:`, JSON.stringify(formPayload, null, 2));
+      const formResponse = await fetch(formSubscribeUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+        body: JSON.stringify(formPayload),
+      });
+
+      if (!formResponse.ok) {
+        const errorData = await formResponse.json().catch(() => ({ message: 'Failed to parse error JSON from form subscription' }));
+        console.warn(`[ConvertKit] Failed to subscribe ${email} to form ${PUBLIC_CONVERTKIT_FORM_ID}. Status: ${formResponse.status}. Error: ${errorData.message || formResponse.statusText}`);
+        return { success: false, error: `Failed to subscribe to form: ${errorData.message || formResponse.statusText}` };
+      } else {
+        const formJson = await formResponse.json();
+        if (formJson.subscription && formJson.subscription.subscriber && formJson.subscription.subscriber.id && !subscriberId) {
+          subscriberId = formJson.subscription.subscriber.id.toString();
+        }
+        console.log(`[ConvertKit] Successfully subscribed/updated ${email} on form ${PUBLIC_CONVERTKIT_FORM_ID}. Subscriber ID: ${subscriberId}`);
+        return { success: true, subscriberId: subscriberId ?? undefined };
+      }
+    } else {
+      console.warn('[ConvertKit] PUBLIC_CONVERTKIT_FORM_ID is not configured. Cannot subscribe to form.');
+      return { success: false, error: 'ConvertKit form ID not configured for subscription.' };
+    }
+  } catch (error: unknown) {
+    console.error('[ConvertKit] Network or other error during API call:', error);
+    let message = 'Network error during ConvertKit interaction.';
+    if (error instanceof Error) {
+      message = error.message;
+    }
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Fetch a subscriber by email using the v3 API.
+ */
+export async function getKitSubscriberByEmail(email: string, apiSecret: string): Promise<KitSubscriber | null> {
+  const normalizedEmail = email.toLowerCase().trim();
+  const url = `https://api.convertkit.com/v3/subscribers?api_secret=${apiSecret}&email_address=${encodeURIComponent(normalizedEmail)}`;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`Kit API Error (Subscribers): ${response.status} ${await response.text()}`);
+      return null;
+    }
+    const data = await response.json();
+    // v3 returns an array of subscribers
+    return data.subscribers && data.subscribers.length > 0 ? data.subscribers[0] : null;
+  } catch (error) {
+    console.error('Error fetching Kit subscriber:', error);
+    return null;
+  }
+}
+
+/**
+ * Fetch subscriber tags using the v3 API.
+ */
+export async function getKitSubscriberTags(subscriberId: number, apiKey: string): Promise<unknown[]> {
+  const url = `https://api.convertkit.com/v3/subscribers/${subscriberId}/tags?api_key=${apiKey}`;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`Kit API Error (Tags): ${response.status} ${await response.text()}`);
+      return [];
+    }
+    const data = await response.json();
+    return data.tags || [];
+  } catch (error) {
+    console.error('Error fetching Kit tags:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch all ConvertKit subscribers using the v3 API.
+ * @param apiSecret The ConvertKit API secret
+ * @returns Array of KitSubscriber objects
+ */
+export async function getAllKitSubscribers(apiSecret: string): Promise<KitSubscriber[]> {
+  const url = `https://api.convertkit.com/v3/subscribers?api_secret=${apiSecret}`;
+  try {
+    const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!response.ok) {
+      console.error(`Kit API Error (All Subscribers): ${response.status} ${await response.text()}`);
+      return [];
+    }
+    const data = await response.json();
+    return data.subscribers || [];
+  } catch (error) {
+    console.error('Error fetching all Kit subscribers:', error);
+    return [];
+  }
+}
+
+/**
+ * Unsubscribe a ConvertKit subscriber by email using the v3 API.
+ * @param email The subscriber's email address
+ * @param apiKey The ConvertKit API key
+ * @returns true if successful, false otherwise
+ */
+export async function unsubscribeKitSubscriberByEmail(email: string, apiKey: string): Promise<boolean> {
+  const url = 'https://api.convertkit.com/v3/unsubscribe';
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey, email }),
+    });
+    if (!response.ok) {
+      console.error(`Kit API Error (Unsubscribe): ${response.status} ${await response.text()}`);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('Error unsubscribing Kit subscriber:', error);
+    return false;
   }
 }

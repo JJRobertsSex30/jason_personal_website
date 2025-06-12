@@ -1,30 +1,7 @@
 import type { APIRoute } from 'astro';
 import { supabase } from '~/lib/supabaseClient';
 import type { UserProfile, KitSubscriber, GemTransaction, UserEngagement } from '~/types';
-
-async function getKitSubscriber(email: string): Promise<KitSubscriber | null> {
-  const apiKey = import.meta.env.CONVERTKIT_API_KEY;
-  if (!apiKey || !email) return null;
-
-  try {
-    const url = `https://api.kit.com/v4/subscribers?email_address=${encodeURIComponent(email)}`;
-    const response = await fetch(url, {
-      headers: {
-        'X-Kit-Api-Key': apiKey,
-        'Accept': 'application/json'
-      }
-    });
-    if (!response.ok) {
-      console.error(`ConvertKit API error for ${email}: ${response.statusText}`);
-      return null;
-    }
-    const data = await response.json();
-    return data.subscribers && data.subscribers.length > 0 ? data.subscribers[0] : null;
-  } catch (error) {
-    console.error(`Failed to fetch from ConvertKit for ${email}:`, error);
-    return null;
-  }
-}
+import { getKitSubscriberByEmail } from '~/lib/convertkit-operations';
 
 export const GET: APIRoute = async ({ params }) => {
   const { id } = params;
@@ -88,7 +65,7 @@ export const GET: APIRoute = async ({ params }) => {
     }
 
     if (emailToSearch) {
-        kitData = await getKitSubscriber(emailToSearch);
+        kitData = await getKitSubscriberByEmail(emailToSearch);
     }
     
     // If we started with a CK user, we might not have a DB profile. Let's create a temporary one.

@@ -2,45 +2,9 @@
 import type { APIRoute } from 'astro';
 import { supabase } from '~/lib/supabaseClient';
 import type { KitSubscriber, KitTag } from '~/types';
+import { getKitSubscriberByEmail, getKitSubscriberTags } from '~/lib/convertkit-operations';
 
 export const prerender = false;
-
-// Helper to fetch subscriber ID from ConvertKit by email
-async function getKitSubscriberByEmail(email: string, apiSecret: string): Promise<KitSubscriber | null> {
-    const normalizedEmail = email.toLowerCase().trim();
-    const url = `https://api.convertkit.com/v3/subscribers?api_secret=${apiSecret}&email_address=${encodeURIComponent(normalizedEmail)}`;
-    try {
-        const response = await fetch(url);
-        if (!response.ok) {
-            console.error(`Kit API Error (Subscribers): ${response.status} ${await response.text()}`);
-            return null;
-        }
-        const data = await response.json();
-        // v3 returns an array of subscribers
-        return data.subscribers && data.subscribers.length > 0 ? data.subscribers[0] : null;
-    } catch (error) {
-        console.error('Error fetching Kit subscriber:', error);
-        return null;
-    }
-}
-
-// Helper to fetch subscriber tags from ConvertKit
-async function getKitSubscriberTags(subscriberId: number, apiKey: string): Promise<KitTag[]> {
-    const url = `https://api.convertkit.com/v3/subscribers/${subscriberId}/tags?api_key=${apiKey}`;
-    try {
-        const response = await fetch(url);
-        if (!response.ok) {
-            console.error(`Kit API Error (Tags): ${response.status} ${await response.text()}`);
-            return [];
-        }
-        const data = await response.json();
-        return data.tags || [];
-    } catch (error) {
-        console.error('Error fetching Kit tags:', error);
-        return [];
-    }
-}
-
 
 export const GET: APIRoute = async ({ request }) => {
     const url = new URL(request.url);

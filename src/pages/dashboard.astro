@@ -5,6 +5,7 @@ import { supabase } from '~/lib/supabaseClient';
 import type { Session } from '@supabase/supabase-js';
 import ConfirmationModal from '~/components/widgets/ConfirmationModal.astro';
 import type { Experiment, Variant, VariantConfig, UserProfile } from '~/types';
+import { getKitSubscriberByEmail, unsubscribeKitSubscriberByEmail } from '~/lib/convertkit-operations';
 
 import AnalyticsPanel from '~/components/widgets/AnalyticsPanel.astro';
 import CampaignPerformancePanel from '~/components/widgets/CampaignPerformancePanel.astro';
@@ -271,26 +272,10 @@ if (Astro.request.method === 'POST') {
             throw new Error(`Failed to get user profile: ${profileError.message}`);
           }
 
-          if (userProfile?.email && import.meta.env.CONVERTKIT_API_KEY && import.meta.env.CONVERTKIT_API_SECRET) {
-            try {
-              // v3: Find subscriber by email using API secret
-              const findUrl = `https://api.convertkit.com/v3/subscribers?api_secret=${import.meta.env.CONVERTKIT_API_SECRET}&email_address=${encodeURIComponent(userProfile.email)}`;
-              const findResponse = await fetch(findUrl);
-              if (findResponse.ok) {
-                const findData = await findResponse.json();
-                if (findData.subscribers && findData.subscribers.length > 0) {
-                  const subscriberId = findData.subscribers[0].id;
-                  // v3: Unsubscribe using API key in the payload
-                  const unsubscribeUrl = `https://api.convertkit.com/v3/unsubscribe`;
-                  await fetch(unsubscribeUrl, { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ api_key: import.meta.env.CONVERTKIT_API_KEY, email: userProfile.email })
-                  });
-                }
-              }
-            } catch (error) {
-              console.error('[DASHBOARD] Background ConvertKit unsubscribe failed during hard delete.', error);
+          if (userProfile && userProfile.email && import.meta.env.CONVERTKIT_API_KEY && import.meta.env.CONVERTKIT_API_SECRET) {
+            const kitSubscriber = await getKitSubscriberByEmail(userProfile.email, import.meta.env.CONVERTKIT_API_SECRET);
+            if (kitSubscriber) {
+              await unsubscribeKitSubscriberByEmail(userProfile.email, import.meta.env.CONVERTKIT_API_KEY);
             }
           }
 
@@ -320,25 +305,10 @@ if (Astro.request.method === 'POST') {
 
           if (profileError) throw new Error(`Failed to get user profile: ${profileError.message}`);
 
-          if (userProfile?.email && import.meta.env.CONVERTKIT_API_KEY && import.meta.env.CONVERTKIT_API_SECRET) {
-             try {
-              // v3: Find subscriber by email using API secret
-              const findUrl = `https://api.convertkit.com/v3/subscribers?api_secret=${import.meta.env.CONVERTKIT_API_SECRET}&email_address=${encodeURIComponent(userProfile.email)}`;
-              const findResponse = await fetch(findUrl);
-              if (findResponse.ok) {
-                const findData = await findResponse.json();
-                if (findData.subscribers && findData.subscribers.length > 0) {
-                   // v3: Unsubscribe using API key in the payload
-                  const unsubscribeUrl = `https://api.convertkit.com/v3/unsubscribe`;
-                  await fetch(unsubscribeUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ api_key: import.meta.env.CONVERTKIT_API_KEY, email: userProfile.email })
-                  });
-                }
-              }
-            } catch (error) {
-              console.error('[DASHBOARD] Background ConvertKit unsubscribe failed during soft delete.', error);
+          if (userProfile && userProfile.email && import.meta.env.CONVERTKIT_API_KEY && import.meta.env.CONVERTKIT_API_SECRET) {
+            const kitSubscriber = await getKitSubscriberByEmail(userProfile.email, import.meta.env.CONVERTKIT_API_SECRET);
+            if (kitSubscriber) {
+              await unsubscribeKitSubscriberByEmail(userProfile.email, import.meta.env.CONVERTKIT_API_KEY);
             }
           }
           
