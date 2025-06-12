@@ -3,7 +3,8 @@ import { supabase } from '~/lib/supabaseClient';
 import {
   findOrCreateUserForVerification,
   generateAndStoreVerificationToken,
-  logHeroImpression
+  logHeroImpression,
+  updateLastVerificationEmailSentAt
 } from '~/lib/database-operations';
 import type {
   ImpressionInsertData,
@@ -172,6 +173,12 @@ export const POST: APIRoute = async ({ request, site: _site }) => {
       if (kitIdUpdateError) {
           console.error(`[API /subscribe] Failed to update kit_subscriber_id for user ${userProfileId}:`, kitIdUpdateError.message);
       }
+  }
+
+  // Update last_verification_email_sent_at after sending verification email
+  const sentAtUpdated = await updateLastVerificationEmailSentAt(userProfileId);
+  if (!sentAtUpdated) {
+    console.warn(`[API /subscribe] Failed to update last_verification_email_sent_at for user ${userProfileId}`);
   }
 
   // 5. Send final response to the client

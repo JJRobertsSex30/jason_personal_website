@@ -51,6 +51,9 @@ export const CONVERTKIT_TAG_IDS = {
   gem_collector: 8126025,         // Gems > 100
   referrer: 8126027,              // Has referral activity
   email_verified: 8126029,        // Email verified via webhook
+  // Add these for signup conversion logic
+  confirmed_signup_and_converted: 8126029, // Confirmed Signup And Also Converted
+  confirmed_signup_but_not_converted: 8139746, // Confirmed Signup But Not Converted
 };
 
 // Map quiz results to tag IDs
@@ -292,15 +295,15 @@ export async function removeTagFromSubscriber(
   email: string,
   tagId: number
 ): Promise<{ success: boolean; error?: string }> {
-  const apiKey = import.meta.env.CONVERTKIT_API_KEY;
-  if (!apiKey) return { success: false, error: 'API Key not configured' };
-  
+  const apiSecret = import.meta.env.CONVERTKIT_API_SECRET;
+  if (!apiSecret) return { success: false, error: 'API Secret not configured' };
+  console.log(`[ConvertKit] Using API Secret prefix: ${apiSecret.slice(0, 4)}...`);
   const url = `https://api.convertkit.com/v3/tags/${tagId}/unsubscribe`;
-    try {
+  try {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
-      body: JSON.stringify({ api_key: apiKey, email }),
+      body: JSON.stringify({ api_secret: apiSecret, email }),
     });
     if (!response.ok) {
       const errorData = await response.json();
@@ -321,12 +324,19 @@ export async function updateSubscriberFirstName(
   const apiSecret = import.meta.env.CONVERTKIT_API_SECRET;
   if (!apiSecret) return { success: false, error: 'API Secret not configured' };
 
-  const payload: SubscriberUpdatePayload = {
+  // Step 1: Look up subscriber by email
+  const subscriber = await getKitSubscriberByEmail(email, apiSecret);
+  if (!subscriber) {
+    return { success: false, error: 'Subscriber not found in ConvertKit' };
+  }
+
+  // Step 2: Update first name using the correct endpoint
+  const url = `https://api.convertkit.com/v3/subscribers/${subscriber.id}`;
+  const payload = {
+    api_secret: apiSecret,
     first_name: firstName,
   };
 
-  const url = `https://api.convertkit.com/v3/subscribers?api_secret=${apiSecret}&email_address=${encodeURIComponent(email)}`;
-  
   try {
     const response = await fetch(url, {
       method: 'PUT',

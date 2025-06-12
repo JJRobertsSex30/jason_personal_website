@@ -1,10 +1,7 @@
 ---
 import Layout from '~/layouts/Layout.astro';
-import { verifyTokenAndLogConversion, updateUserFirstName } from '~/lib/database-operations';
+import { verifyTokenAndLogConversion, updateUserFirstName, updateUserKitStateByEmail } from '~/lib/database-operations';
 import { addTagToSubscriber, removeTagFromSubscriber, updateSubscriberFirstName, CONVERTKIT_TAG_IDS } from '~/lib/convertkit-operations';
-
-// IMPORTANT: Replace 0 with your actual ConvertKit Tag ID for "Email Not Verified"
-const EMAIL_NOT_VERIFIED_TAG_ID = 8139746; // <<< USER: REPLACE THIS WITH YOUR ACTUAL TAG ID
 
 let pageTitleInternal = 'Verify Email';
 let messageInternal = '';
@@ -62,16 +59,22 @@ if (Astro.request.method === 'POST') {
       showFirstNameForm = true;
 
       if (verifiedUserEmail) {
-        // Add 'Email Verified' tag
-        const addTagRes = await addTagToSubscriber(verifiedUserEmail, CONVERTKIT_TAG_IDS.email_verified);
+        // Add 'Confirmed Signup And Also Converted' tag
+        const addTagRes = await addTagToSubscriber(verifiedUserEmail, CONVERTKIT_TAG_IDS.confirmed_signup_and_converted);
         if (!addTagRes.success) {
-          console.warn(`Failed to add 'Email Verified' tag to ${verifiedUserEmail}:`, addTagRes.error);
+          console.warn(`Failed to add 'Confirmed Signup And Also Converted' tag to ${verifiedUserEmail}:`, addTagRes.error);
         }
 
-        // Remove 'Email Not Verified' tag
-        const removeTagRes = await removeTagFromSubscriber(verifiedUserEmail, EMAIL_NOT_VERIFIED_TAG_ID);
+        // Remove 'Confirmed Signup But Not Converted' tag
+        const removeTagRes = await removeTagFromSubscriber(verifiedUserEmail, CONVERTKIT_TAG_IDS.confirmed_signup_but_not_converted);
         if (!removeTagRes.success) {
-          console.warn(`Failed to remove 'Email Not Verified' tag from ${verifiedUserEmail}:`, removeTagRes.error);
+          console.warn(`Failed to remove 'Confirmed Signup But Not Converted' tag from ${verifiedUserEmail}:`, removeTagRes.error);
+        }
+
+        // Update kit_state in user_profiles
+        const kitStateUpdated = await updateUserKitStateByEmail(verifiedUserEmail);
+        if (!kitStateUpdated) {
+          console.warn(`Failed to update kit_state in user_profiles for ${verifiedUserEmail}`);
         }
       }
     } else {

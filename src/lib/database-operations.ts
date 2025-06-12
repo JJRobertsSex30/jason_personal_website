@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import type { PostgrestError } from '@supabase/supabase-js';
 import { createClient } from '@supabase/supabase-js';
+import { getKitSubscriberByEmail } from './convertkit-operations';
 
 /**
  * Database Operations for Cursor AI
@@ -565,6 +566,24 @@ export async function tableExists(tableName: string): Promise<{ exists: boolean;
 
 // NEW FUNCTIONS START
 
+// Helper to generate a unique referral code
+async function generateUniqueReferralCode(): Promise<string> {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  let exists = true;
+  while (exists) {
+    code = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    // Check uniqueness in DB
+    const { data } = await supabase
+      .from('user_profiles')
+      .select('id')
+      .eq('referral_code', code)
+      .single();
+    exists = !!(data as unknown);
+  }
+  return code;
+}
+
 /**
  * Finds a user by email in user_profiles. If the user does not exist, it creates a new
  * user in both auth.users and user_profiles, ensuring data integrity.
@@ -612,7 +631,11 @@ export async function findOrCreateUserForVerification(email: string): Promise<Fi
   // Note: There is no direct `getUserByEmail`. We list users and filter. This is inefficient
   // but necessary. It assumes the user base is not enormous.
   const { data: { users: allUsers }, error: listUsersError } = await supabaseAdmin.auth.admin.listUsers();
-  
+  // Fix: Explicitly type allUsers as an array of Supabase user objects
+  // (email is optional, id is required)
+  type SupabaseAuthUser = { email?: string; id: string };
+  const typedAllUsers: SupabaseAuthUser[] = allUsers as SupabaseAuthUser[];
+
   if (listUsersError) {
       console.error(`[DB Ops] Error trying to list users from auth.users: ${listUsersError.message}`);
       return { user: null, isNewUser: false, isAlreadyVerified: false, error: {
@@ -624,7 +647,7 @@ export async function findOrCreateUserForVerification(email: string): Promise<Fi
       }};
   }
 
-  const existingAuthUser = allUsers.find(u => u.email === email);
+  const existingAuthUser = typedAllUsers.find(u => u.email === email);
 
   let newAuthUser = existingAuthUser;
   let isNewInAuth = false;
@@ -657,13 +680,15 @@ export async function findOrCreateUserForVerification(email: string): Promise<Fi
   }
 
   // --- At this point, we have an auth user (either new or existing). Now, create the profile. ---
+  const referralCode = await generateUniqueReferralCode();
   const { data: newUserProfile, error: createProfileError } = await supabase
     .from('user_profiles')
     .insert({
       id: newAuthUser.id, // Use the ID from the auth user
       email: email,
-      insight_gems: 100, 
+      insight_gems: 100,
       is_email_verified: false,
+      referral_code: referralCode,
     })
     .select()
     .single();
@@ -798,13 +823,14 @@ export async function verifyTokenAndLogConversion(tokenValue: string): Promise<V
     }
 
     // Step 3: Mark user as verified and token as used in a transaction
+    console.log(`[DB] Calling verify_user_and_token RPC with p_token_id: ${tokenData.id}, p_user_id: ${tokenData.user_profile_id}`);
     const { data: userProfile, error: verificationError } = await supabase.rpc('verify_user_and_token', {
       p_token_id: tokenData.id,
       p_user_id: tokenData.user_profile_id,
     });
-    
     if (verificationError || !userProfile) {
-        throw new Error(verificationError?.message || "Failed to call user verification RPC.");
+      console.error('[DB] Error from verify_user_and_token RPC:', verificationError);
+      return { success: false, message: verificationError?.message || 'Failed to call user verification RPC.', error: verificationError };
     }
     
     // Step 4: Log the conversion event
@@ -1043,6 +1069,46 @@ export async function stitchAnonymousUserToProfile(userProfileId: string, anonym
   }
 }
 
+/**
+ * Updates the kit_state column in user_profiles to match the ConvertKit state for the given email.
+ * @param email The user's email address
+ * @returns true if successful, false otherwise
+ */
+export async function updateUserKitStateByEmail(email: string): Promise<boolean> {
+  if (!email) return false;
+  const apiSecret = import.meta.env.CONVERTKIT_API_SECRET;
+  if (!apiSecret) return false;
+  const kitSubscriber = await getKitSubscriberByEmail(email, apiSecret);
+  if (!kitSubscriber) return false;
+  const { error } = await supabase
+    .from('user_profiles')
+    .update({ kit_state: kitSubscriber.state, updated_at: new Date().toISOString() })
+    .eq('email', email);
+  if (error) {
+    console.error(`[DB Ops] Failed to update kit_state for ${email}:`, error);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Updates last_verification_email_sent_at to the current timestamp for the given user.
+ * @param userId The user's profile ID
+ * @returns true if successful, false otherwise
+ */
+export async function updateLastVerificationEmailSentAt(userId: string): Promise<boolean> {
+  if (!userId) return false;
+  const { error } = await supabase
+    .from('user_profiles')
+    .update({ last_verification_email_sent_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('id', userId);
+  if (error) {
+    console.error(`[DB Ops] Failed to update last_verification_email_sent_at for user ${userId}:`, error);
+    return false;
+  }
+  return true;
+}
+
 export default {
   executeQuery,
   getRecords,
@@ -1068,5 +1134,7 @@ export default {
   updateUserFirstName,
   logHeroImpression,
   callHandleQuizSubmissionRpc,
-  stitchAnonymousUserToProfile
+  stitchAnonymousUserToProfile,
+  updateUserKitStateByEmail,
+  updateLastVerificationEmailSentAt
 }; 
