@@ -51,6 +51,8 @@ export const GET: APIRoute = async () => {
         if (!impressionsRes.data) throw new Error('No impression data available.');
 
         const totalImpressions = impressionsRes.data.length;
+        const totalConversions = conversionsRes.data.length;
+        const conversionRate = totalImpressions > 0 ? (totalConversions / totalImpressions) * 100 : 0;
         const sessions = new Map<string, typeof impressionsRes.data>();
         impressionsRes.data.forEach(imp => {
             if (!sessions.has(imp.session_identifier)) {
@@ -67,7 +69,7 @@ export const GET: APIRoute = async () => {
 
         // --- Bounce Rate Analysis ---
         const totalBounces = impressionsRes.data.filter(imp => imp.bounce).length;
-        const overallBounceRate = calculateAverage(totalBounces, sessionCount, 2) * 100;
+        const overallBounceRate = totalImpressions > 0 ? (totalBounces / totalImpressions) * 100 : 0;
 
         const bounceRateByDevice = Object.entries(countBy(impressionsRes.data.filter(i => i.bounce), 'device_type'))
             .map(([device, count]) => ({ device, bounceRate: calculateAverage(count, totalBounces, 2) * 100 }))
@@ -85,7 +87,7 @@ export const GET: APIRoute = async () => {
                 deviceType,
                 sessions: count,
                 avgLoadTime: calculateAverage(deviceImpressions.reduce((sum, i) => sum + ensureNumber(i.page_load_time), 0) / 1000, count, 2),
-                conversionRate: calculateAverage(deviceConversions, count, 2) * 100
+                conversionRate: deviceImpressions.length > 0 ? (deviceConversions / deviceImpressions.length) * 100 : 0
             };
         });
 
@@ -124,6 +126,7 @@ export const GET: APIRoute = async () => {
                 sessionFrequency: [],
                 engagementSegments: [],
             },
+            conversionRate,
         };
 
         return new Response(JSON.stringify(finalStats), {

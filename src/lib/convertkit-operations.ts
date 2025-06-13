@@ -509,18 +509,18 @@ export async function getAllKitSubscribers(apiSecret: string): Promise<KitSubscr
 }
 
 /**
- * Unsubscribe a ConvertKit subscriber by email using the v3 API.
+ * Unsubscribe (cancel) a ConvertKit subscriber by email using the v3 API.
  * @param email The subscriber's email address
- * @param apiKey The ConvertKit API key
+ * @param apiSecret The ConvertKit API secret
  * @returns true if successful, false otherwise
  */
-export async function unsubscribeKitSubscriberByEmail(email: string, apiKey: string): Promise<boolean> {
+export async function unsubscribeKitSubscriberByEmail(email: string, apiSecret: string): Promise<boolean> {
   const url = 'https://api.convertkit.com/v3/unsubscribe';
   try {
     const response = await fetch(url, {
-      method: 'POST',
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: apiKey, email }),
+      body: JSON.stringify({ email, api_secret: apiSecret }),
     });
     if (!response.ok) {
       console.error(`Kit API Error (Unsubscribe): ${response.status} ${await response.text()}`);

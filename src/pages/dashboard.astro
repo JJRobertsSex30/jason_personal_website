@@ -257,9 +257,11 @@ if (Astro.request.method === 'POST') {
           const userId = formData.get('user_id')?.toString();
           if (!userId) throw new Error('User ID is required for deletion.');
 
+          console.log(`[HARD DELETE] Attempting to delete user: ${userId}`);
+
           const supabaseAdmin = createClient(
             import.meta.env.SUPABASE_URL!,
-            import.meta.env.SUPABASE_SERVICE_ROLE_KEY!
+            import.meta.env.SUPABASE_SERVICE_ROLE_KEY || import.meta.env.SUPABASE_ANON_KEY // fallback if no service role
           );
 
           const { data: userProfile, error: profileError } = await supabase
@@ -269,30 +271,65 @@ if (Astro.request.method === 'POST') {
             .single();
 
           if (profileError && profileError.code !== 'PGRST116') {
-            throw new Error(`Failed to get user profile: ${profileError.message}`);
+            console.error(`[HARD DELETE] Failed to get user profile: ${profileError.message}`);
+            pageError = `Failed to get user profile: ${profileError.message}`;
+            throw new Error(pageError);
           }
 
           if (userProfile && userProfile.email && import.meta.env.CONVERTKIT_API_KEY && import.meta.env.CONVERTKIT_API_SECRET) {
-            const kitSubscriber = await getKitSubscriberByEmail(userProfile.email, import.meta.env.CONVERTKIT_API_SECRET);
-            if (kitSubscriber) {
-              await unsubscribeKitSubscriberByEmail(userProfile.email, import.meta.env.CONVERTKIT_API_KEY);
+            try {
+              const kitSubscriber = await getKitSubscriberByEmail(userProfile.email, import.meta.env.CONVERTKIT_API_SECRET);
+              if (kitSubscriber) {
+                const unsubResult = await unsubscribeKitSubscriberByEmail(userProfile.email, import.meta.env.CONVERTKIT_API_SECRET);
+                if (!unsubResult) {
+                  console.error(`[HARD DELETE] Failed to unsubscribe user from ConvertKit: ${userProfile.email}`);
+                  pageError = `Failed to unsubscribe user from ConvertKit: ${userProfile.email}`;
+                  throw new Error(pageError);
+                } else {
+                  console.log(`[HARD DELETE] Successfully unsubscribed user from ConvertKit: ${userProfile.email}`);
+                }
+              } else {
+                console.log(`[HARD DELETE] No ConvertKit subscriber found for: ${userProfile.email}`);
+              }
+            } catch (e) {
+              console.error(`[HARD DELETE] Error during ConvertKit unsubscribe:`, e);
+              pageError = `Error during ConvertKit unsubscribe: ${e instanceof Error ? e.message : e}`;
+              throw new Error(pageError);
             }
           }
 
-          const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(userId);
-          if (deleteAuthError && deleteAuthError.message !== 'User not found') {
-            throw new Error(`Failed to delete auth user: ${deleteAuthError.message}`);
+          try {
+            const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+            if (deleteAuthError && deleteAuthError.message !== 'User not found') {
+              console.error(`[HARD DELETE] Failed to delete auth user: ${deleteAuthError.message}`);
+              pageError = `Failed to delete auth user: ${deleteAuthError.message}`;
+              throw new Error(pageError);
+            } else {
+              console.log(`[HARD DELETE] Auth user deleted or not found: ${userId}`);
+            }
+          } catch (e) {
+            console.error(`[HARD DELETE] Error during auth user delete:`, e);
+            pageError = `Error during auth user delete: ${e instanceof Error ? e.message : e}`;
+            throw new Error(pageError);
           }
 
-          // MUST use the admin client to bypass RLS
-          const { error: deleteProfileError } = await supabaseAdmin.from('user_profiles').delete().eq('id', userId);
-          if (deleteProfileError) {
-            throw new Error(`Failed to delete user profile: ${deleteProfileError.message}`);
+          try {
+            const { error: deleteProfileError } = await supabaseAdmin.from('user_profiles').delete().eq('id', userId);
+            if (deleteProfileError) {
+              console.error(`[HARD DELETE] Failed to delete user profile: ${deleteProfileError.message}`);
+              pageError = `Failed to delete user profile: ${deleteProfileError.message}`;
+              throw new Error(pageError);
+            } else {
+              console.log(`[HARD DELETE] User profile deleted: ${userId}`);
+            }
+          } catch (e) {
+            console.error(`[HARD DELETE] Error during user profile delete:`, e);
+            pageError = `Error during user profile delete: ${e instanceof Error ? e.message : e}`;
+            throw new Error(pageError);
           }
 
           generalMessage = `User (ID: ${userId}) has been permanently deleted.`;
           return Astro.redirect(Astro.url.pathname + '#users-panel', 303);
-
         } else if (action === 'soft_delete_user') {
           const userId = formData.get('user_id')?.toString();
           if (!userId) throw new Error('User ID is required for soft deletion.');
@@ -308,7 +345,7 @@ if (Astro.request.method === 'POST') {
           if (userProfile && userProfile.email && import.meta.env.CONVERTKIT_API_KEY && import.meta.env.CONVERTKIT_API_SECRET) {
             const kitSubscriber = await getKitSubscriberByEmail(userProfile.email, import.meta.env.CONVERTKIT_API_SECRET);
             if (kitSubscriber) {
-              await unsubscribeKitSubscriberByEmail(userProfile.email, import.meta.env.CONVERTKIT_API_KEY);
+              await unsubscribeKitSubscriberByEmail(userProfile.email, import.meta.env.CONVERTKIT_API_SECRET);
             }
           }
           
@@ -666,12 +703,12 @@ if (Astro.request.method === 'GET') {
     confirmButtonText="Yes, Archive User"
   />
 
-  <form method="POST" action="#users-panel" id="delete-user-form" class="hidden">
+  <form method="POST" action={Astro.url.pathname + '#users-panel'} id="delete-user-form">
     <input type="hidden" name="_action" value="hard_delete_user" />
     <input type="hidden" name="user_id" id="user-id-to-delete" value="" />
   </form>
 
-  <form method="POST" action="#users-panel" id="soft-delete-user-form" class="hidden">
+  <form method="POST" action={Astro.url.pathname + '#users-panel'} id="soft-delete-user-form">
     <input type="hidden" name="_action" value="soft_delete_user" />
     <input type="hidden" name="user_id" id="user-id-to-soft-delete" value="" />
   </form>

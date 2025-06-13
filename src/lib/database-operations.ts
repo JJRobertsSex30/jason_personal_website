@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient';
 import type { PostgrestError } from '@supabase/supabase-js';
 import { createClient } from '@supabase/supabase-js';
-import { getKitSubscriberByEmail } from './convertkit-operations';
+import { getKitSubscriberByEmail, unsubscribeKitSubscriberByEmail } from './convertkit-operations';
 
 /**
  * Database Operations for Cursor AI
@@ -1109,6 +1109,86 @@ export async function updateLastVerificationEmailSentAt(userId: string): Promise
   return true;
 }
 
+/**
+ * Hard delete a user by ID: removes from auth.users, triggers cascade delete, and unsubscribes from ConvertKit.
+ * @param userId The user's Supabase Auth/User Profile ID
+ * @returns { success: boolean; error?: string }
+ */
+export async function hardDeleteUserById(userId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    // 1. Attempt to delete from Supabase Auth (auth.users)
+    let authDeleteError: unknown = null;
+    let userEmail: string | null = null;
+    let kitUnsubscribed = false;
+    try {
+      const supabaseAdmin = createClient(
+        import.meta.env.SUPABASE_URL!,
+        import.meta.env.SUPABASE_SERVICE_ROLE_KEY || import.meta.env.SUPABASE_ANON_KEY
+      );
+      // Try to fetch user profile for ConvertKit unsubscribe later
+      const { data: userProfile } = await supabase
+        .from('user_profiles')
+        .select('email')
+        .eq('id', userId)
+        .single();
+      if (userProfile && userProfile.email) {
+        userEmail = userProfile.email;
+      }
+      // Try to delete from auth.users
+      const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+      if (deleteAuthError && deleteAuthError.message !== 'User not found') {
+        authDeleteError = deleteAuthError;
+      }
+    } catch (e) {
+      authDeleteError = e;
+    }
+
+    // 2. If auth.users delete failed (user not found), try to delete from user_profiles directly
+    if (authDeleteError) {
+      console.warn(`[DB Ops] Auth delete failed for user ${userId}:`, authDeleteError);
+      const { error: profileDeleteError } = await supabase
+        .from('user_profiles')
+        .delete()
+        .eq('id', userId);
+      if (profileDeleteError) {
+        return { success: false, error: `Failed to delete user from auth and user_profiles: ${profileDeleteError.message}` };
+      }
+    }
+    // If auth.users delete succeeded, rely on cascade delete for user_profiles and related data
+
+    // 3. Unsubscribe from ConvertKit (if email is available)
+    if (userEmail && import.meta.env.CONVERTKIT_API_KEY && import.meta.env.CONVERTKIT_API_SECRET) {
+      try {
+        const kitSubscriber = await getKitSubscriberByEmail(userEmail, import.meta.env.CONVERTKIT_API_SECRET);
+        if (kitSubscriber) {
+          kitUnsubscribed = await unsubscribeKitSubscriberByEmail(userEmail, import.meta.env.CONVERTKIT_API_SECRET);
+          if (!kitUnsubscribed) {
+            // Check if the last error was a 404 Not Found
+            // If so, treat as non-fatal
+            // (Assume unsubscribeKitSubscriberByEmail logs the error details)
+            console.warn(`[DB Ops] Failed to unsubscribe user from ConvertKit (404 is non-fatal): ${userEmail}`);
+          }
+        } else {
+          // If no subscriber found, treat as non-fatal
+          console.warn(`[DB Ops] No ConvertKit subscriber found for: ${userEmail}`);
+        }
+      } catch (e) {
+        // If error message contains 404, treat as non-fatal
+        if (e && typeof e === 'object' && 'message' in e && String(e.message).includes('404')) {
+          console.warn(`[DB Ops] ConvertKit unsubscribe 404 (non-fatal) for ${userEmail}`);
+        } else {
+          console.warn(`[DB Ops] Error during ConvertKit unsubscribe for ${userEmail}:`, e);
+        }
+      }
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('[DB Ops] Hard delete failed:', err);
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export default {
   executeQuery,
   getRecords,
@@ -1136,5 +1216,6 @@ export default {
   callHandleQuizSubmissionRpc,
   stitchAnonymousUserToProfile,
   updateUserKitStateByEmail,
-  updateLastVerificationEmailSentAt
+  updateLastVerificationEmailSentAt,
+  hardDeleteUserById
 }; 

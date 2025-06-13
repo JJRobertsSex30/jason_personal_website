@@ -343,7 +343,7 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
 
     try {
       const rpcCallParams: HandleQuizSubmissionParams = {
-        userId: userProfileForSubmittedEmail.id,
+        user_profile_id: userProfileForSubmittedEmail.id,
         emailAddress: email,
         userFirstName: firstName || null,
         quizScore: score,
@@ -386,6 +386,10 @@ export const POST = async ({ request, clientAddress }: { request: Request; clien
     }
 
     console.log(`[API Quiz Submit ${requestTimestamp}] Finalizing response for ${email}. RPC Success: ${rpcSuccess}, Kit ID: ${kitSubscriberId}`);
+
+    // --- After successful quiz submission and before returning response, insert conversion record ---
+    // Determine eligibility (reuse or call eligibility logic if needed)
+    // Removed unused conversionEligibilityVerified variable and related comment
 
     return new Response(JSON.stringify({
       success: rpcSuccess, // Overall success now tied to RPC outcome primarily

@@ -69,6 +69,11 @@ const statusMap: Record<string, { text: string; color: string }> = {
 
 const statusInfo = userProfile?.kit_state ? (statusMap[userProfile.kit_state] || { text: userProfile.kit_state, color: 'bg-gray-200 dark:bg-gray-700' }) : { text: 'Not in Mailing List', color: 'bg-gray-200 dark:bg-gray-700' };
 
+if (Astro.request.method === 'POST') {
+  console.log('[DASHBOARD] POST handler triggered');
+  // ...rest of your code
+}
+
 ---
 <Layout metadata={metadata}>
     <div class="container mx-auto max-w-5xl px-4 py-10">

@@ -73,6 +73,14 @@
         </div>
     </div>
 
+    <!-- Conversion Rate Card -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg mt-6">
+      <h3 class="text-xl font-bold text-slate-800 dark:text-white mb-4">Overall Conversion Rate</h3>
+      <div class="text-center">
+        <div class="text-3xl font-bold text-green-700" id="overall-conversion-rate">-</div>
+        <div class="text-sm text-slate-600 dark:text-slate-400">Conv % (All Impressions)</div>
+      </div>
+    </div>
 
     <!-- Device & Connection Impact -->
     <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg">
@@ -177,6 +185,8 @@ document.addEventListener('astro:page-load', () => {
                     .map(d => `<div class="text-xs flex justify-between"><span>${d.device}:</span> <span class="font-semibold">${d.bounceRate.toFixed(1)}%</span></div>`)
                     .join('');
             }
+            // Populate Overall Conversion Rate
+            setElementText(document.getElementById('overall-conversion-rate'), `${(data.conversionRate ?? 0).toFixed(1)}%`);
             
             // Populate Device Performance
             if (elements.devicePerformanceTable) {

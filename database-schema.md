@@ -246,7 +246,7 @@ Tracks user conversion events.
 | `conversion_attribution_source` | text | YES | `'direct'::text` | |
 | `conversion_window_days` | int4 | YES | `30` | |
 | `original_exposure_date` | timestamptz | YES | | |
-| `conversion_eligibility_verified` | bool | YES | `false` | |
+| `conversion_eligibility_verified` | bool | YES | `false` | Indicates whether the user was eligible for A/B test conversion at the time of conversion. Set by the eligibility logic in userEligibility.ts. Only conversions with this set to true are counted in A/B test results; ineligible conversions are tracked for engagement analytics only. |
 | `conversion_context` | jsonb | YES | `'{}'::jsonb` | |
 
 ### **email_verification_tokens**

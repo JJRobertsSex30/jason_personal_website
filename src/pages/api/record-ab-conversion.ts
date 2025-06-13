@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { supabase } from '~/lib/supabaseClient'; // Assuming you'll use Supabase
+import { checkUserEligibilityForABTesting } from '../../lib/userEligibility';
 
 interface ConversionPayload {
   email?: string; // Optional, as token might be primary identifier
@@ -55,6 +56,16 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     const conversionTimestamp = new Date();
     const originalExposureDate: Date | null = new Date(pendingConfirmation.original_exposure_timestamp);
 
+    // --- Determine device_type and other fields from pendingConfirmation or submissionDetails ---
+    const deviceType = pendingConfirmation.device_type || submissionDetails.device_type || 'unknown';
+    const anonymousUserId = pendingConfirmation.anonymous_user_id || submissionDetails.anonymous_user_id || null;
+    const timeToConvert = pendingConfirmation.time_to_convert || null;
+    const conversionContext = pendingConfirmation.conversion_context || submissionDetails.conversion_context || null;
+
+    // --- Eligibility check for conversion ---
+    const eligibility = await checkUserEligibilityForABTesting(userIdentifier);
+    const conversionEligibilityVerified = eligibility.isEligible;
+
     const conversionDataToInsert = {
       experiment_id: experimentId,
       variant_id: variantId, 
@@ -81,6 +92,11 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       utm_content: submissionDetails.utm_content,
       created_at: conversionTimestamp.toISOString(),
       original_exposure_date: originalExposureDate ? originalExposureDate.toISOString() : null,
+      device_type: deviceType,
+      anonymous_user_id: anonymousUserId,
+      time_to_convert: timeToConvert,
+      conversion_context: conversionContext,
+      conversion_eligibility_verified: conversionEligibilityVerified,
     };
 
     if (!existingConversions || existingConversions.length === 0) {

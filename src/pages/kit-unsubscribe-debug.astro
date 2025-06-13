@@ -1,0 +1,103 @@
+---
+const DEFAULT_EMAIL = 'roberts.jason@gmail.com';
+const DEFAULT_ENDPOINT = 'https://api.convertkit.com/v3/unsubscribe';
+const DEFAULT_API_KEY = '';
+const DEFAULT_API_SECRET = '';
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'];
+
+let debugInfo = '';
+let email = DEFAULT_EMAIL;
+let endpoint = DEFAULT_ENDPOINT;
+let apiKey = DEFAULT_API_KEY;
+let apiSecret = DEFAULT_API_SECRET;
+let method = 'POST';
+
+if (Astro.request.method === 'POST') {
+  const formData = await Astro.request.formData();
+  email = formData.get('email')?.toString() || DEFAULT_EMAIL;
+  endpoint = formData.get('endpoint')?.toString() || DEFAULT_ENDPOINT;
+  apiKey = formData.get('api_key')?.toString() || '';
+  apiSecret = formData.get('api_secret')?.toString() || '';
+  method = formData.get('http_method')?.toString() || 'POST';
+
+  // Only include fields that are non-empty
+  const payload: Record<string, string> = { email };
+  if (apiKey) payload.api_key = apiKey;
+  if (apiSecret) payload.api_secret = apiSecret;
+
+  let lastRequest = { endpoint, method, payload };
+  try {
+    const fetchOptions: Record<string, unknown> = {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+    };
+    if (method !== 'GET' && method !== 'HEAD') {
+      fetchOptions.body = JSON.stringify(payload);
+    }
+    const res = await fetch(endpoint, fetchOptions);
+    const text = await res.text();
+    let json = null;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      // Not JSON, leave as null
+    }
+    let lastResponse = {
+      status: res.status,
+      statusText: res.statusText,
+      headers: Object.fromEntries(res.headers.entries()),
+      body: json || text,
+    };
+    debugInfo = `Request: ${JSON.stringify(lastRequest, null, 2)}\n\nResponse: ${JSON.stringify(lastResponse, null, 2)}`;
+  } catch (err) {
+    debugInfo = `Request: ${JSON.stringify(lastRequest, null, 2)}\n\nError: ${err}`;
+  }
+}
+---
+<html lang="en">
+  <head>
+    <title>ConvertKit Unsubscribe Debug Tool</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: sans-serif; background: #f8fafc; color: #222; }
+      .container { max-width: 600px; margin: 2rem auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #0001; padding: 2rem; }
+      label { display: block; margin-top: 1rem; font-weight: bold; }
+      input, select, textarea { width: 100%; padding: 0.5rem; margin-top: 0.25rem; border: 1px solid #ccc; border-radius: 4px; }
+      button { margin-top: 1.5rem; padding: 0.75rem 2rem; background: #2563eb; color: #fff; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; }
+      button:hover { background: #1d4ed8; }
+      pre { background: #f1f5f9; color: #222; padding: 1rem; border-radius: 6px; overflow-x: auto; margin-top: 2rem; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>ConvertKit Unsubscribe Debug Tool</h1>
+      <form method="POST">
+        <label for="email">Email to Unsubscribe</label>
+        <input type="email" id="email" name="email" value={email} required />
+
+        <label for="endpoint">ConvertKit API Endpoint</label>
+        <input type="text" id="endpoint" name="endpoint" value={endpoint} required />
+
+        <label for="api_key">ConvertKit API Key</label>
+        <input type="text" id="api_key" name="api_key" value={apiKey} />
+
+        <label for="api_secret">ConvertKit API Secret</label>
+        <input type="text" id="api_secret" name="api_secret" value={apiSecret} />
+
+        <label for="http_method">HTTP Method</label>
+        <select id="http_method" name="http_method">
+          {HTTP_METHODS.map(m => <option value={m} selected={m === method}>{m}</option>)}
+        </select>
+
+        <button type="submit">Send Request</button>
+      </form>
+      {debugInfo && (
+        <>
+          <h2>Debug Info</h2>
+          <pre>{debugInfo}</pre>
+        </>
+      )}
+    </div>
+  </body>
+</html> 
