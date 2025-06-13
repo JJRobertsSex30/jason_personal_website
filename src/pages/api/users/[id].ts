@@ -65,7 +65,12 @@ export const GET: APIRoute = async ({ params }) => {
     }
 
     if (emailToSearch) {
-        kitData = await getKitSubscriberByEmail(emailToSearch);
+        const apiSecret = import.meta.env.CONVERTKIT_API_SECRET;
+        if (apiSecret) {
+            kitData = await getKitSubscriberByEmail(emailToSearch, apiSecret);
+        } else {
+            console.warn('ConvertKit API secret is not set. Cannot fetch kitData.');
+        }
     }
     
     // If we started with a CK user, we might not have a DB profile. Let's create a temporary one.
