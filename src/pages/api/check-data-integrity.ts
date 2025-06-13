@@ -10,7 +10,7 @@ type VariantWithExperiment = {
 
 type ConversionWithRelations = {
   id: string;
-  user_id: string;
+  user_profile_id: string;
   variant_id: string;
   experiment_id: string;
   created_at: string;
@@ -20,12 +20,12 @@ type ConversionWithRelations = {
 
 // --- Integrity Check Functions ---
 
-async function findMissingImpressions(issues: { type: string; conversion_id: string; variant_id: string; experiment_id: string; user_id: string; issue: string; }[]) {
+async function findMissingImpressions(issues: { type: string; conversion_id: string; variant_id: string; experiment_id: string; user_profile_id: string; issue: string; }[]) {
   const { data: conversions, error } = await supabase
     .from('conversions')
     .select<string, ConversionWithRelations>(`
       id,
-      user_id,
+      user_profile_id,
       variant_id,
       experiment_id,
       created_at,
@@ -45,7 +45,7 @@ async function findMissingImpressions(issues: { type: string; conversion_id: str
     const { data: impression } = await supabase
       .from('impressions')
       .select('id')
-      .eq('user_id', conversion.user_id)
+      .eq('user_profile_id', conversion.user_profile_id)
       .eq('variant_id', conversion.variant_id)
       .limit(1)
       .maybeSingle();
@@ -56,7 +56,7 @@ async function findMissingImpressions(issues: { type: string; conversion_id: str
         conversion_id: conversion.id,
         variant_id: conversion.variant_id,
         experiment_id: conversion.experiment_id,
-        user_id: conversion.user_id,
+        user_profile_id: conversion.user_profile_id,
         issue: 'Conversion exists without corresponding impression'
       });
     }
@@ -115,7 +115,7 @@ async function getOverallStats(stats: Record<string, number>) {
 
 export const GET: APIRoute = async () => {
   try {
-    const issues: { type: string; conversion_id: string; variant_id: string; experiment_id: string; user_id: string; issue: string; }[] = [];
+    const issues: { type: string; conversion_id: string; variant_id: string; experiment_id: string; user_profile_id: string; issue: string; }[] = [];
     const summary: { variant_id: string; variant_name: string; experiment_name: string; impressions: number; conversions: number; conversion_rate: number; has_integrity_issue: boolean; }[] = [];
     const stats: Record<string, number> = {};
 

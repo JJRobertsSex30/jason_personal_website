@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { supabase } from '~/lib/supabaseClient';
 
 type Impression = {
-    user_id: string;
+    user_profile_id: string;
     session_identifier: string;
     page_url: string;
     impression_at: string;
@@ -42,8 +42,8 @@ export const GET: APIRoute = async () => {
     try {
         // Fetch data in parallel
         const [impressionsRes, conversionsRes] = await Promise.all([
-            supabase.from('impressions').select('user_id, session_identifier, page_url, impression_at, time_on_page, scroll_depth_percent, bounce, device_type, utm_source, connection_type, screen_resolution, page_load_time'),
-            supabase.from('conversions').select('user_id, conversion_type, device_type')
+            supabase.from('impressions').select('user_profile_id, session_identifier, page_url, impression_at, time_on_page, scroll_depth_percent, bounce, device_type, utm_source, connection_type, screen_resolution, page_load_time'),
+            supabase.from('conversions').select('user_profile_id, conversion_type, device_type')
         ]);
 
         if (impressionsRes.error) throw new Error(`Impressions fetch error: ${impressionsRes.error.message}`);

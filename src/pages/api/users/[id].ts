@@ -40,8 +40,8 @@ export const GET: APIRoute = async ({ params }) => {
 
             // Fetch related data only if user is in DB
             const [gems, engagements, referrals] = await Promise.all([
-                 supabase.from('gem_transactions').select('*').eq('user_id', id).order('created_at', { ascending: false }),
-                 supabase.from('user_engagements').select('*').eq('user_id', id).order('created_at', { ascending: false }),
+                 supabase.from('gem_transactions').select('*').eq('user_profile_id', id).order('created_at', { ascending: false }),
+                 supabase.from('user_engagements').select('*').eq('user_profile_id', id).order('created_at', { ascending: false }),
                  supabase.from('referrals').select('new_user_id').eq('referrer_id', id)
             ]);
             if(gems.data) gemTransactions = gems.data;

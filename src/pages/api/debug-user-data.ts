@@ -13,7 +13,7 @@ type ConversionWithRelations = {
   id: string;
   variant_id: string;
   experiment_id: string;
-  user_id: string;
+  user_profile_id: string;
   conversion_type: string;
   created_at: string;
   conversion_eligibility_verified: boolean;
@@ -24,7 +24,7 @@ type ImpressionWithRelations = {
     id: string;
     variant_id: string;
     experiment_id: string;
-    user_id: string;
+    user_profile_id: string;
     created_at: string;
     user_was_eligible: boolean;
     user_eligibility_status: string;
@@ -44,10 +44,10 @@ type IntegrityIssue = {
 
 export const GET: APIRoute = async ({ request }) => {
   const url = new URL(request.url);
-  const userIdentifier = url.searchParams.get('user_id');
+  const userIdentifier = url.searchParams.get('user_profile_id');
 
   try {
-    if (!userIdentifier) return new Response(JSON.stringify({ error: 'user_id is required' }), { status: 400 });
+    if (!userIdentifier) return new Response(JSON.stringify({ error: 'user_profile_id is required' }), { status: 400 });
 
     const { data: impressions, error: impressionsError } = await supabase
       .from('impressions')
@@ -55,13 +55,13 @@ export const GET: APIRoute = async ({ request }) => {
         id,
         variant_id,
         experiment_id,
-        user_id,
+        user_profile_id,
         created_at,
         user_was_eligible,
         user_eligibility_status,
         variants!inner(name, experiments!inner(name))
       `)
-      .eq('user_id', userIdentifier)
+      .eq('user_profile_id', userIdentifier)
       .order('created_at', { ascending: false });
 
     const { data: conversions, error: conversionsError } = await supabase
@@ -70,13 +70,13 @@ export const GET: APIRoute = async ({ request }) => {
         id,
         variant_id,
         experiment_id,
-        user_id,
+        user_profile_id,
         conversion_type,
         created_at,
         conversion_eligibility_verified,
         variants!inner(name, experiments!inner(name))
       `)
-      .eq('user_id', userIdentifier)
+      .eq('user_profile_id', userIdentifier)
       .order('created_at', { ascending: false });
 
     if (impressionsError || conversionsError) {

@@ -79,9 +79,9 @@
           "default_value": "gen_random_uuid()"
         },
         {
-          "name": "user_id",
+          "name": "user_profile_id",
           "type": "uuid",
-          "is_nullable": false,
+          "is_nullable": true,
           "is_primary_key": false,
           "default_value": null
         },
@@ -140,6 +140,13 @@
           "is_nullable": true,
           "is_primary_key": false,
           "default_value": "timezone('utc'::text, now())"
+        },
+        {
+          "name": "anonymous_user_id",
+          "type": "text",
+          "is_nullable": true,
+          "is_primary_key": false,
+          "default_value": null
         }
       ]
     },
@@ -154,9 +161,9 @@
           "default_value": "uuid_generate_v4()"
         },
         {
-          "name": "user_id",
+          "name": "user_profile_id",
           "type": "uuid",
-          "is_nullable": false,
+          "is_nullable": true,
           "is_primary_key": false,
           "default_value": null
         },
@@ -306,6 +313,13 @@
           "is_nullable": true,
           "is_primary_key": false,
           "default_value": "'{}'::jsonb"
+        },
+        {
+          "name": "anonymous_user_id",
+          "type": "text",
+          "is_nullable": true,
+          "is_primary_key": false,
+          "default_value": null
         }
       ]
     },
@@ -585,9 +599,9 @@
           "default_value": "uuid_generate_v4()"
         },
         {
-          "name": "user_id",
+          "name": "user_profile_id",
           "type": "uuid",
-          "is_nullable": false,
+          "is_nullable": true,
           "is_primary_key": false,
           "default_value": null
         },
@@ -779,6 +793,13 @@
           "is_nullable": true,
           "is_primary_key": false,
           "default_value": "'{}'::jsonb"
+        },
+        {
+          "name": "anonymous_user_id",
+          "type": "text",
+          "is_nullable": true,
+          "is_primary_key": false,
+          "default_value": null
         }
       ]
     },
@@ -1203,9 +1224,9 @@
           "default_value": "gen_random_uuid()"
         },
         {
-          "name": "user_id",
+          "name": "user_profile_id",
           "type": "uuid",
-          "is_nullable": false,
+          "is_nullable": true,
           "is_primary_key": false,
           "default_value": null
         },
@@ -1250,6 +1271,13 @@
           "is_nullable": true,
           "is_primary_key": false,
           "default_value": "timezone('utc'::text, now())"
+        },
+        {
+          "name": "anonymous_user_id",
+          "type": "text",
+          "is_nullable": true,
+          "is_primary_key": false,
+          "default_value": null
         }
       ]
     },
@@ -1304,9 +1332,9 @@
           "default_value": "gen_random_uuid()"
         },
         {
-          "name": "user_id",
+          "name": "user_profile_id",
           "type": "uuid",
-          "is_nullable": false,
+          "is_nullable": true,
           "is_primary_key": false,
           "default_value": null
         },
@@ -1386,6 +1414,13 @@
           "is_nullable": true,
           "is_primary_key": false,
           "default_value": "now()"
+        },
+        {
+          "name": "anonymous_user_id",
+          "type": "text",
+          "is_nullable": true,
+          "is_primary_key": false,
+          "default_value": null
         }
       ]
     },
@@ -1482,6 +1517,13 @@
           "is_nullable": true,
           "is_primary_key": false,
           "default_value": "'unconfirmed'::text"
+        },
+        {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "is_nullable": true,
+          "is_primary_key": false,
+          "default_value": null
         }
       ]
     },
@@ -1549,7 +1591,7 @@
     },
     {
       "source_table": "user_engagement_tracking",
-      "source_column": "user_id",
+      "source_column": "user_profile_id",
       "target_table": "user_profiles",
       "target_column": "id"
     },
@@ -1579,7 +1621,7 @@
     },
     {
       "source_table": "impressions",
-      "source_column": "user_id",
+      "source_column": "user_profile_id",
       "target_table": "user_profiles",
       "target_column": "id"
     },
@@ -1597,7 +1639,7 @@
     },
     {
       "source_table": "conversions",
-      "source_column": "user_id",
+      "source_column": "user_profile_id",
       "target_table": "user_profiles",
       "target_column": "id"
     },
@@ -1615,7 +1657,7 @@
     },
     {
       "source_table": "user_experiment_participation",
-      "source_column": "user_id",
+      "source_column": "user_profile_id",
       "target_table": "user_profiles",
       "target_column": "id"
     },
@@ -1633,7 +1675,7 @@
     },
     {
       "source_table": "conversion_attribution",
-      "source_column": "user_id",
+      "source_column": "user_profile_id",
       "target_table": "user_profiles",
       "target_column": "id"
     },

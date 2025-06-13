@@ -18,8 +18,8 @@ export const GET: APIRoute = async () => {
         
         // Fetch raw data from all relevant tables in parallel without complex joins
         const [impressionsRes, conversionsRes, engagementsRes] = await Promise.all([
-            supabase.from('impressions').select('user_id, page_url, impression_at, experiment_id, variant_id, session_identifier, device_type, country_code'),
-            supabase.from('conversions').select('user_id, conversion_type, created_at, experiment_id, variant_id, session_identifier, device_type, country_code, conversion_value'),
+            supabase.from('impressions').select('user_profile_id, page_url, impression_at, experiment_id, variant_id, session_identifier, device_type, country_code'),
+            supabase.from('conversions').select('user_profile_id, conversion_type, created_at, experiment_id, variant_id, session_identifier, device_type, country_code, conversion_value'),
             supabase.from('user_engagements').select('*').order('created_at', { ascending: false }).limit(200)
         ]);
 
@@ -51,30 +51,30 @@ export const GET: APIRoute = async () => {
         const userJourneys: { [key: string]: JourneyEvent[] } = {};
 
         journeyData.impressions.forEach(imp => {
-            if (!userJourneys[imp.user_id]) {
-                userJourneys[imp.user_id] = [];
+            if (!userJourneys[imp.user_profile_id]) {
+                userJourneys[imp.user_profile_id] = [];
             }
-            userJourneys[imp.user_id].push({
+            userJourneys[imp.user_profile_id].push({
                 type: 'Impression',
                 timestamp: new Date(imp.impression_at).toISOString(),
                 title: `Viewed Page`,
                 details: `URL: ${imp.page_url || 'Unknown'}`,
-                userId: imp.user_id,
-                email: usersMap.get(imp.user_id),
+                userId: imp.user_profile_id,
+                email: usersMap.get(imp.user_profile_id),
             });
         });
 
         journeyData.conversions.forEach(conv => {
-            if (!userJourneys[conv.user_id]) {
-                userJourneys[conv.user_id] = [];
+            if (!userJourneys[conv.user_profile_id]) {
+                userJourneys[conv.user_profile_id] = [];
             }
-            userJourneys[conv.user_id].push({
+            userJourneys[conv.user_profile_id].push({
                 type: 'Conversion',
                 timestamp: new Date(conv.created_at).toISOString(),
                 title: `Converted: ${conv.conversion_type}`,
                 details: `Value: ${conv.conversion_value || 'N/A'}`,
-                userId: conv.user_id,
-                email: usersMap.get(conv.user_id),
+                userId: conv.user_profile_id,
+                email: usersMap.get(conv.user_profile_id),
             });
         });
 

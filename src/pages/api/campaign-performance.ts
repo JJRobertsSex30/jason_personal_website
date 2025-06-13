@@ -65,11 +65,11 @@ export const GET: APIRoute = async ({ request: _request }) => {
     // --- Parallel Data Fetching ---
     const { data: impressions, error: impressionsError } = await supabase
       .from('impressions')
-      .select('utm_source, utm_medium, utm_campaign, time_on_page, scroll_depth_percent, user_id, impression_at, user_agent, device_type, country_code');
+      .select('utm_source, utm_medium, utm_campaign, time_on_page, scroll_depth_percent, user_profile_id, impression_at, user_agent, device_type, country_code');
     
     const { data: conversions, error: conversionsError } = await supabase
       .from('conversions')
-      .select('utm_source, utm_medium, utm_campaign, user_id, created_at, conversion_value');
+      .select('utm_source, utm_medium, utm_campaign, user_profile_id, created_at, conversion_value');
 
     if (impressionsError) {
       console.error('Error fetching impressions:', impressionsError);
