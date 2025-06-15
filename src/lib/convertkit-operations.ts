@@ -182,35 +182,37 @@ export async function submitToConvertKit(
     if (!convertKitFormId || !apiKey) {
       throw new Error('ConvertKit form ID or API Key not configured');
     }
-    
-    const convertKitApiUrl = `https://api.kit.com/v4/forms/${convertKitFormId}/subscribers`;
-    
+    // Use v3 endpoint
+    const convertKitApiUrl = `https://api.convertkit.com/v3/forms/${convertKitFormId}/subscribe`;
+    // Build minimal payload
+    const payloadWithKey: Record<string, unknown> = {
+      api_key: apiKey,
+      email: payload.email_address,
+    };
+    if (payload.first_name) payloadWithKey.first_name = payload.first_name;
+    if (payload.fields && Object.keys(payload.fields).length > 0) payloadWithKey.fields = payload.fields;
+    if (payload.tags && payload.tags.length > 0) payloadWithKey.tags = payload.tags;
     // Log the payload being sent to ConvertKit
-    console.log('[ConvertKit] Submitting to form ' + convertKitFormId + ' with payload:', JSON.stringify(payload, null, 2));
-    
+    console.log('[ConvertKit] Submitting to form ' + convertKitFormId + ' with payload:', JSON.stringify(payloadWithKey, null, 2));
     const response = await fetch(convertKitApiUrl, {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
-        'X-Kit-Api-Key': apiKey
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payloadWithKey),
     });
-    
     if (!response.ok) {
       const errorBody = await response.text();
       throw new Error(`ConvertKit API error: ${response.status} ${response.statusText} - ${errorBody}`);
     }
-    
     const result = await response.json();
     console.log('ConvertKit submission successful:', result);
-    
     return { success: true };
   } catch (error) {
     console.error('ConvertKit submission failed:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -388,10 +390,7 @@ export async function updateConvertKitSubscriber(
   let subscriberId = existingKitId;
 
   // Prepare custom fields payload
-  const customFields: Record<string, string | number | undefined> = {
-    signup_source: 'hero',
-    signup_timestamp: new Date().toISOString(),
-  };
+  const customFields: Record<string, string | number | undefined> = {};
   if (referralCode) {
     customFields.referral_id = referralCode;
   }
@@ -405,13 +404,13 @@ export async function updateConvertKitSubscriber(
   try {
     if (PUBLIC_CONVERTKIT_FORM_ID) {
       const formSubscribeUrl = `${API_BASE_URL}/forms/${PUBLIC_CONVERTKIT_FORM_ID}/subscribe`;
-      console.log(`[ConvertKit] Attempting to subscribe ${email} to form ${PUBLIC_CONVERTKIT_FORM_ID}`);
-      const formPayload = {
+      // Build minimal payload
+      const formPayload: Record<string, unknown> = {
         api_key: CONVERTKIT_API_KEY,
         email: email,
-        first_name: firstName || undefined,
-        fields: customFields,
       };
+      if (firstName) formPayload.first_name = firstName;
+      if (Object.keys(customFields).length > 0) formPayload.fields = customFields;
       console.log(`[ConvertKit] Subscribing to form ${PUBLIC_CONVERTKIT_FORM_ID}. Payload:`, JSON.stringify(formPayload, null, 2));
       const formResponse = await fetch(formSubscribeUrl, {
         method: 'POST',

@@ -94,11 +94,40 @@ const metadata = {
     const downloadLink = document.getElementById('download-chapters-link');
     const urlParams = new URLSearchParams(window.location.search);
     const actionToken = urlParams.get('token');
+    const userEmail = urlParams.get('email');
+
+    // --- Random A/B Tagging Logic (now calls server endpoint) ---
+    if (userEmail) {
+      // 50/50 random assignment
+      const group = Math.random() < 0.5 ? 'A' : 'B';
+      // Call server endpoint to assign tag securely
+      fetch('/api/assign-ab-tag', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: userEmail,
+          group: group
+        }),
+        keepalive: true
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          console.log(`User assigned to group ${group} and tagged with tag ID ${data.tagId}`);
+        } else {
+          console.error('Failed to tag user in ConvertKit:', data.message);
+        }
+      })
+      .catch(error => {
+        console.error('Error tagging user in ConvertKit:', error);
+      });
+    } else {
+      console.warn('No email found in URL. A/B tag assignment skipped.');
+    }
 
     if (downloadLink && actionToken) {
       downloadLink.addEventListener('click', () => {
         console.log('Download link clicked. Logging engagement event with token:', actionToken);
-        
         // Fire and forget the tracking request
         fetch('/api/track-engagement', {
           method: 'POST',

@@ -1189,6 +1189,62 @@ export async function hardDeleteUserById(userId: string): Promise<{ success: boo
   }
 }
 
+/**
+ * Soft delete a user by ID: sets deleted_at, updates kit_state, and unsubscribes from ConvertKit.
+ * @param userId The user's Supabase User Profile ID
+ * @returns { success: boolean; error?: string }
+ */
+export async function softDeleteUserById(userId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    let userEmail: string | null = null;
+    // 1. Fetch user profile for email
+    const { data: userProfile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('email')
+      .eq('id', userId)
+      .single();
+    if (profileError) {
+      return { success: false, error: `Failed to fetch user profile: ${profileError.message}` };
+    }
+    if (!userProfile || !userProfile.email) {
+      return { success: false, error: 'User profile or email not found' };
+    }
+    userEmail = userProfile.email;
+    // 2. Update deleted_at and kit_state
+    const { error: updateError } = await supabase
+      .from('user_profiles')
+      .update({ deleted_at: new Date().toISOString(), kit_state: 'cancelled' })
+      .eq('id', userId);
+    if (updateError) {
+      return { success: false, error: `Failed to soft-delete user: ${updateError.message}` };
+    }
+    // 3. Unsubscribe from ConvertKit (if email is available)
+    if (userEmail && import.meta.env.CONVERTKIT_API_KEY && import.meta.env.CONVERTKIT_API_SECRET) {
+      try {
+        const kitSubscriber = await getKitSubscriberByEmail(userEmail, import.meta.env.CONVERTKIT_API_SECRET);
+        if (kitSubscriber) {
+          const kitUnsubscribed = await unsubscribeKitSubscriberByEmail(userEmail, import.meta.env.CONVERTKIT_API_SECRET);
+          if (!kitUnsubscribed) {
+            console.warn(`[DB Ops] Failed to unsubscribe user from ConvertKit (404 is non-fatal): ${userEmail}`);
+          }
+        } else {
+          console.warn(`[DB Ops] No ConvertKit subscriber found for: ${userEmail}`);
+        }
+      } catch (e) {
+        if (e && typeof e === 'object' && 'message' in e && String(e.message).includes('404')) {
+          console.warn(`[DB Ops] ConvertKit unsubscribe 404 (non-fatal) for ${userEmail}`);
+        } else {
+          console.warn(`[DB Ops] Error during ConvertKit unsubscribe for ${userEmail}:`, e);
+        }
+      }
+    }
+    return { success: true };
+  } catch (err) {
+    console.error('[DB Ops] Soft delete failed:', err);
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export default {
   executeQuery,
   getRecords,
@@ -1217,5 +1273,6 @@ export default {
   stitchAnonymousUserToProfile,
   updateUserKitStateByEmail,
   updateLastVerificationEmailSentAt,
-  hardDeleteUserById
+  hardDeleteUserById,
+  softDeleteUserById
 }; 

@@ -23,7 +23,7 @@ interface KitSubscriber {
 
 async function getKitSubscriber(email: string): Promise<KitSubscriber | null> {
     const normalizedEmail = email.toLowerCase().trim();
-    const url = `https://api.kit.com/v4/subscribers?api_key=${convertKitApiKey}&email_address=${encodeURIComponent(normalizedEmail)}`;
+    const url = `https://api.convertkit.com/v3/subscribers?api_key=${convertKitApiKey}&email_address=${encodeURIComponent(normalizedEmail)}`;
     
     try {
         const response = await fetch(url);

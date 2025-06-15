@@ -1,0 +1,77 @@
+---
+const CONVERTKIT_API_KEY = 'kit_4fe97557cef1466fb081dad8b4f6241c';
+const FORM_ID = '8175911'; // Your new landing page form
+const email = 'roberts.jason@gmail.com';
+
+let subscriptionTest = null;
+
+if (Astro.request.method === 'POST') {
+  try {
+    // Test the actual subscription endpoint
+    const response = await fetch(`https://api.kit.com/v4/forms/${FORM_ID}/subscribers`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Kit-Api-Key': CONVERTKIT_API_KEY
+      },
+      body: JSON.stringify({
+        email_address: email
+      })
+    });
+
+    const data = await response.json();
+    
+    subscriptionTest = {
+      status: response.status,
+      success: response.ok,
+      data: data,
+      headers: {
+        rateLimitRemaining: response.headers.get('x-ratelimit-remaining'),
+        rateLimitReset: response.headers.get('x-ratelimit-reset'),
+        contentType: response.headers.get('content-type')
+      }
+    };
+  } catch (err) {
+    subscriptionTest = { error: err.message };
+  }
+}
+---
+
+<html>
+<head>
+  <title>ConvertKit Subscription Test</title>
+  <style>
+    .test-result { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+    .success { background-color: #d4edda; border-color: #c3e6cb; }
+    .error { background-color: #f8d7da; border-color: #f5c6cb; }
+    pre { background: #f8f9fa; padding: 10px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1>ConvertKit v4 Subscription Test</h1>
+  <p><strong>Form ID:</strong> {FORM_ID} (Landing Page)</p>
+  <p><strong>Email:</strong> {email}</p>
+  
+  <form method="POST">
+    <button type="submit">Test v4 Subscription Endpoint</button>
+  </form>
+  
+  {subscriptionTest && (
+    <div class={`test-result ${subscriptionTest.success ? 'success' : 'error'}`}>
+      <h2>Subscription Test Result</h2>
+      <p><strong>Status:</strong> {subscriptionTest.success ? '✅ SUCCESS' : '❌ FAILED'}</p>
+      <p><strong>HTTP Status:</strong> {subscriptionTest.status}</p>
+      
+      {subscriptionTest.headers?.rateLimitRemaining && (
+        <p><strong>Rate Limit Remaining:</strong> {subscriptionTest.headers.rateLimitRemaining}</p>
+      )}
+      
+      <details>
+        <summary>Full Response</summary>
+        <pre>{JSON.stringify(subscriptionTest, null, 2)}</pre>
+      </details>
+    </div>
+  )}
+</body>
+</html>

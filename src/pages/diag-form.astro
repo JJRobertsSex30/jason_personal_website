@@ -1,0 +1,140 @@
+---
+const CONVERTKIT_API_KEY = 'kit_4fe97557cef1466fb081dad8b4f6241c';
+const FORM_ID = '8175911';
+
+let diagnostics = {};
+
+if (Astro.request.method === 'POST') {
+  // Test 1: API Key with account endpoint
+  try {
+    const accountResp = await fetch('https://api.kit.com/v4/account', {
+      headers: { 
+        'X-Kit-Api-Key': CONVERTKIT_API_KEY,
+        'Accept': 'application/json'
+      }
+    });
+    const accountData = await accountResp.json();
+    diagnostics.apiKey = {
+      status: accountResp.status,
+      working: accountResp.ok,
+      data: accountData,
+      rateLimitRemaining: accountResp.headers.get('x-ratelimit-remaining'),
+      rateLimitReset: accountResp.headers.get('x-ratelimit-reset')
+    };
+  } catch (err) {
+    diagnostics.apiKey = { error: err.message };
+  }
+
+  // Test 2: List all forms
+  try {
+    const formsResp = await fetch('https://api.kit.com/v4/forms', {
+      headers: { 
+        'X-Kit-Api-Key': CONVERTKIT_API_KEY,
+        'Accept': 'application/json'
+      }
+    });
+    const formsData = await formsResp.json();
+    diagnostics.forms = {
+      status: formsResp.status,
+      working: formsResp.ok,
+      totalForms: formsData.forms?.length || 0,
+      formExists: formsData.forms?.some(f => f.id.toString() === FORM_ID),
+      allFormIds: formsData.forms?.map(f => f.id) || [],
+      targetFormDetails: formsData.forms?.find(f => f.id.toString() === FORM_ID) || null
+    };
+  } catch (err) {
+    diagnostics.forms = { error: err.message };
+  }
+
+  // Test 3: Try to get the specific form directly
+  try {
+    const formResp = await fetch(`https://api.kit.com/v4/forms/${FORM_ID}`, {
+      headers: { 
+        'X-Kit-Api-Key': CONVERTKIT_API_KEY,
+        'Accept': 'application/json'
+      }
+    });
+    const formData = await formResp.json();
+    diagnostics.specificForm = {
+      status: formResp.status,
+      working: formResp.ok,
+      data: formData
+    };
+  } catch (err) {
+    diagnostics.specificForm = { error: err.message };
+  }
+}
+---
+
+<html>
+<head>
+  <title>ConvertKit Comprehensive Diagnostic</title>
+  <style>
+    .test-result { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+    .success { background-color: #d4edda; border-color: #c3e6cb; }
+    .error { background-color: #f8d7da; border-color: #f5c6cb; }
+    pre { background: #f8f9fa; padding: 10px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1>ConvertKit Comprehensive Diagnostic</h1>
+  <p><strong>Testing Form ID:</strong> {FORM_ID}</p>
+  
+  <form method="POST">
+    <button type="submit">Run Full Diagnostic</button>
+  </form>
+  
+  {diagnostics.apiKey && (
+    <div class={`test-result ${diagnostics.apiKey.working ? 'success' : 'error'}`}>
+      <h2>1. API Key Test</h2>
+      <p><strong>Status:</strong> {diagnostics.apiKey.working ? '✅ WORKING' : '❌ FAILED'}</p>
+      <p><strong>HTTP Status:</strong> {diagnostics.apiKey.status}</p>
+      {diagnostics.apiKey.rateLimitRemaining && (
+        <p><strong>Rate Limit Remaining:</strong> {diagnostics.apiKey.rateLimitRemaining}</p>
+      )}
+      <details>
+        <summary>Full API Key Response</summary>
+        <pre>{JSON.stringify(diagnostics.apiKey, null, 2)}</pre>
+      </details>
+    </div>
+  )}
+  
+  {diagnostics.forms && (
+    <div class={`test-result ${diagnostics.forms.working ? 'success' : 'error'}`}>
+      <h2>2. Forms List Test</h2>
+      <p><strong>Status:</strong> {diagnostics.forms.working ? '✅ WORKING' : '❌ FAILED'}</p>
+      <p><strong>Total Forms Found:</strong> {diagnostics.forms.totalForms}</p>
+      <p><strong>Target Form Found:</strong> {diagnostics.forms.formExists ? '✅ YES' : '❌ NO'}</p>
+      {diagnostics.forms.allFormIds.length > 0 && (
+        <p><strong>Available Form IDs:</strong> {diagnostics.forms.allFormIds.join(', ')}</p>
+      )}
+      {diagnostics.forms.targetFormDetails && (
+        <div>
+          <h3>Target Form Details:</h3>
+          <pre>{JSON.stringify(diagnostics.forms.targetFormDetails, null, 2)}</pre>
+        </div>
+      )}
+      <details>
+        <summary>Full Forms Response</summary>
+        <pre>{JSON.stringify(diagnostics.forms, null, 2)}</pre>
+      </details>
+    </div>
+  )}
+  
+  {diagnostics.specificForm && (
+    <div class={`test-result ${diagnostics.specificForm.working ? 'success' : 'error'}`}>
+      <h2>3. Specific Form Access Test</h2>
+      <p><strong>Status:</strong> {diagnostics.specificForm.working ? '✅ ACCESSIBLE' : '❌ NOT ACCESSIBLE'}</p>
+      <p><strong>HTTP Status:</strong> {diagnostics.specificForm.status}</p>
+      <details>
+        <summary>Specific Form Response</summary>
+        <pre>{JSON.stringify(diagnostics.specificForm, null, 2)}</pre>
+      </details>
+    </div>
+  )}
+  
+  {Object.keys(diagnostics).length === 0 && (
+    <p><em>Click "Run Full Diagnostic" to test your ConvertKit setup.</em></p>
+  )}
+</body>
+</html>

@@ -23,6 +23,7 @@ const statusMap: Record<string, { text: string; color: string }> = {
     color: 'bg-yellow-100 dark:bg-yellow-400/30 text-yellow-600 dark:text-yellow-300',
   },
   cancelled: { text: 'Cancelled', color: 'bg-gray-100 dark:bg-gray-400/30 text-gray-500 dark:text-gray-300' },
+  unsubscribed: { text: 'Unsubscribed', color: 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300' },
   complained: {
     text: 'Complained',
     color: 'bg-orange-100 dark:bg-orange-400/30 text-orange-600 dark:text-orange-300',
@@ -112,7 +113,7 @@ const statusMap: Record<string, { text: string; color: string }> = {
               {userProfiles.map((profile) => {
                 const statusKey = profile.kit_state || 'unknown';
                 const statusInfo = statusMap[statusKey] || statusMap['unknown'];
-
+                const isCancelled = statusKey === 'cancelled';
                 return (
                   <tr data-state={statusKey} data-href={`/dashboard/user/${profile.view_id}`} class="user-row cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50">
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900 dark:text-slate-100">
@@ -159,6 +160,19 @@ const statusMap: Record<string, { text: string; color: string }> = {
                             />
                           </svg>
                         </button>
+                        {isCancelled && (
+                          <button
+                            data-action="restore-user"
+                            data-user-id={profile.id}
+                            data-user-email={profile.email}
+                            class="restore-user-btn text-slate-500 hover:text-green-600 dark:text-slate-400 dark:hover:text-green-500 p-1.5 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-green-500"
+                            title="Restore User"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582M20 20v-5h-.581M19.418 19.418A9 9 0 104.582 4.582" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -205,6 +219,32 @@ const statusMap: Record<string, { text: string; color: string }> = {
   <div id="hard-delete-user-modal-backdrop" class="fixed inset-0"></div>
 </div>
 
+<!-- Soft Delete Confirmation Modal -->
+<div id="soft-delete-user-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+  <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6 max-w-sm w-full relative z-10">
+    <h2 class="text-xl font-bold mb-4">Archive User (Soft Delete)</h2>
+    <p class="mb-6">This will unsubscribe the user from emails and hide them from active lists. Their data will be kept for historical purposes and they can be restored later. Are you sure?</p>
+    <div class="flex justify-end space-x-2">
+      <button id="soft-delete-user-modal-cancel-btn" class="px-4 py-2 rounded bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-slate-200">Cancel</button>
+      <button id="soft-delete-user-modal-confirm-btn" class="px-4 py-2 rounded bg-blue-600 text-white">Yes, Archive User</button>
+    </div>
+  </div>
+  <div id="soft-delete-user-modal-backdrop" class="fixed inset-0"></div>
+</div>
+
+<!-- Restore Confirmation Modal -->
+<div id="restore-user-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+  <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6 max-w-sm w-full relative z-10">
+    <h2 class="text-xl font-bold mb-4">Restore User</h2>
+    <p class="mb-6">Are you sure you want to restore this user? This will re-subscribe them and trigger a new email.</p>
+    <div class="flex justify-end space-x-2">
+      <button id="restore-user-modal-cancel-btn" class="px-4 py-2 rounded bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-slate-200">Cancel</button>
+      <button id="restore-user-modal-confirm-btn" class="px-4 py-2 rounded bg-green-600 text-white">Restore User</button>
+    </div>
+  </div>
+  <div id="restore-user-modal-backdrop" class="fixed inset-0"></div>
+</div>
+
 <script>
   document.addEventListener('astro:page-load', () => {
     // Status Filter Logic
@@ -234,9 +274,13 @@ const statusMap: Record<string, { text: string; color: string }> = {
     userRows.forEach(row => {
       row.addEventListener('click', (e) => {
         const target = e.target;
-        // Do not navigate if the delete button or its SVG icon is clicked
+        // Do not navigate if the delete, soft delete, restore button, or their SVG icon is clicked
         if (!(target instanceof Element)) return;
-        if (target.closest('.delete-user-btn') || target.closest('[data-action="open-soft-delete-modal"]')) {
+        if (
+          target.closest('.delete-user-btn') ||
+          target.closest('[data-action="open-soft-delete-modal"]') ||
+          target.closest('.restore-user-btn')
+        ) {
           return;
         }
         const href = (row as HTMLElement).dataset.href;
@@ -249,6 +293,8 @@ const statusMap: Record<string, { text: string; color: string }> = {
     // Add a modal for hard delete confirmation (similar to soft delete modal)
     let userIdToDelete = '';
     let userEmailToDelete = '';
+    let userIdToSoftDelete = '';
+    let userEmailToSoftDelete = '';
 
     // Add event listener for hard delete buttons
     document.querySelectorAll('[data-action="delete-user"]').forEach(btn => {
@@ -291,6 +337,92 @@ const statusMap: Record<string, { text: string; color: string }> = {
         if (modal) modal.classList.add('hidden');
       });
     }
+
+    // Add event listener for soft delete buttons
+    document.querySelectorAll('[data-action="open-soft-delete-modal"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        userIdToSoftDelete = btn.getAttribute('data-user-id') || '';
+        userEmailToSoftDelete = btn.getAttribute('data-user-email') || '';
+        // Show the modal
+        const modal = document.getElementById('soft-delete-user-modal');
+        if (modal) modal.classList.remove('hidden');
+        e.stopPropagation();
+      });
+    });
+
+    // Modal confirm button for soft delete
+    const softDeleteModalConfirmBtn = document.getElementById('soft-delete-user-modal-confirm-btn');
+    if (softDeleteModalConfirmBtn) {
+      softDeleteModalConfirmBtn.addEventListener('click', () => {
+        if (userIdToSoftDelete && userEmailToSoftDelete) {
+          softDeleteUser(userIdToSoftDelete);
+        }
+        const modal = document.getElementById('soft-delete-user-modal');
+        if (modal) modal.classList.add('hidden');
+      });
+    }
+
+    // Modal cancel button for soft delete
+    const softDeleteModalCancelBtn = document.getElementById('soft-delete-user-modal-cancel-btn');
+    if (softDeleteModalCancelBtn) {
+      softDeleteModalCancelBtn.addEventListener('click', () => {
+        const modal = document.getElementById('soft-delete-user-modal');
+        if (modal) modal.classList.add('hidden');
+      });
+    }
+
+    // Modal backdrop for soft delete
+    const softDeleteModalBackdrop = document.getElementById('soft-delete-user-modal-backdrop');
+    if (softDeleteModalBackdrop) {
+      softDeleteModalBackdrop.addEventListener('click', () => {
+        const modal = document.getElementById('soft-delete-user-modal');
+        if (modal) modal.classList.add('hidden');
+      });
+    }
+
+    // Add restore user click handler
+    let restoreUserId = '';
+    let restoreUserEmail = '';
+    document.addEventListener('click', (e) => {
+      const restoreBtn = (e.target && (e.target as Element).closest('[data-action="restore-user"]'));
+      if (restoreBtn) {
+        restoreUserId = restoreBtn.getAttribute('data-user-id') || '';
+        restoreUserEmail = restoreBtn.getAttribute('data-user-email') || '';
+        // Show the modal
+        const modal = document.getElementById('restore-user-modal');
+        if (modal) modal.classList.remove('hidden');
+      }
+    });
+
+    // Modal confirm button for restore
+    const restoreModalConfirmBtn = document.getElementById('restore-user-modal-confirm-btn');
+    if (restoreModalConfirmBtn) {
+      restoreModalConfirmBtn.addEventListener('click', () => {
+        if (restoreUserId || restoreUserEmail) {
+          restoreUser(restoreUserId, restoreUserEmail);
+        }
+        const modal = document.getElementById('restore-user-modal');
+        if (modal) modal.classList.add('hidden');
+      });
+    }
+
+    // Modal cancel button for restore
+    const restoreModalCancelBtn = document.getElementById('restore-user-modal-cancel-btn');
+    if (restoreModalCancelBtn) {
+      restoreModalCancelBtn.addEventListener('click', () => {
+        const modal = document.getElementById('restore-user-modal');
+        if (modal) modal.classList.add('hidden');
+      });
+    }
+
+    // Modal backdrop for restore
+    const restoreModalBackdrop = document.getElementById('restore-user-modal-backdrop');
+    if (restoreModalBackdrop) {
+      restoreModalBackdrop.addEventListener('click', () => {
+        const modal = document.getElementById('restore-user-modal');
+        if (modal) modal.classList.add('hidden');
+      });
+    }
   });
 
   function deleteUser(userId) {
@@ -302,16 +434,70 @@ const statusMap: Record<string, { text: string; color: string }> = {
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          // Remove the user row from the table
-          const btn = document.querySelector(`button[data-user-id='${userId}']`);
-          const row = btn ? btn.closest('tr') : null;
-          if (row && row.parentNode) row.parentNode.removeChild(row);
+          reloadUserList();
         } else {
           alert('Failed to delete user: ' + (data.error || 'Unknown error'));
         }
       })
       .catch(err => {
         alert('Failed to delete user: ' + err);
+      });
+  }
+
+  function softDeleteUser(userId) {
+    fetch('/api/soft-delete-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          reloadUserList();
+        } else {
+          alert('Failed to archive user: ' + (data.error || 'Unknown error'));
+        }
+      })
+      .catch(err => {
+        alert('Failed to archive user: ' + err);
+      });
+  }
+
+  function reloadUserList() {
+    fetch('/api/users')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.users) {
+          // Replace table body with new rows
+          const tableBody = document.getElementById('user-list');
+          if (tableBody) {
+            tableBody.innerHTML = '';
+            data.users.forEach(profile => {
+              // You may want to re-render the row using a template or framework method
+              // For now, reload the page as a fallback
+              window.location.reload();
+            });
+          }
+        }
+      });
+  }
+
+  function restoreUser(userId, userEmail) {
+    fetch('/api/restore-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, userEmail })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          reloadUserList();
+        } else {
+          alert('Failed to restore user: ' + (data.error || 'Unknown error'));
+        }
+      })
+      .catch(err => {
+        alert('Failed to restore user: ' + err);
       });
   }
 </script>
